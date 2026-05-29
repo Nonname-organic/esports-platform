@@ -167,7 +167,7 @@ interface CreateTournamentModalProps {
 }
 
 function CreateTournamentModal({ onClose, onSubmit, isPending }: CreateTournamentModalProps) {
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<{ name: string; game: GameType; format: string; max_teams: number }>({
     name: "",
     game: "VALORANT",
     format: "single_elimination",
@@ -195,7 +195,7 @@ function CreateTournamentModal({ onClose, onSubmit, isPending }: CreateTournamen
             <label className="mb-1.5 block text-sm font-medium text-slate-400">ゲーム</label>
             <select
               value={form.game}
-              onChange={(e) => setForm((f) => ({ ...f, game: e.target.value }))}
+              onChange={(e) => setForm((f) => ({ ...f, game: e.target.value as GameType }))}
               className="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none focus:border-brand-500"
             >
               {["VALORANT", "LOL", "APEX", "CS2", "OVERWATCH"].map((g) => (
