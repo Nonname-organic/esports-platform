@@ -7,6 +7,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Plus, Trophy, Users, ChevronRight, AlertCircle } from "lucide-react";
 import { useTournaments, useCreateTournament, useGenerateBracket } from "@/features/tournaments/hooks/use-tournaments";
+import { GameType } from "@/types/tournament";
 import { useAuthStore } from "@/store/auth-store";
 import { formatDate, getStatusColor, getStatusLabel } from "@/lib/utils";
 
@@ -161,7 +162,7 @@ export default function DashboardPage() {
 
 interface CreateTournamentModalProps {
   onClose: () => void;
-  onSubmit: (data: { name: string; game: string; format: string; max_teams: number }) => Promise<void>;
+  onSubmit: (data: { name: string; game: GameType; format: string; max_teams: number }) => Promise<void>;
   isPending: boolean;
 }
 
