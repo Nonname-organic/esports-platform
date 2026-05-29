@@ -6,7 +6,7 @@ WORKDIR /app
 
 # package-lock.json をコピーして再現性を確保
 COPY package.json package-lock.json ./
-RUN npm ci --frozen-lockfile
+RUN npm ci
 
 # ============================
 # Stage 2: builder
