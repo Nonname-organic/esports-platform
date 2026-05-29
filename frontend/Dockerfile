@@ -6,7 +6,7 @@ WORKDIR /app
 
 # package-lock.json をコピーして再現性を確保
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm install --include=optional
 
 # ============================
 # Stage 2: builder
