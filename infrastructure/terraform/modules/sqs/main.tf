@@ -8,9 +8,9 @@ locals {
 
   # Queue definitions: name suffix → description
   queues = {
-    match        = "Match result processing: ranking update + analytics aggregation"
-    notification = "Async notification dispatch: Discord, in-app"
-    analytics    = "Dedicated analytics stats update events (enriched with Riot API data)"
+    match        = "Match result processing - ranking update + analytics aggregation"
+    notification = "Async notification dispatch - Discord in-app"
+    analytics    = "Dedicated analytics stats update events enriched with Riot API data"
   }
 }
 

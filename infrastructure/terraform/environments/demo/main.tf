@@ -93,7 +93,7 @@ module "ec2" {
   sg_ec2_id             = module.vpc.sg_ec2_id
   instance_profile_name = module.iam.ec2_instance_profile_name
   key_name              = var.ec2_key_name
-  instance_type         = "t2.micro"
+  instance_type         = "t3.micro"
   ghcr_image_tag        = var.ghcr_image_tag
 
   # Application environment variables written to /opt/app/.env on first boot.
@@ -126,11 +126,11 @@ module "ec2" {
 
     ALLOWED_ORIGINS = length(var.custom_domain_aliases) > 0 ? join(",", [
       for alias in var.custom_domain_aliases : "https://${alias}"
-    ]) : "https://${module.cloudfront.domain_name}"
+    ]) : "*"
 
     NEXT_PUBLIC_API_URL = length(var.custom_domain_aliases) > 0 ? (
       "https://${var.custom_domain_aliases[0]}/api/v1"
-    ) : "https://${module.cloudfront.domain_name}/api/v1"
+    ) : "/api/v1"
   }
 }
 
@@ -141,7 +141,7 @@ module "cloudfront" {
   project     = var.project
   environment = local.environment
 
-  origin_domain_name  = module.ec2.public_ip
+  origin_domain_name  = module.ec2.public_dns
   acm_certificate_arn = var.acm_certificate_arn
   aliases             = var.custom_domain_aliases
   price_class         = "PriceClass_100"

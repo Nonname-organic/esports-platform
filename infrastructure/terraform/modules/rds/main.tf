@@ -20,10 +20,11 @@ resource "aws_db_parameter_group" "postgres15" {
   family      = "postgres15"
   description = "Custom parameter group for ${local.name_prefix}"
 
-  # WAL level = logical enables Debezium CDC for future data lake integration
+  # Enables logical replication (sets wal_level=logical automatically in RDS)
   parameter {
-    name  = "wal_level"
-    value = "logical"
+    name         = "rds.logical_replication"
+    value        = "1"
+    apply_method = "pending-reboot"
   }
 
   # Lower random_page_cost for SSD storage (RDS uses SSD by default)
@@ -34,8 +35,9 @@ resource "aws_db_parameter_group" "postgres15" {
 
   # Allow up to 200 connections (managed by asyncpg connection pool)
   parameter {
-    name  = "max_connections"
-    value = "200"
+    name         = "max_connections"
+    value        = "200"
+    apply_method = "pending-reboot"
   }
 
   # Kill idle-in-transaction sessions after 30 s to prevent lock buildup
@@ -57,7 +59,7 @@ resource "aws_db_parameter_group" "postgres15" {
 resource "aws_db_instance" "postgres" {
   identifier        = "${local.name_prefix}-postgres"
   engine            = "postgres"
-  engine_version    = "15.7"
+  engine_version    = "15.18"
   instance_class    = var.instance_class
   allocated_storage = var.allocated_storage
 

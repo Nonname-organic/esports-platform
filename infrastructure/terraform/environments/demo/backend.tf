@@ -21,16 +21,18 @@ terraform {
   }
 
   backend "s3" {
-    bucket         = "esports-platform-tfstate-demo"
-    key            = "demo/terraform.tfstate"
-    region         = "ap-northeast-1"
-    dynamodb_table = "esports-platform-tflock-demo"
-    encrypt        = true
+    bucket       = "esports-platform-tfstate-demo"
+    key          = "demo/terraform.tfstate"
+    region       = "ap-northeast-1"
+    use_lockfile = true
+    encrypt      = true
+    profile      = "terraform-deploy"
   }
 }
 
 provider "aws" {
-  region = var.aws_region
+  region  = var.aws_region
+  profile = "terraform-deploy"
 
   default_tags {
     tags = {

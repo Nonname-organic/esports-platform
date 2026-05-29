@@ -21,7 +21,6 @@ concurrency:
 permissions:
   contents: read
   packages: write
-  id-token: write  # OIDC for ECR login
 
 jobs:
   tag:
@@ -62,15 +61,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-build
-          aws-region: ap-northeast-1
-
-      - name: Login to Amazon ECR
-        uses: aws-actions/amazon-ecr-login@v2
-
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
@@ -80,9 +70,6 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository_owner }}/esports-platform-${{ matrix.service }}:${{ needs.tag.outputs.image-tag }}
             ghcr.io/${{ github.repository_owner }}/esports-platform-${{ matrix.service }}:latest
-            ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-northeast-1.amazonaws.com/esports-platform-${{ matrix.service }}:${{ needs.tag.outputs.image-tag }}
-            ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-northeast-1.amazonaws.com/esports-platform-${{ matrix.service }}:latest
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
-          # provenance=false avoids multi-arch index manifests that confuse ECS
           provenance: false
