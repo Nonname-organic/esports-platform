@@ -1,13 +1,11 @@
 "use client";
 
-export const dynamic = "force-dynamic";
-
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Trophy, Eye, EyeOff } from "lucide-react";
 import { useAuthStore } from "@/store/auth-store";
-import { apiClient, ApiError } from "@/lib/api-client";
+import { apiClient } from "@/lib/api-client";
 
 interface LoginResponse {
   access_token: string;
@@ -24,7 +22,7 @@ interface MeResponse {
   };
 }
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { setTokens, setUser } = useAuthStore();
@@ -41,7 +39,6 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      // OAuth2 password flow (form-urlencoded)
       const formData = new URLSearchParams();
       formData.set("username", email);
       formData.set("password", password);
@@ -63,7 +60,6 @@ export default function LoginPage() {
       const { access_token, refresh_token } = (await tokenRes.json()) as LoginResponse;
       setTokens(access_token, refresh_token);
 
-      // ユーザー情報を取得
       const meRes = await apiClient.get<MeResponse>("/api/v1/auth/me");
       setUser({
         id: meRes.data.id,
@@ -85,7 +81,6 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center px-4">
       <div className="w-full max-w-md">
-        {/* ロゴ */}
         <div className="mb-8 text-center">
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-500/20">
             <Trophy className="h-7 w-7 text-brand-400" />
@@ -94,7 +89,6 @@ export default function LoginPage() {
           <p className="mt-1 text-sm text-slate-400">EsportsPlatform にサインイン</p>
         </div>
 
-        {/* フォーム */}
         <form
           onSubmit={handleSubmit}
           className="rounded-2xl border border-white/10 bg-slate-900 p-6 space-y-4"
@@ -159,5 +153,13 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   );
 }
