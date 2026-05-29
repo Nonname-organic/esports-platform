@@ -1,0 +1,138 @@
+name: DB Migrate
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        type: choice
+        options: [demo, mvp, production]
+      revision:
+        description: "Alembic revision (default: head)"
+        required: false
+        default: head
+      confirm:
+        description: Type "yes" to confirm migration
+        required: true
+
+concurrency:
+  group: db-migrate-${{ github.event.inputs.environment }}
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  gate:
+    name: Confirm migration
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "yes" ]; then
+            echo "Confirmation required: set confirm=yes to proceed"
+            exit 1
+          fi
+
+  migrate-demo:
+    name: Migrate — Demo (EC2)
+    needs: gate
+    if: github.event.inputs.environment == 'demo'
+    runs-on: ubuntu-latest
+    environment: demo
+    steps:
+      - name: Run migration via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEMO_EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.DEMO_EC2_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            cd /opt/app
+            REVISION="${{ github.event.inputs.revision }}"
+            REVISION="${REVISION:-head}"
+            docker compose exec -T api alembic upgrade "$REVISION"
+            echo "Migration to '$REVISION' complete on demo"
+
+  migrate-mvp:
+    name: Migrate — MVP (ECS)
+    needs: gate
+    if: github.event.inputs.environment == 'mvp'
+    runs-on: ubuntu-latest
+    environment: mvp
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-mvp-deploy
+          aws-region: ap-northeast-1
+
+      - name: Install Session Manager plugin
+        run: |
+          curl --silent \
+            "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" \
+            -o /tmp/session-manager-plugin.deb
+          sudo dpkg -i /tmp/session-manager-plugin.deb
+
+      - name: Run migration via ECS Exec
+        run: |
+          REVISION="${{ github.event.inputs.revision }}"
+          REVISION="${REVISION:-head}"
+
+          TASK_ARN=$(aws ecs list-tasks \
+            --cluster esports-platform-mvp \
+            --service-name esports-platform-mvp-api \
+            --desired-status RUNNING \
+            --query 'taskArns[0]' \
+            --output text)
+
+          if [ "$TASK_ARN" = "None" ] || [ -z "$TASK_ARN" ]; then
+            echo "No running API task found" && exit 1
+          fi
+
+          aws ecs execute-command \
+            --cluster esports-platform-mvp \
+            --task "$TASK_ARN" \
+            --container api \
+            --interactive \
+            --command "alembic upgrade $REVISION"
+
+  migrate-production:
+    name: Migrate — Production (EKS)
+    needs: gate
+    if: github.event.inputs.environment == 'production'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-production-deploy
+          aws-region: ap-northeast-1
+
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig \
+            --name esports-platform-production \
+            --region ap-northeast-1
+
+      - name: Run migration via kubectl exec
+        run: |
+          REVISION="${{ github.event.inputs.revision }}"
+          REVISION="${REVISION:-head}"
+
+          POD=$(kubectl get pods \
+            -n esports-platform \
+            -l app.kubernetes.io/name=api \
+            --field-selector=status.phase=Running \
+            -o jsonpath='{.items[0].metadata.name}')
+
+          if [ -z "$POD" ]; then
+            echo "No running API pod found" && exit 1
+          fi
+
+          kubectl exec -n esports-platform "$POD" -- \
+            alembic upgrade "$REVISION"

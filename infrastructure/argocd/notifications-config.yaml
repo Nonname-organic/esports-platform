@@ -1,0 +1,78 @@
+# ArgoCD Notifications — Discord webhook integration.
+# Sends a message to Discord when deployments succeed, fail, or degrade.
+#
+# Setup:
+#   1. Create Discord webhook in server settings
+#   2. kubectl create secret generic argocd-notifications-secret \
+#        --from-literal=discord-webhook=<YOUR_WEBHOOK_URL> -n argocd
+#   3. Apply this ConfigMap: kubectl apply -f notifications-config.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-notifications-cm
+  namespace: argocd
+data:
+  # ── Notification services ────────────────────────────────────────────────────
+  service.discord: |
+    webhookUrl: $discord-webhook
+
+  # ── Message templates ────────────────────────────────────────────────────────
+  template.app-sync-succeeded: |
+    discord:
+      embeds: |
+        [{
+          "title": "✅ Deployment Succeeded",
+          "description": "**{{.app.metadata.name}}** synced to `{{.app.status.sync.revision | substr 0 7}}`",
+          "color": 3066993,
+          "fields": [
+            {"name": "Environment", "value": "{{.app.metadata.namespace}}", "inline": true},
+            {"name": "Status", "value": "{{.app.status.health.status}}", "inline": true}
+          ]
+        }]
+
+  template.app-sync-failed: |
+    discord:
+      embeds: |
+        [{
+          "title": "❌ Deployment Failed",
+          "description": "**{{.app.metadata.name}}** sync failed",
+          "color": 15158332,
+          "fields": [
+            {"name": "Error", "value": "{{.app.status.operationState.message}}", "inline": false},
+            {"name": "Revision", "value": "{{.app.status.sync.revision | substr 0 7}}", "inline": true}
+          ]
+        }]
+
+  template.app-health-degraded: |
+    discord:
+      embeds: |
+        [{
+          "title": "⚠️ Application Degraded",
+          "description": "**{{.app.metadata.name}}** health is `{{.app.status.health.status}}`",
+          "color": 16776960,
+          "fields": [
+            {"name": "Message", "value": "{{.app.status.health.message}}", "inline": false}
+          ]
+        }]
+
+  # ── Trigger rules ─────────────────────────────────────────────────────────────
+  trigger.on-sync-succeeded: |
+    - when: app.status.operationState.phase in ['Succeeded']
+      send: [app-sync-succeeded]
+
+  trigger.on-sync-failed: |
+    - when: app.status.operationState.phase in ['Error', 'Failed']
+      send: [app-sync-failed]
+
+  trigger.on-health-degraded: |
+    - when: app.status.health.status == 'Degraded'
+      send: [app-health-degraded]
+
+  # ── Default subscriptions (all apps in the project) ──────────────────────────
+  subscriptions: |
+    - recipients:
+        - discord
+      triggers:
+        - on-sync-succeeded
+        - on-sync-failed
+        - on-health-degraded

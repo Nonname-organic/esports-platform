@@ -1,0 +1,52 @@
+# ローカル開発用オーバーライド
+# 使い方: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up postgres redis api -d
+
+services:
+  # PostgreSQL をローカルコンテナで代替（本番は RDS）
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: esports_db
+      POSTGRES_USER: esports_user
+      POSTGRES_PASSWORD: esports_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U esports_user -d esports_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # API: ポートを外に公開 + postgres コンテナに依存
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: production
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      - DB_HOST=postgres
+      - REDIS_HOST=redis
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # 開発時はホットリロード
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # nginx と frontend はローカル開発では不要
+  nginx:
+    profiles: ["prod"]
+  frontend:
+    profiles: ["prod"]
+  worker:
+    profiles: ["prod"]
+
+volumes:
+  postgres_dev_data:

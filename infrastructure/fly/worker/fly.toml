@@ -1,0 +1,41 @@
+# Fly.io config for the Worker service (SQS consumer in Redis queue mode).
+# Deploy: flyctl deploy --app esports-platform-worker --image <image>
+#
+# First-time setup — run once locally:
+#   flyctl apps create esports-platform-worker --org <org>
+#   flyctl secrets set --app esports-platform-worker \
+#     SECRET_KEY=<same-as-api> \
+#     DB_HOST=<neon-host> \
+#     DB_NAME=esports_db \
+#     DB_USER=esports_user \
+#     DB_PASSWORD=<password> \
+#     REDIS_HOST=<upstash-host> \
+#     REDIS_PORT=6379 \
+#     REDIS_PASSWORD=<upstash-password> \
+#     S3_BUCKET_NAME=<r2-bucket> \
+#     S3_ENDPOINT_URL=https://<account>.r2.cloudflarestorage.com \
+#     AWS_ACCESS_KEY_ID=<r2-access-key-id> \
+#     AWS_SECRET_ACCESS_KEY=<r2-secret-access-key>
+
+app = "esports-platform-worker"
+primary_region = "nrt"
+
+[env]
+  ENVIRONMENT = "demo"
+  USE_REDIS_QUEUE = "true"
+  DB_SSL_REQUIRED = "true"
+  REDIS_TLS = "true"
+  REDIS_DB = "0"
+  LOG_LEVEL = "INFO"
+
+# Worker has no HTTP listener — use processes block for the command.
+[processes]
+  app = "python -m app.workers.sqs_consumer"
+
+# Auto-stop when idle to save free allowance; auto-start when a job arrives.
+# Note: with BRPOP the process must stay alive to poll — set auto_stop_machines
+# to false if you need continuous polling, or rely on the 20s brpop timeout.
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 256

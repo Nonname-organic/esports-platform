@@ -1,0 +1,281 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_PROMETHEUS",
+      "label": "Prometheus",
+      "description": "",
+      "type": "datasource",
+      "pluginId": "prometheus",
+      "pluginName": "Prometheus"
+    }
+  ],
+  "title": "Esports Platform",
+  "uid": "esports-platform-overview",
+  "version": 1,
+  "schemaVersion": 39,
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "tags": ["esports", "platform"],
+  "templating": {
+    "list": [
+      {
+        "name": "environment",
+        "type": "custom",
+        "label": "Environment",
+        "current": { "value": "production" },
+        "options": [
+          { "text": "production", "value": "production" },
+          { "text": "mvp",        "value": "mvp" }
+        ]
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "HTTP API",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Request Rate (req/s)",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 1 },
+      "datasource": "${DS_PROMETHEUS}",
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total{service=\"esports-platform-api\",environment=\"$environment\"}[1m])) by (method)",
+          "legendFormat": "{{method}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "min": 0 }
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "5xx Error Rate (%)",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 1 },
+      "datasource": "${DS_PROMETHEUS}",
+      "targets": [
+        {
+          "expr": "100 * sum(rate(http_requests_total{service=\"esports-platform-api\",environment=\"$environment\",status_code=~\"5..\"}[5m])) / sum(rate(http_requests_total{service=\"esports-platform-api\",environment=\"$environment\"}[5m]))",
+          "legendFormat": "error rate"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red",    "value": 5 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Latency Percentiles",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 1 },
+      "datasource": "${DS_PROMETHEUS}",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket{service=\"esports-platform-api\",environment=\"$environment\"}[5m])) by (le))",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{service=\"esports-platform-api\",environment=\"$environment\"}[5m])) by (le))",
+          "legendFormat": "p95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{service=\"esports-platform-api\",environment=\"$environment\"}[5m])) by (le))",
+          "legendFormat": "p99"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "s", "min": 0 }
+      }
+    },
+    {
+      "id": 10,
+      "type": "row",
+      "title": "Workers & Queues",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "SQS Queue Depth",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 10 },
+      "datasource": "${DS_PROMETHEUS}",
+      "targets": [
+        {
+          "expr": "esports_sqs_queue_depth",
+          "legendFormat": "{{queue}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 50 },
+              { "color": "red",    "value": 100 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Worker Job Rate (jobs/s)",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 10 },
+      "datasource": "${DS_PROMETHEUS}",
+      "targets": [
+        {
+          "expr": "sum(rate(esports_worker_jobs_total[1m])) by (event_type, status)",
+          "legendFormat": "{{event_type}} / {{status}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "ops", "min": 0 }
+      }
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Worker Replica Count",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 10 },
+      "datasource": "${DS_PROMETHEUS}",
+      "targets": [
+        {
+          "expr": "kube_deployment_status_replicas_available{namespace=\"esports-platform\",deployment=~\".*worker.*\"}",
+          "legendFormat": "{{deployment}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "min": 0 }
+      }
+    },
+    {
+      "id": 20,
+      "type": "row",
+      "title": "Business Metrics",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 18 }
+    },
+    {
+      "id": 21,
+      "type": "stat",
+      "title": "Active Tournaments",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 19 },
+      "datasource": "${DS_PROMETHEUS}",
+      "targets": [
+        {
+          "expr": "esports_active_tournaments_total",
+          "legendFormat": ""
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": null }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "Matches Processed / min",
+      "gridPos": { "h": 8, "w": 10, "x": 4, "y": 19 },
+      "datasource": "${DS_PROMETHEUS}",
+      "targets": [
+        {
+          "expr": "sum(rate(esports_matches_processed_total[1m])) by (game) * 60",
+          "legendFormat": "{{game}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "min": 0 }
+      }
+    },
+    {
+      "id": 23,
+      "type": "timeseries",
+      "title": "Active WebSocket Connections",
+      "gridPos": { "h": 8, "w": 10, "x": 14, "y": 19 },
+      "datasource": "${DS_PROMETHEUS}",
+      "targets": [
+        {
+          "expr": "sum(esports_ws_connections_active) by (room_type)",
+          "legendFormat": "{{room_type}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "min": 0 }
+      }
+    },
+    {
+      "id": 30,
+      "type": "row",
+      "title": "Kubernetes Pod Health",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 27 }
+    },
+    {
+      "id": 31,
+      "type": "timeseries",
+      "title": "API Available Replicas",
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 28 },
+      "datasource": "${DS_PROMETHEUS}",
+      "targets": [
+        {
+          "expr": "kube_deployment_status_replicas_available{namespace=\"esports-platform\",deployment=~\".*api.*\"}",
+          "legendFormat": "available"
+        },
+        {
+          "expr": "kube_deployment_spec_replicas{namespace=\"esports-platform\",deployment=~\".*api.*\"}",
+          "legendFormat": "desired"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "min": 0 }
+      }
+    },
+    {
+      "id": 32,
+      "type": "table",
+      "title": "Application Info",
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 28 },
+      "datasource": "${DS_PROMETHEUS}",
+      "targets": [
+        {
+          "expr": "esports_app_info",
+          "legendFormat": "",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true, "job": true, "instance": true } } }
+      ]
+    }
+  ]
+}

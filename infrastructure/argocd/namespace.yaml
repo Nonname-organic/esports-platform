@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argocd
+  labels:
+    app.kubernetes.io/managed-by: argocd
+---
+# Application namespace — created here so ArgoCD can manage it
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: esports-platform
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    environment: production

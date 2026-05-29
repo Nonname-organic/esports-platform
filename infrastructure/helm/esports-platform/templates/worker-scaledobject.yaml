@@ -1,0 +1,49 @@
+{{- if .Values.worker.keda.enabled }}
+# KEDA ScaledObject: scale Worker based on SQS match queue depth.
+# Requires KEDA operator: helm install keda kedacore/keda -n keda --create-namespace
+#
+# Scaling logic:
+#   replicas = ceil(queueDepth / targetQueueLength)
+#   e.g. 50 messages / 10 per replica = 5 replicas
+#   Scales to 0 when queue is empty (cost optimization).
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ include "esports-platform.fullname" . }}-worker
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "esports-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "esports-platform.fullname" . }}-worker
+  pollingInterval: 15         # check queue depth every 15 s
+  cooldownPeriod: 60          # wait 60 s before scaling down after queue drains
+  minReplicaCount: {{ .Values.worker.keda.minReplicaCount }}
+  maxReplicaCount: {{ .Values.worker.keda.maxReplicaCount }}
+  triggers:
+    - type: aws-sqs-queue
+      authenticationRef:
+        name: {{ .Values.worker.keda.triggerAuthName }}
+      metadata:
+        queueURL: {{ .Values.worker.keda.sqsQueueUrl | quote }}
+        queueLength: {{ .Values.worker.keda.targetQueueLength | quote }}
+        awsRegion: {{ .Values.aws.region | quote }}
+        # identityOwner: pod uses IRSA (no long-lived creds needed)
+        identityOwner: pod
+---
+# TriggerAuthentication: tells KEDA to use the pod's IRSA ServiceAccount token
+# to authenticate against SQS. No access keys required.
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: {{ .Values.worker.keda.triggerAuthName }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "esports-platform.labels" . | nindent 4 }}
+spec:
+  podIdentity:
+    provider: aws-eks   # use IRSA WebIdentity token
+{{- end }}

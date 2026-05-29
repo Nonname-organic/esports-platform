@@ -1,0 +1,25 @@
+project    = "esports-platform"
+aws_region = "ap-northeast-1"
+
+# Restrict bastion/maintenance SSH
+admin_ssh_cidrs = ["203.0.113.1/32"]
+
+db_password = "CHANGE_ME_strong_password_here"
+secret_key  = "CHANGE_ME_at_least_32_characters_long_secret"
+
+# ACM certs — two required: one per-region
+# ap-northeast-1 for ALB:
+acm_certificate_arn = "arn:aws:acm:ap-northeast-1:123456789012:certificate/xxxx"
+# us-east-1 for CloudFront:
+acm_certificate_arn_us_east_1 = "arn:aws:acm:us-east-1:123456789012:certificate/yyyy"
+
+custom_domain_aliases = ["esports.yourdomain.com"]
+
+discord_webhook_url = "https://discord.com/api/webhooks/..."
+
+# Image tags pushed by CI/CD (GitHub Actions)
+api_image      = "ghcr.io/your-org/esports-platform-api:latest"
+frontend_image = "ghcr.io/your-org/esports-platform-frontend:latest"
+worker_image   = "ghcr.io/your-org/esports-platform-worker:latest"
+
+api_desired_count = 2

@@ -1,0 +1,57 @@
+# Fly.io config for the API service (FastAPI).
+# Deploy: flyctl deploy --app esports-platform-api --image <image>
+#
+# First-time setup — run once locally:
+#   flyctl apps create esports-platform-api --org <org>
+#   flyctl secrets set --app esports-platform-api \
+#     SECRET_KEY=<min-32-chars> \
+#     DB_HOST=<neon-host> \
+#     DB_NAME=esports_db \
+#     DB_USER=esports_user \
+#     DB_PASSWORD=<password> \
+#     REDIS_HOST=<upstash-host> \
+#     REDIS_PORT=6379 \
+#     REDIS_PASSWORD=<upstash-password> \
+#     S3_BUCKET_NAME=<r2-bucket> \
+#     S3_ENDPOINT_URL=https://<account>.r2.cloudflarestorage.com \
+#     AWS_ACCESS_KEY_ID=<r2-access-key-id> \
+#     AWS_SECRET_ACCESS_KEY=<r2-secret-access-key> \
+#     ALLOWED_ORIGINS=https://<vercel-domain>.vercel.app
+
+app = "esports-platform-api"
+primary_region = "nrt"  # Tokyo — change to "sin" (Singapore) or "lax" (LA) as needed
+
+[env]
+  PORT = "8000"
+  ENVIRONMENT = "demo"
+  USE_REDIS_QUEUE = "true"
+  DB_SSL_REQUIRED = "true"
+  REDIS_TLS = "true"
+  REDIS_DB = "0"
+  LOG_LEVEL = "INFO"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  # Keep at least 1 machine alive so cold starts don't impact the demo.
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "requests"
+    hard_limit = 200
+    soft_limit = 150
+
+  [[http_service.checks]]
+    grace_period = "15s"
+    interval = "30s"
+    method = "GET"
+    path = "/health/live"
+    timeout = "5s"
+    type = "http"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 512

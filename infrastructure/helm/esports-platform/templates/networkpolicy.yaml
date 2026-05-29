@@ -1,0 +1,122 @@
+{{- if .Values.networkPolicy.enabled }}
+# NetworkPolicy: default-deny all ingress, then allow only legitimate paths.
+# Requires a CNI that enforces NetworkPolicy (Calico, Cilium, or VPC CNI with policy enabled).
+
+# ── API: ingress only from ALB/ingress-controller ────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "esports-platform.fullname" . }}-api
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "esports-platform.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "esports-platform.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: api
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow from ALB ingress controller namespace
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.ingressNamespace }}
+      ports:
+        - protocol: TCP
+          port: 8000
+    # Allow from frontend pods (SSR server-side fetch)
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "esports-platform.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: frontend
+      ports:
+        - protocol: TCP
+          port: 8000
+  egress:
+    # Allow DNS resolution
+    - ports:
+        - protocol: UDP
+          port: 53
+    # Allow all TCP egress (RDS, Redis, SQS, CloudWatch — all external to cluster)
+    - ports:
+        - protocol: TCP
+          port: 5432   # RDS
+        - protocol: TCP
+          port: 6379   # ElastiCache Redis
+        - protocol: TCP
+          port: 443    # SQS, S3, CloudWatch (HTTPS)
+---
+# ── Frontend: ingress only from ALB, egress only to API ──────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "esports-platform.fullname" . }}-frontend
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "esports-platform.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "esports-platform.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: frontend
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.ingressNamespace }}
+      ports:
+        - protocol: TCP
+          port: 3000
+  egress:
+    - ports:
+        - protocol: UDP
+          port: 53
+    # SSR calls to internal API service
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "esports-platform.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: api
+      ports:
+        - protocol: TCP
+          port: 8000
+    # HTTPS for Next.js image optimisation and external assets
+    - ports:
+        - protocol: TCP
+          port: 443
+---
+# ── Worker: no ingress, outbound to RDS/Redis/SQS/CloudWatch only ────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "esports-platform.fullname" . }}-worker
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "esports-platform.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "esports-platform.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: worker
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []  # worker accepts no inbound connections
+  egress:
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 5432
+        - protocol: TCP
+          port: 6379
+        - protocol: TCP
+          port: 443
+{{- end }}

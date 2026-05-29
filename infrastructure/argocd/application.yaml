@@ -1,0 +1,70 @@
+# ArgoCD Application: declarative definition of what is deployed where.
+# ArgoCD continuously reconciles the cluster state with this spec.
+#
+# GitOps flow:
+#   1. GitHub Actions builds image, pushes to GHCR, updates image.tag in
+#      infrastructure/helm/esports-platform/values-production.yaml
+#   2. ArgoCD detects the Git change (polling or webhook)
+#   3. ArgoCD syncs — runs helm template and applies the diff
+#   4. Rollback: revert the Git commit, ArgoCD re-syncs automatically
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: esports-platform
+  namespace: argocd
+  labels:
+    app.kubernetes.io/managed-by: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    # Notify Discord on sync events (requires notifications controller setup)
+    notifications.argoproj.io/subscribe.on-sync-succeeded.discord: ""
+    notifications.argoproj.io/subscribe.on-sync-failed.discord: ""
+    notifications.argoproj.io/subscribe.on-health-degraded.discord: ""
+spec:
+  project: esports-platform
+
+  source:
+    repoURL: "https://github.com/your-org/esports-platform"
+    targetRevision: main
+    path: infrastructure/helm/esports-platform
+
+    helm:
+      releaseName: esports-platform
+      valueFiles:
+        - values.yaml
+        - values-production.yaml
+      # Image tag is updated by CI — ArgoCD reads it from values-production.yaml
+      # or can be set via: argocd app set esports-platform --helm-set image.tag=sha-abc
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: esports-platform
+
+  syncPolicy:
+    automated:
+      prune: true      # delete resources removed from Git
+      selfHeal: true   # revert manual kubectl changes automatically
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - ServerSideApply=true   # use SSA to avoid annotation size limit issues
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+
+  # Health check overrides — mark app healthy only when all pods are ready
+  ignoreDifferences:
+    # HPA: ignore current replica count (KEDA/HPA manages this)
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas
+    # ArgoCD sometimes diffs on managed fields from server-side apply
+    - group: ""
+      kind: Secret
+      jsonPointers:
+        - /metadata/annotations/kubectl.kubernetes.io~1last-applied-configuration

@@ -1,0 +1,17 @@
+apiVersion: v2
+name: esports-platform
+description: e-sports tournament management platform (API + Frontend + Worker)
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+
+keywords:
+  - esports
+  - tournament
+  - fastapi
+  - nextjs
+
+maintainers:
+  - name: platform-team
+
+dependencies: []

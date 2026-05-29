@@ -1,0 +1,21 @@
+# Production image override: replaces build: contexts with pre-built GHCR images.
+#
+# Usage (EC2 deploy):
+#   IMAGE_TAG=sha-abc1234 IMAGE_ORG=your-org \
+#     docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# IMAGE_TAG and IMAGE_ORG are set by the CI deploy workflow via SSH env vars.
+version: "3.9"
+
+services:
+  api:
+    image: ghcr.io/${IMAGE_ORG}/esports-platform-api:${IMAGE_TAG:-latest}
+    build: null
+
+  worker:
+    image: ghcr.io/${IMAGE_ORG}/esports-platform-worker:${IMAGE_TAG:-latest}
+    build: null
+
+  frontend:
+    image: ghcr.io/${IMAGE_ORG}/esports-platform-frontend:${IMAGE_TAG:-latest}
+    build: null

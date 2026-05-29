@@ -1,0 +1,26 @@
+# Copy this file to terraform.tfvars and fill in your values.
+# NEVER commit terraform.tfvars — it contains secrets.
+# Add it to .gitignore.
+
+project    = "esports-platform"
+aws_region = "ap-northeast-1"
+
+# EC2 key pair name (must already exist in AWS console)
+ec2_key_name = "my-key-pair"
+
+# SSH access restriction — add your home IP
+admin_ssh_cidrs = ["203.0.113.1/32"]
+
+# Strong random passwords (e.g. openssl rand -base64 32)
+db_password = "CHANGE_ME_strong_password_here"
+secret_key  = "CHANGE_ME_at_least_32_characters_long_secret"
+
+# Optional: custom domain + ACM certificate (us-east-1)
+# acm_certificate_arn   = "arn:aws:acm:us-east-1:123456789012:certificate/xxxx"
+# custom_domain_aliases = ["esports.yourdomain.com"]
+
+# Optional: Discord webhook for match notifications
+# discord_webhook_url = "https://discord.com/api/webhooks/..."
+
+# CI/CD: image tag pushed by GitHub Actions
+ghcr_image_tag = "latest"

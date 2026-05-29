@@ -1,0 +1,77 @@
+# Cluster bootstrap: apply this once after EKS cluster creation.
+# This installs the bare-minimum operators that the Helm chart depends on.
+#
+# Usage:
+#   kubectl apply -f cluster-bootstrap.yaml
+#
+# Then install operators via Helm (order matters):
+#   1. AWS Load Balancer Controller — creates ALB from Ingress resources
+#   2. External Secrets Operator   — syncs AWS Secrets Manager → k8s Secrets
+#   3. KEDA                        — event-driven autoscaling (SQS trigger)
+#   4. ArgoCD                      — GitOps continuous deployment
+
+---
+# ── Namespace: esports-platform ──────────────────────────────────────────────
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: esports-platform
+  labels:
+    environment: production
+    app.kubernetes.io/managed-by: argocd
+
+---
+# ── ClusterSecretStore: points External Secrets to AWS Secrets Manager ────────
+# Requires external-secrets-operator to be installed first.
+# IRSA on the esports-platform ServiceAccount provides the AWS credentials.
+apiVersion: external-secrets.io/v1beta1
+kind: ClusterSecretStore
+metadata:
+  name: aws-secretsmanager
+spec:
+  provider:
+    aws:
+      service: SecretsManager
+      region: ap-northeast-1
+      auth:
+        jwt:
+          serviceAccountRef:
+            name: esports-platform-sa
+            namespace: esports-platform
+
+---
+# ── ResourceQuota: namespace-level budget ────────────────────────────────────
+# Prevents a runaway HPA from consuming all cluster resources.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: esports-platform-quota
+  namespace: esports-platform
+spec:
+  hard:
+    requests.cpu: "8"
+    requests.memory: 8Gi
+    limits.cpu: "16"
+    limits.memory: 16Gi
+    pods: "50"
+    services: "10"
+
+---
+# ── LimitRange: default resource requests for pods without explicit values ────
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: esports-platform-limits
+  namespace: esports-platform
+spec:
+  limits:
+    - type: Container
+      default:
+        cpu: 250m
+        memory: 256Mi
+      defaultRequest:
+        cpu: 125m
+        memory: 128Mi
+      max:
+        cpu: "2"
+        memory: 2Gi

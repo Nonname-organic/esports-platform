@@ -1,0 +1,58 @@
+name: Deploy — Production (EKS via ArgoCD)
+
+on:
+  workflow_run:
+    workflows: ["Build & Push"]
+    branches: [main]
+    types: [completed]
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: write  # push image tag update to main
+
+jobs:
+  deploy:
+    name: Update Helm values → ArgoCD syncs
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://${{ vars.PRODUCTION_DOMAIN }}
+    steps:
+      - name: Compute image tag
+        id: tag
+        run: |
+          SHA="${{ github.event.workflow_run.head_sha }}"
+          echo "value=sha-${SHA::7}" >> $GITHUB_OUTPUT
+
+      # Checkout main (not the built SHA) so the push is a fast-forward.
+      # The image tag is derived from workflow_run.head_sha above, not HEAD.
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Update image.tag in Helm values
+        env:
+          IMAGE_TAG: ${{ steps.tag.outputs.value }}
+        run: |
+          VALUES=infrastructure/helm/esports-platform/values-production.yaml
+          sed -i "s/^\([[:space:]]*tag:[[:space:]]*\).*/\1${IMAGE_TAG}/" "$VALUES"
+          grep "tag:" "$VALUES"
+
+      - name: Commit and push tag update
+        env:
+          IMAGE_TAG: ${{ steps.tag.outputs.value }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add infrastructure/helm/esports-platform/values-production.yaml
+          git diff --staged --quiet && echo "No changes to commit" && exit 0
+
+          git commit -m "chore(deploy): bump production image to ${IMAGE_TAG} [skip ci]"
+          git push origin main

@@ -1,0 +1,198 @@
+# Default values — safe for staging/preview environments.
+# Override with values-production.yaml for production deployments.
+
+nameOverride: ""
+fullnameOverride: ""
+
+# ── Image registry ────────────────────────────────────────────────────────────
+image:
+  registry: ghcr.io
+  organization: your-org       # override per-environment
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# ── AWS configuration ─────────────────────────────────────────────────────────
+aws:
+  region: ap-northeast-1
+  accountId: "123456789012"    # override per-environment
+  irsaRoleName: esports-platform-production-irsa
+
+# ── Application environment variables (non-sensitive) ─────────────────────────
+# Sensitive values (db_password, secret_key) are injected via ExternalSecret.
+env:
+  ENVIRONMENT: production
+  DEBUG: "false"
+  ACCESS_TOKEN_EXPIRE_MINUTES: "15"
+  REFRESH_TOKEN_EXPIRE_DAYS: "7"
+  DB_PORT: "5432"
+  DB_NAME: esports_db
+  DB_USER: esports_user
+  REDIS_PORT: "6379"
+  REDIS_DB: "0"
+  DB_POOL_SIZE: "10"
+  DB_MAX_OVERFLOW: "20"
+
+# Injected by ArgoCD / CI — reference to image tag for each service
+# Set via --set api.image.tag=sha-abc1234 in Helm upgrade
+api:
+  image:
+    repository: esports-platform-api
+
+  replicaCount: 2
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  hpa:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+  # Readiness: /health/ready checks DB + Redis; pod removed from service if degraded
+  readinessProbe:
+    httpGet:
+      path: /health/ready
+      port: 8000
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    failureThreshold: 3
+
+  # Liveness: /health/live only checks the process; does NOT restart on DB outage
+  livenessProbe:
+    httpGet:
+      path: /health/live
+      port: 8000
+    initialDelaySeconds: 30
+    periodSeconds: 20
+    failureThreshold: 5
+
+  # Spread replicas across AZs for HA
+  topologySpreadConstraints:
+    enabled: true
+
+  pdb:
+    enabled: true
+    minAvailable: 1
+
+  service:
+    port: 8000
+
+frontend:
+  image:
+    repository: esports-platform-frontend
+
+  replicaCount: 1
+
+  resources:
+    requests:
+      cpu: 125m
+      memory: 256Mi
+    limits:
+      cpu: 250m
+      memory: 512Mi
+
+  hpa:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 60
+
+  readinessProbe:
+    httpGet:
+      path: /
+      port: 3000
+    initialDelaySeconds: 15
+    periodSeconds: 10
+
+  livenessProbe:
+    httpGet:
+      path: /
+      port: 3000
+    initialDelaySeconds: 30
+    periodSeconds: 20
+
+  pdb:
+    enabled: false   # single replica acceptable for frontend
+
+  service:
+    port: 3000
+
+worker:
+  image:
+    repository: esports-platform-worker
+
+  replicaCount: 1
+
+  resources:
+    requests:
+      cpu: 125m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+  # KEDA scales the worker based on SQS queue depth.
+  # Set enabled: true and supply sqsQueueUrl in values-production.yaml.
+  keda:
+    enabled: false
+    sqsQueueUrl: ""
+    targetQueueLength: "10"   # scale up 1 replica per N messages
+    minReplicaCount: 0        # scale to zero when queue is empty
+    maxReplicaCount: 5
+    # TriggerAuthentication name for IRSA-based KEDA SQS auth
+    triggerAuthName: keda-trigger-auth-aws
+
+# ── Ingress (AWS ALB Controller) ──────────────────────────────────────────────
+ingress:
+  enabled: true
+  className: alb
+  host: esports.example.com  # override per-environment
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443},{"HTTP":80}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/certificate-arn: ""  # set per-environment
+    alb.ingress.kubernetes.io/healthcheck-path: /health
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: "30"
+
+# ── Secrets via External Secrets Operator ────────────────────────────────────
+# Pulls secrets from AWS Secrets Manager at deploy time.
+# Requires external-secrets-operator installed in cluster.
+externalSecrets:
+  enabled: true
+  secretStoreName: aws-secretsmanager
+  refreshInterval: 1h
+  remoteRefs:
+    dbPassword: esports/production/db-password
+    secretKey: esports/production/secret-key
+    dbHost: esports/production/db-host
+    redisHost: esports/production/redis-host
+    sqsMatchQueueUrl: esports/production/sqs-match-queue-url
+    sqsNotificationQueueUrl: esports/production/sqs-notification-queue-url
+    sqsAnalyticsQueueUrl: esports/production/sqs-analytics-queue-url
+    discordWebhookUrl: esports/production/discord-webhook-url
+    s3BucketName: esports/production/s3-bucket-name
+    allowedOrigins: esports/production/allowed-origins
+
+# ── Monitoring (Prometheus Operator) ─────────────────────────────────────────
+# Requires kube-prometheus-stack installed in the cluster.
+monitoring:
+  enabled: false          # set true in values-production.yaml
+  scrapeInterval: 30s
+  alerting:
+    enabled: false        # set true once Alertmanager is configured
+
+# ── Network Policies ──────────────────────────────────────────────────────────
+networkPolicy:
+  enabled: true
+  # Namespace where ingress-nginx / ALB controller pods live
+  ingressNamespace: ingress-nginx

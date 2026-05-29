@@ -1,0 +1,96 @@
+{{- if and .Values.monitoring.enabled .Values.monitoring.alerting.enabled }}
+# PrometheusRule defines alerting rules evaluated by the Prometheus Operator.
+# Alerts fire to Alertmanager, which routes them to Discord via webhook.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "esports-platform.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "esports-platform.labels" . | nindent 4 }}
+    release: kube-prometheus-stack
+spec:
+  groups:
+    # ── API availability ─────────────────────────────────────────────────────
+    - name: esports-platform.api
+      interval: 30s
+      rules:
+        - alert: APIHighErrorRate
+          expr: |
+            (
+              sum(rate(http_requests_total{service="esports-platform-api", status_code=~"5.."}[5m]))
+              /
+              sum(rate(http_requests_total{service="esports-platform-api"}[5m]))
+            ) > 0.05
+          for: 5m
+          labels:
+            severity: critical
+            team: platform
+          annotations:
+            summary: "API error rate above 5%"
+            description: >
+              {{ "{{ $value | humanizePercentage }}" }} of API requests are returning 5xx
+              over the last 5 minutes.
+
+        - alert: APIHighP95Latency
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(http_request_duration_seconds_bucket{service="esports-platform-api"}[5m]))
+              by (le)
+            ) > 2.0
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: "API p95 latency above 2s"
+            description: >
+              p95 request latency is {{ "{{ $value | humanizeDuration }}" }}.
+
+        - alert: APIPodsDown
+          expr: |
+            kube_deployment_status_replicas_available{
+              namespace="{{ .Release.Namespace }}",
+              deployment="{{ include "esports-platform.fullname" . }}-api"
+            } < 2
+          for: 2m
+          labels:
+            severity: critical
+            team: platform
+          annotations:
+            summary: "API has fewer than 2 available replicas"
+            description: >
+              Only {{ "{{ $value }}" }} API pod(s) are available. PDB requires minAvailable=2.
+
+    # ── Worker / queue ───────────────────────────────────────────────────────
+    - name: esports-platform.worker
+      interval: 60s
+      rules:
+        - alert: SQSQueueBacklog
+          expr: esports_sqs_queue_depth{queue="match"} > 100
+          for: 10m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: "SQS match queue has >100 unprocessed messages"
+            description: >
+              {{ "{{ $value }}" }} messages are waiting. Worker may be stalled or
+              KEDA is not scaling up.
+
+        - alert: WorkerJobErrorRate
+          expr: |
+            (
+              sum(rate(esports_worker_jobs_total{status="error"}[10m]))
+              /
+              sum(rate(esports_worker_jobs_total[10m]))
+            ) > 0.1
+          for: 10m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: "Worker job error rate above 10%"
+            description: >
+              {{ "{{ $value | humanizePercentage }}" }} of worker jobs are failing.
+{{- end }}

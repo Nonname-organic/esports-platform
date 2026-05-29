@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "esports-platform.fullname" . }}-frontend
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "esports-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: frontend
+spec:
+  replicas: {{ .Values.frontend.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "esports-platform.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: frontend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        {{- include "esports-platform.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: frontend
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      serviceAccountName: {{ include "esports-platform.serviceAccountName" . }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+
+      containers:
+        - name: frontend
+          image: {{ include "esports-platform.image" (dict "root" . "service" "frontend") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+
+          {{- if .Values.externalSecrets.enabled }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "esports-platform.configMapName" . }}
+            - secretRef:
+                name: {{ include "esports-platform.secretName" . }}
+          {{- else }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "esports-platform.configMapName" . }}
+          {{- end }}
+
+          # NEXT_PUBLIC_API_URL points to the internal API service (cluster-internal)
+          # or the public domain depending on whether this is SSR or browser call
+          env:
+            - name: NEXT_PUBLIC_API_URL
+              value: "https://{{ .Values.ingress.host }}/api/v1"
+            - name: INTERNAL_API_URL
+              value: "http://{{ include "esports-platform.fullname" . }}-api:{{ .Values.api.service.port }}/api/v1"
+
+          readinessProbe:
+            {{- toYaml .Values.frontend.readinessProbe | nindent 12 }}
+          livenessProbe:
+            {{- toYaml .Values.frontend.livenessProbe | nindent 12 }}
+
+          resources:
+            {{- toYaml .Values.frontend.resources | nindent 12 }}
+
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 5"]
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false  # Next.js standalone needs writable .next/cache
+            capabilities:
+              drop: ["ALL"]
+
+          volumeMounts:
+            - name: next-cache
+              mountPath: /app/.next/cache
+
+      volumes:
+        - name: next-cache
+          emptyDir: {}
+
+      terminationGracePeriodSeconds: 30

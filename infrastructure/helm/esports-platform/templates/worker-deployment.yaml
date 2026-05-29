@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "esports-platform.fullname" . }}-worker
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "esports-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  # KEDA manages replica count when enabled; this value is the initial count.
+  replicas: {{ .Values.worker.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "esports-platform.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: worker
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      # Allow zero replicas during update (KEDA may have scaled to 0)
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        {{- include "esports-platform.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: worker
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      serviceAccountName: {{ include "esports-platform.serviceAccountName" . }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+
+      containers:
+        - name: worker
+          image: {{ include "esports-platform.image" (dict "root" . "service" "worker") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+
+          {{- if .Values.externalSecrets.enabled }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "esports-platform.configMapName" . }}
+            - secretRef:
+                name: {{ include "esports-platform.secretName" . }}
+          {{- else }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "esports-platform.configMapName" . }}
+          {{- end }}
+
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
+
+          # SQS consumer performs graceful shutdown on SIGTERM.
+          # Allow 60 s for in-flight messages to complete processing.
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 10"]
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+
+      volumes:
+        - name: tmp
+          emptyDir: {}
+
+      terminationGracePeriodSeconds: 60

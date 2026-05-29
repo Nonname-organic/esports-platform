@@ -1,0 +1,47 @@
+# AppProject: scopes what ArgoCD can deploy and where.
+# RBAC: only allow deploying from this repo to the esports-platform namespace.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: esports-platform
+  namespace: argocd
+  labels:
+    app.kubernetes.io/managed-by: argocd
+  # Finalizer prevents accidental deletion while apps are running
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: "e-sports tournament management platform"
+
+  # Only this Git repository is a valid source
+  sourceRepos:
+    - "https://github.com/your-org/esports-platform"
+
+  # Only the esports-platform namespace in the in-cluster target
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: esports-platform
+    # ArgoCD resources live in argocd namespace
+    - server: https://kubernetes.default.svc
+      namespace: argocd
+
+  # Allow all core Kubernetes and standard CRD resource types
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"
+
+  # Prevent deploying to any namespace not in destinations
+  namespaceResourceBlacklist: []
+
+  roles:
+    # CI/CD pipeline can sync but not delete apps
+    - name: ci-sync
+      description: Role for GitHub Actions to trigger syncs
+      policies:
+        - p, proj:esports-platform:ci-sync, applications, sync, esports-platform/*, allow
+        - p, proj:esports-platform:ci-sync, applications, get, esports-platform/*, allow
+      jwtTokens: []  # populated after: argocd proj role create-token esports-platform ci-sync

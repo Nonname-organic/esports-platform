@@ -1,0 +1,67 @@
+name: Deploy — Demo (EC2)
+
+on:
+  workflow_run:
+    workflows: ["Build & Push"]
+    branches: [main]
+    types: [completed]
+
+concurrency:
+  group: deploy-demo
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: SSH deploy to EC2
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: demo
+      url: https://${{ vars.DEMO_DOMAIN }}
+    steps:
+      - name: Compute image tag
+        id: tag
+        run: |
+          SHA="${{ github.event.workflow_run.head_sha }}"
+          echo "value=sha-${SHA::7}" >> $GITHUB_OUTPUT
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+          IMAGE_TAG: ${{ steps.tag.outputs.value }}
+          IMAGE_ORG: ${{ github.repository_owner }}
+        with:
+          host: ${{ secrets.DEMO_EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.DEMO_EC2_SSH_KEY }}
+          envs: GHCR_TOKEN,GHCR_USER,IMAGE_TAG,IMAGE_ORG
+          script: |
+            set -euo pipefail
+
+            # Authenticate to GHCR so we can pull private images
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+
+            cd /opt/app
+
+            # Pull new images (docker-compose.prod.yml overrides build: → image:)
+            IMAGE_TAG="$IMAGE_TAG" IMAGE_ORG="$IMAGE_ORG" \
+              docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
+
+            # Restart services; new containers start before old ones stop
+            IMAGE_TAG="$IMAGE_TAG" IMAGE_ORG="$IMAGE_ORG" \
+              docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+              up -d --remove-orphans
+
+            # Wait for API readiness (uses /health/live — process-alive check only)
+            for i in $(seq 1 12); do
+              docker compose exec -T api curl -sf http://localhost:8000/health/live && break
+              echo "Waiting for API... ($i/12)"
+              sleep 5
+            done
+
+            # Run DB migrations after API is live
+            docker compose exec -T api alembic upgrade head
+
+            echo "Deploy $IMAGE_TAG complete"

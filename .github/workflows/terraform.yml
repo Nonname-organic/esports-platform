@@ -1,0 +1,138 @@
+name: Terraform
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'infrastructure/terraform/**'
+      - '.github/workflows/terraform.yml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to apply
+        required: true
+        type: choice
+        options: [demo, mvp, production]
+      action:
+        description: Terraform action
+        required: true
+        type: choice
+        options: [plan, apply]
+        default: plan
+
+concurrency:
+  group: terraform-${{ github.event.inputs.environment || 'pr' }}
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write  # to post plan comments
+
+env:
+  TF_VERSION: '1.9.8'
+  AWS_REGION: ap-northeast-1
+
+jobs:
+  detect-environments:
+    name: Detect changed environments
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      environments: ${{ steps.detect.outputs.environments }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed Terraform environments
+        id: detect
+        run: |
+          changed=$(git diff --name-only origin/main...HEAD -- 'infrastructure/terraform/**' \
+            | grep -oP 'infrastructure/terraform/environments/\K[^/]+' \
+            | sort -u \
+            | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          # Default to all environments if only module files changed
+          if [ "$changed" = "[]" ]; then
+            changed='["demo","mvp","production"]'
+          fi
+          echo "environments=$changed" >> $GITHUB_OUTPUT
+
+  plan:
+    name: Terraform Plan — ${{ matrix.environment }}
+    needs: detect-environments
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: ${{ fromJSON(needs.detect-environments.outputs.environments) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-terraform-plan
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform init
+        working-directory: infrastructure/terraform/environments/${{ matrix.environment }}
+        run: terraform init -input=false
+
+      - name: Terraform validate
+        working-directory: infrastructure/terraform/environments/${{ matrix.environment }}
+        run: terraform validate
+
+      - name: Terraform plan
+        id: plan
+        working-directory: infrastructure/terraform/environments/${{ matrix.environment }}
+        run: |
+          terraform plan -input=false -no-color -out=tfplan 2>&1 | tee plan.txt
+          echo "exitcode=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
+
+      - name: Post plan to PR
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: terraform-plan-${{ matrix.environment }}
+          message: |
+            ### Terraform Plan — `${{ matrix.environment }}`
+
+            <details><summary>Show plan</summary>
+
+            ```hcl
+            ${{ steps.plan.outputs.stdout }}
+            ```
+
+            </details>
+
+  apply:
+    name: Terraform Apply — ${{ github.event.inputs.environment }}
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply'
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.event.inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-terraform-apply-${{ github.event.inputs.environment }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform init
+        working-directory: infrastructure/terraform/environments/${{ github.event.inputs.environment }}
+        run: terraform init -input=false
+
+      - name: Terraform apply
+        working-directory: infrastructure/terraform/environments/${{ github.event.inputs.environment }}
+        run: terraform apply -input=false -auto-approve

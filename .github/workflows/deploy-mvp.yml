@@ -1,0 +1,125 @@
+name: Deploy — MVP (ECS Fargate)
+
+on:
+  workflow_run:
+    workflows: ["Build & Push"]
+    branches: [main]
+    types: [completed]
+
+concurrency:
+  group: deploy-mvp
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ap-northeast-1
+  ECS_CLUSTER: esports-platform-mvp
+
+jobs:
+  setup:
+    name: Resolve image tag
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.tag.outputs.value }}
+    steps:
+      - id: tag
+        run: |
+          SHA="${{ github.event.workflow_run.head_sha }}"
+          echo "value=sha-${SHA::7}" >> $GITHUB_OUTPUT
+
+  deploy-service:
+    name: Deploy — ${{ matrix.service }}
+    needs: setup
+    runs-on: ubuntu-latest
+    environment:
+      name: mvp
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: api
+            container: api
+            task-def-family: esports-platform-mvp-api
+            ecs-service: esports-platform-mvp-api
+          - service: worker
+            container: worker
+            task-def-family: esports-platform-mvp-worker
+            ecs-service: esports-platform-mvp-worker
+          - service: frontend
+            container: frontend
+            task-def-family: esports-platform-mvp-frontend
+            ecs-service: esports-platform-mvp-frontend
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-mvp-deploy
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Download current task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition ${{ matrix.task-def-family }} \
+            --query taskDefinition \
+            > task-definition.json
+
+      - name: Render updated task definition
+        id: render
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: ${{ matrix.container }}
+          # secrets.* is only accessible in step-level with:/env:, NOT in workflow-level env:
+          image: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-northeast-1.amazonaws.com/esports-platform-${{ matrix.service }}:${{ needs.setup.outputs.image-tag }}
+
+      - name: Deploy to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render.outputs.task-definition }}
+          service: ${{ matrix.ecs-service }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+          wait-for-minutes: 10
+
+  run-migration:
+    name: Run DB migrations
+    needs: [setup, deploy-service]
+    runs-on: ubuntu-latest
+    environment: mvp
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-mvp-deploy
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install Session Manager plugin
+        run: |
+          curl --silent \
+            "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" \
+            -o /tmp/session-manager-plugin.deb
+          sudo dpkg -i /tmp/session-manager-plugin.deb
+
+      - name: Run alembic upgrade head via ECS Exec
+        run: |
+          TASK_ARN=$(aws ecs list-tasks \
+            --cluster "$ECS_CLUSTER" \
+            --service-name esports-platform-mvp-api \
+            --desired-status RUNNING \
+            --query 'taskArns[0]' \
+            --output text)
+
+          if [ "$TASK_ARN" = "None" ] || [ -z "$TASK_ARN" ]; then
+            echo "No running API task found" && exit 1
+          fi
+
+          aws ecs execute-command \
+            --cluster "$ECS_CLUSTER" \
+            --task "$TASK_ARN" \
+            --container api \
+            --interactive \
+            --command "alembic upgrade head"

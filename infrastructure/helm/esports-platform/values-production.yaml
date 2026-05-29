@@ -1,0 +1,78 @@
+# Production overrides — higher replicas, resource limits, KEDA enabled.
+# Merge on top of values.yaml:
+#   helm upgrade esports-platform ./esports-platform \
+#     -f values.yaml -f values-production.yaml \
+#     --set image.tag=$IMAGE_TAG
+
+image:
+  organization: your-org   # replace with your GitHub org/username
+  tag: latest               # bumped to sha-xxxxxxx by deploy-production.yml
+
+aws:
+  accountId: "REPLACE_WITH_ACCOUNT_ID"
+  irsaRoleName: esports-platform-production-irsa
+
+api:
+  replicaCount: 3
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  hpa:
+    minReplicas: 3
+    maxReplicas: 12
+  pdb:
+    minAvailable: 2
+
+frontend:
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+  pdb:
+    enabled: true
+    minAvailable: 1
+
+worker:
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  keda:
+    enabled: true
+    sqsQueueUrl: "REPLACE_WITH_SQS_MATCH_QUEUE_URL"
+    targetQueueLength: "10"
+    minReplicaCount: 1   # keep at least 1 in production
+    maxReplicaCount: 10
+
+ingress:
+  host: esports.yourdomain.com
+  annotations:
+    alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:ap-northeast-1:ACCOUNT:certificate/CERT_ID"
+    alb.ingress.kubernetes.io/wafv2-acl-arn: "arn:aws:wafv2:ap-northeast-1:ACCOUNT:regional/webacl/..."
+
+externalSecrets:
+  remoteRefs:
+    dbPassword: esports/production/db-password
+    secretKey: esports/production/secret-key
+    dbHost: esports/production/db-host
+    redisHost: esports/production/redis-host
+    sqsMatchQueueUrl: esports/production/sqs-match-queue-url
+    sqsNotificationQueueUrl: esports/production/sqs-notification-queue-url
+    sqsAnalyticsQueueUrl: esports/production/sqs-analytics-queue-url
+    discordWebhookUrl: esports/production/discord-webhook-url
+    s3BucketName: esports/production/s3-bucket-name
+    allowedOrigins: esports/production/allowed-origins
+
+networkPolicy:
+  enabled: true
