@@ -30,9 +30,6 @@ async def lifespan(app: FastAPI):
         {"version": settings.IMAGE_TAG, "environment": settings.ENVIRONMENT}
     )
     await get_redis()
-    from app.core.telemetry import setup_telemetry
-
-    setup_telemetry(app, settings)
     yield
     await close_redis()
     logger.info("shutdown")
@@ -46,6 +43,10 @@ app = FastAPI(
     openapi_url="/openapi.json" if settings.ENVIRONMENT != "prod" else None,
     lifespan=lifespan,
 )
+
+# ===== Telemetry (must be called before app starts) =====
+from app.core.telemetry import setup_telemetry
+setup_telemetry(app, settings)
 
 # ===== Middleware =====
 app.add_middleware(
