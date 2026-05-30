@@ -19,64 +19,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     # ===== ENUM TYPES =====
-    op.execute(
-        "CREATE TYPE IF NOT EXISTS user_role AS ENUM "
-        "('admin', 'organizer', 'team_manager', 'player', 'viewer')"
-    )
-    op.execute(
-        "CREATE TYPE IF NOT EXISTS game_type AS ENUM "
-        "('VALORANT', 'LOL', 'APEX', 'CS2', 'OVERWATCH')"
-    )
-    op.execute(
-        "CREATE TYPE IF NOT EXISTS tournament_format AS ENUM "
-        "('single_elimination', 'double_elimination', 'round_robin', 'swiss')"
-    )
-    op.execute(
-        "CREATE TYPE IF NOT EXISTS tournament_status AS ENUM "
-        "('draft', 'registration_open', 'registration_closed', 'check_in', "
-        "'ongoing', 'completed', 'cancelled')"
-    )
-    op.execute(
-        "CREATE TYPE IF NOT EXISTS registration_status AS ENUM "
-        "('pending', 'approved', 'rejected', 'withdrawn', 'waitlisted')"
-    )
-    op.execute(
-        "CREATE TYPE IF NOT EXISTS member_role AS ENUM "
-        "('captain', 'player', 'substitute', 'coach', 'analyst')"
-    )
-    op.execute(
-        "CREATE TYPE IF NOT EXISTS bo_format AS ENUM ('BO1', 'BO3', 'BO5')"
-    )
-    op.execute(
-        "CREATE TYPE IF NOT EXISTS match_status AS ENUM "
-        "('scheduled', 'ongoing', 'completed', 'cancelled', 'forfeit', 'no_show')"
-    )
-    op.execute(
-        "CREATE TYPE IF NOT EXISTS ban_pick_action AS ENUM ('ban', 'pick')"
-    )
-    op.execute(
-        "CREATE TYPE IF NOT EXISTS side_type AS ENUM ('attack', 'defense')"
-    )
-    op.execute(
-        "CREATE TYPE IF NOT EXISTS notification_type AS ENUM "
-        "('match_start', 'match_result', 'match_scheduled', 'registration_approved', "
-        "'registration_rejected', 'check_in_reminder', 'tournament_start', "
-        "'tournament_cancelled', 'bracket_updated', 'general')"
-    )
-    op.execute(
-        "CREATE TYPE IF NOT EXISTS notification_channel AS ENUM ('in_app', 'discord', 'email')"
-    )
-    op.execute(
-        "CREATE TYPE IF NOT EXISTS check_in_method AS ENUM ('qr', 'manual')"
-    )
-    op.execute(
-        "CREATE TYPE IF NOT EXISTS period_type AS ENUM "
-        "('daily', 'weekly', 'monthly', 'tournament', 'all_time')"
-    )
-    op.execute(
-        "CREATE TYPE IF NOT EXISTS analytics_event_source AS ENUM "
-        "('application', 'riot_api', 'manual', 'webhook')"
-    )
+    # ENUM types are created automatically by sa.Enum in op.create_table below
 
     # ===== USERS =====
     op.create_table(
