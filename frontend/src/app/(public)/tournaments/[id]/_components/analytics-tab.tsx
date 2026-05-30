@@ -110,15 +110,13 @@ export function AnalyticsTab({ tournament }: AnalyticsTabProps) {
           ) : (
             <ol className="space-y-3">
               {topMaps.map((map) => {
-                const atkRate = map.total_rounds > 0
-                  ? ((map.attacker_wins / map.total_rounds) * 100).toFixed(0)
-                  : "50";
+                const atkRate = (map.attack_win_rate * 100).toFixed(0);
 
                 return (
                   <li key={map.map_id}>
                     <div className="flex items-center justify-between gap-2 text-sm">
                       <span className="font-semibold text-white">{map.map_name}</span>
-                      <span className="text-xs text-slate-500">{map.total_rounds} ラウンド</span>
+                      <span className="text-xs text-slate-500">{map.total_games} ゲーム</span>
                     </div>
                     <div className="mt-1 flex h-2 overflow-hidden rounded-full bg-white/10">
                       <div
