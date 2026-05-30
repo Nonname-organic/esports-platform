@@ -103,7 +103,14 @@ export function AgentChart({ data }: AgentChartProps) {
             width={72}
           />
           <Tooltip
-            content={(props) => <CustomTooltip {...props} metric={metric} />}
+            content={(props) => (
+              <CustomTooltip
+                active={props.active}
+                payload={props.payload as TooltipProps<number, string>["payload"]}
+                label={props.label}
+                metric={metric}
+              />
+            )}
             cursor={{ fill: "rgba(255,255,255,0.04)" }}
           />
           <Bar dataKey={metric} radius={[0, 3, 3, 0]} maxBarSize={18}>
