@@ -1,10 +1,21 @@
 import { apiClient } from "@/lib/api-client";
-import type { MatchDetail } from "@/types/match";
-import type { ApiResponse } from "@/types/tournament";
+import type { MatchDetail, MatchStatus, MatchSummary } from "@/types/match";
+import type { ApiResponse, ListResponse } from "@/types/tournament";
 
 export const matchApi = {
   get: (id: string): Promise<ApiResponse<MatchDetail>> =>
     apiClient.get(`/api/v1/matches/${id}`),
+
+  listByTournament: (
+    tournamentId: string,
+    params?: { status?: MatchStatus; limit?: number; cursor?: string },
+  ): Promise<ListResponse<MatchSummary>> => {
+    const qs = new URLSearchParams({ tournament_id: tournamentId });
+    if (params?.status) qs.set("status", params.status);
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.cursor) qs.set("cursor", params.cursor);
+    return apiClient.get(`/api/v1/matches?${qs.toString()}`);
+  },
 
   start: (id: string): Promise<void> =>
     apiClient.patch(`/api/v1/matches/${id}/start`),

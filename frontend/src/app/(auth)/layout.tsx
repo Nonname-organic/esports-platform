@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { LayoutDashboard, BarChart3, Plus, Trophy, Settings } from "lucide-react";
+import { LayoutDashboard, BarChart3, Plus, Shield } from "lucide-react";
 import { useAuthStore } from "@/store/auth-store";
 import { cn } from "@/lib/utils";
 
@@ -91,6 +91,27 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
               >
                 <Plus className="h-4 w-4 flex-shrink-0" />
                 大会を作成
+              </Link>
+            </div>
+          )}
+
+          {/* Admin専用メニュー */}
+          {user.role === "admin" && (
+            <div className="mt-4 border-t border-white/10 pt-4">
+              <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-widest text-red-800">
+                Admin
+              </p>
+              <Link
+                href="/admin"
+                className={cn(
+                  "flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                  pathname === "/admin"
+                    ? "bg-red-500/10 text-red-400"
+                    : "text-slate-500 hover:bg-red-500/5 hover:text-red-400",
+                )}
+              >
+                <Shield className="h-4 w-4 flex-shrink-0" />
+                Admin Dashboard
               </Link>
             </div>
           )}

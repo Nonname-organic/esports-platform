@@ -60,6 +60,24 @@ export interface MatchDetail {
   vod_url: string | null;
 }
 
+export interface MatchSummary {
+  id: string;
+  tournament_id: string;
+  format: BOFormat;
+  status: MatchStatus;
+  round_number: number;
+  match_number: number;
+  team1: MatchTeam | null;
+  team2: MatchTeam | null;
+  team1_wins: number;
+  team2_wins: number;
+  winner_id: string | null;
+  scheduled_at: string | null;
+  started_at: string | null;
+  ended_at: string | null;
+  stream_url: string | null;
+}
+
 // WebSocket メッセージ
 export type WSMessage =
   | { type: "score_update"; match_id: string; game_number: number; team1_score: number; team2_score: number }

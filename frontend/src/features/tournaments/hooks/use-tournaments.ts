@@ -1,7 +1,8 @@
 "use client";
 
-import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, useInfiniteQuery, keepPreviousData } from "@tanstack/react-query";
 import { tournamentApi } from "../api/tournament-api";
+import type { TournamentListParams } from "../api/tournament-api";
 import type { GameType, TournamentStatus } from "@/types/tournament";
 
 export const tournamentKeys = {
@@ -44,6 +45,15 @@ export function useBracket(id: string) {
     queryFn: () => tournamentApi.getBracket(id),
     select: (res) => res.data,
     refetchInterval: 30 * 1000, // 30秒ごとにポーリング（WS補完）
+  });
+}
+
+export function useTournamentList(params: TournamentListParams & { cursor?: string }) {
+  return useQuery({
+    queryKey: [...tournamentKeys.all, "page", params],
+    queryFn: () => tournamentApi.list({ ...params, limit: 12 }),
+    staleTime: 5 * 60 * 1000,
+    placeholderData: keepPreviousData,
   });
 }
 

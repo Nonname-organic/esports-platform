@@ -42,15 +42,20 @@ export interface BracketMatchTeam {
   logo_url: string | null;
 }
 
+export type BracketSide = "winners" | "losers" | "grand_finals";
+
 export interface BracketMatch {
   id: string;
   round_number: number;
   match_number: number;
   team1: BracketMatchTeam | null;
   team2: BracketMatchTeam | null;
+  team1_seed: number | null;
+  team2_seed: number | null;
   winner_id: string | null;
   status: string;
   scheduled_at: string | null;
+  bracket_side: BracketSide | null;
 }
 
 export interface BracketResponse {

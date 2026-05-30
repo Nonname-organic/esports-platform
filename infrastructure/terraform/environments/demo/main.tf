@@ -126,7 +126,7 @@ module "ec2" {
 
     ALLOWED_ORIGINS = length(var.custom_domain_aliases) > 0 ? join(",", [
       for alias in var.custom_domain_aliases : "https://${alias}"
-    ]) : "*"
+    ]) : "[\"*\"]"
 
     NEXT_PUBLIC_API_URL = length(var.custom_domain_aliases) > 0 ? (
       "https://${var.custom_domain_aliases[0]}/api/v1"
