@@ -37,25 +37,12 @@ function LoginForm() {
     setIsLoading(true);
 
     try {
-      const formData = new URLSearchParams();
-      formData.set("username", email);
-      formData.set("password", password);
+      const tokenRes = await apiClient.post<LoginResponse>("/api/v1/auth/login", {
+        email,
+        password,
+      });
 
-      const tokenRes = await fetch(
-        `/api/v1/auth/token`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: formData.toString(),
-        },
-      );
-
-      if (!tokenRes.ok) {
-        const err = await tokenRes.json().catch(() => ({}));
-        throw new Error(err.detail ?? "メールアドレスまたはパスワードが正しくありません");
-      }
-
-      const { access_token, refresh_token } = (await tokenRes.json()) as LoginResponse;
+      const { access_token, refresh_token } = tokenRes;
       setTokens(access_token, refresh_token);
 
       const meRes = await apiClient.get<MeResponse>("/api/v1/auth/me");
