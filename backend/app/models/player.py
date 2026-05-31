@@ -1,11 +1,11 @@
 import uuid
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Enum, ForeignKey, String, Text
+from sqlalchemy import ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import Base, TimestampMixin, UUIDMixin
+from app.models.base import Base, TimestampMixin, UUIDMixin, pg_enum
 from app.models.enums import GameType
 
 if TYPE_CHECKING:
@@ -26,7 +26,7 @@ class Player(UUIDMixin, TimestampMixin, Base):
     )
     in_game_name: Mapped[str] = mapped_column(String(100), nullable=False)
     real_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    game: Mapped[GameType] = mapped_column(Enum(GameType, name="game_type"), nullable=False)
+    game: Mapped[GameType] = mapped_column(pg_enum(GameType, name="game_type"), nullable=False)
     rank: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     # ["Jett", "Reyna", "Sage"] など
     agent_pool: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True, default=list)

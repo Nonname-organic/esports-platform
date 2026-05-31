@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, Optional
 from sqlalchemy import (
     Boolean,
     DateTime,
-    Enum,
     ForeignKey,
     Integer,
     Numeric,
@@ -17,7 +16,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import Base, TimestampMixin, UUIDMixin
+from app.models.base import Base, TimestampMixin, UUIDMixin, pg_enum
 from app.models.enums import (
     CheckInMethod,
     GameType,
@@ -41,16 +40,16 @@ class Tournament(UUIDMixin, TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     slug: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
     game: Mapped[GameType] = mapped_column(
-        Enum(GameType, name="game_type"),
+        pg_enum(GameType, name="game_type"),
         nullable=False,
         index=True,
     )
     format: Mapped[TournamentFormat] = mapped_column(
-        Enum(TournamentFormat, name="tournament_format"),
+        pg_enum(TournamentFormat, name="tournament_format"),
         nullable=False,
     )
     status: Mapped[TournamentStatus] = mapped_column(
-        Enum(TournamentStatus, name="tournament_status"),
+        pg_enum(TournamentStatus, name="tournament_status"),
         nullable=False,
         default=TournamentStatus.DRAFT,
         index=True,
@@ -127,7 +126,7 @@ class TournamentRegistration(UUIDMixin, Base):
         nullable=False,
     )
     status: Mapped[RegistrationStatus] = mapped_column(
-        Enum(RegistrationStatus, name="registration_status"),
+        pg_enum(RegistrationStatus, name="registration_status"),
         nullable=False,
         default=RegistrationStatus.PENDING,
     )
@@ -226,7 +225,7 @@ class CheckIn(UUIDMixin, Base):
         nullable=True,
     )
     method: Mapped[Optional[CheckInMethod]] = mapped_column(
-        Enum(CheckInMethod, name="check_in_method"), nullable=True
+        pg_enum(CheckInMethod, name="check_in_method"), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
@@ -255,13 +254,13 @@ class Notification(UUIDMixin, Base):
         nullable=True,
     )
     type: Mapped[NotificationType] = mapped_column(
-        Enum(NotificationType, name="notification_type"), nullable=False
+        pg_enum(NotificationType, name="notification_type"), nullable=False
     )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
     is_read: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
     channel: Mapped[NotificationChannel] = mapped_column(
-        Enum(NotificationChannel, name="notification_channel"),
+        pg_enum(NotificationChannel, name="notification_channel"),
         nullable=False,
         default=NotificationChannel.IN_APP,
     )

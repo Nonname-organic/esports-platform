@@ -1,11 +1,11 @@
 import uuid
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Boolean, Enum, String, Text
+from sqlalchemy import Boolean, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import Base, TimestampMixin, UUIDMixin
+from app.models.base import Base, TimestampMixin, UUIDMixin, pg_enum
 from app.models.enums import UserRole
 
 if TYPE_CHECKING:
@@ -23,7 +23,7 @@ class User(UUIDMixin, TimestampMixin, Base):
     username: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[UserRole] = mapped_column(
-        Enum(UserRole, name="user_role"),
+        pg_enum(UserRole, name="user_role"),
         nullable=False,
         default=UserRole.VIEWER,
     )

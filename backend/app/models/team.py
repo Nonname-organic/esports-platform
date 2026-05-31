@@ -2,11 +2,11 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import Base, TimestampMixin, UUIDMixin
+from app.models.base import Base, TimestampMixin, UUIDMixin, pg_enum
 from app.models.enums import GameType, MemberRole
 
 if TYPE_CHECKING:
@@ -21,7 +21,7 @@ class Team(UUIDMixin, TimestampMixin, Base):
 
     name: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     tag: Mapped[str] = mapped_column(String(10), nullable=False)
-    game: Mapped[GameType] = mapped_column(Enum(GameType, name="game_type"), nullable=False)
+    game: Mapped[GameType] = mapped_column(pg_enum(GameType, name="game_type"), nullable=False)
     logo_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     owner_id: Mapped[uuid.UUID] = mapped_column(
@@ -67,7 +67,7 @@ class TeamMember(UUIDMixin, Base):
         nullable=False,
     )
     role: Mapped[MemberRole] = mapped_column(
-        Enum(MemberRole, name="member_role"),
+        pg_enum(MemberRole, name="member_role"),
         nullable=False,
         default=MemberRole.PLAYER,
     )

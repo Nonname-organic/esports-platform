@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING, Optional
 from sqlalchemy import (
     Boolean,
     DateTime,
-    Enum,
     ForeignKey,
     Integer,
     String,
@@ -14,7 +13,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import Base, TimestampMixin, UUIDMixin
+from app.models.base import Base, TimestampMixin, UUIDMixin, pg_enum
 from app.models.enums import BOFormat, BanPickAction, GameType, MatchStatus, SideType
 
 if TYPE_CHECKING:
@@ -28,7 +27,7 @@ class Map(UUIDMixin, Base):
     __tablename__ = "maps"
 
     game: Mapped[GameType] = mapped_column(
-        Enum(GameType, name="game_type"), nullable=False
+        pg_enum(GameType, name="game_type"), nullable=False
     )
     internal_name: Mapped[str] = mapped_column(String(100), nullable=False)
     display_name: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -81,12 +80,12 @@ class Match(UUIDMixin, TimestampMixin, Base):
         nullable=True,
     )
     format: Mapped[BOFormat] = mapped_column(
-        Enum(BOFormat, name="bo_format"),
+        pg_enum(BOFormat, name="bo_format"),
         nullable=False,
         default=BOFormat.BO3,
     )
     status: Mapped[MatchStatus] = mapped_column(
-        Enum(MatchStatus, name="match_status"),
+        pg_enum(MatchStatus, name="match_status"),
         nullable=False,
         default=MatchStatus.SCHEDULED,
         index=True,
@@ -174,7 +173,7 @@ class MatchGame(UUIDMixin, Base):
     )
     # team1のファーストサイド
     side_first_team1: Mapped[Optional[SideType]] = mapped_column(
-        Enum(SideType, name="side_type"), nullable=True
+        pg_enum(SideType, name="side_type"), nullable=True
     )
     duration_seconds: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     started_at: Mapped[Optional[datetime]] = mapped_column(
@@ -208,7 +207,7 @@ class BanPick(UUIDMixin, Base):
         nullable=False,
     )
     action: Mapped[BanPickAction] = mapped_column(
-        Enum(BanPickAction, name="ban_pick_action"), nullable=False
+        pg_enum(BanPickAction, name="ban_pick_action"), nullable=False
     )
     map_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

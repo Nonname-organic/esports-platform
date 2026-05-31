@@ -2,11 +2,11 @@ import uuid
 from datetime import date, datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Integer, Numeric, String
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models.base import Base, UUIDMixin
+from app.models.base import Base, UUIDMixin, pg_enum
 from app.models.enums import AnalyticsEventSource, GameType, PeriodType
 
 
@@ -17,7 +17,7 @@ class AnalyticsEvent(UUIDMixin, Base):
 
     event_type: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     source: Mapped[AnalyticsEventSource] = mapped_column(
-        Enum(AnalyticsEventSource, name="analytics_event_source"),
+        pg_enum(AnalyticsEventSource, name="analytics_event_source"),
         nullable=False,
         default=AnalyticsEventSource.APPLICATION,
     )
@@ -51,10 +51,10 @@ class AggPlayerStats(UUIDMixin, Base):
         nullable=False,
     )
     game: Mapped[GameType] = mapped_column(
-        Enum(GameType, name="game_type"), nullable=False
+        pg_enum(GameType, name="game_type"), nullable=False
     )
     period_type: Mapped[PeriodType] = mapped_column(
-        Enum(PeriodType, name="period_type"), nullable=False
+        pg_enum(PeriodType, name="period_type"), nullable=False
     )
     period_date: Mapped[date] = mapped_column(Date, nullable=False)
     tournament_id: Mapped[Optional[uuid.UUID]] = mapped_column(
@@ -88,10 +88,10 @@ class AggTeamStats(UUIDMixin, Base):
         nullable=False,
     )
     game: Mapped[GameType] = mapped_column(
-        Enum(GameType, name="game_type"), nullable=False
+        pg_enum(GameType, name="game_type"), nullable=False
     )
     period_type: Mapped[PeriodType] = mapped_column(
-        Enum(PeriodType, name="period_type"), nullable=False
+        pg_enum(PeriodType, name="period_type"), nullable=False
     )
     period_date: Mapped[date] = mapped_column(Date, nullable=False)
     tournament_id: Mapped[Optional[uuid.UUID]] = mapped_column(
@@ -124,7 +124,7 @@ class AggMapStats(UUIDMixin, Base):
         nullable=False,
     )
     game: Mapped[GameType] = mapped_column(
-        Enum(GameType, name="game_type"), nullable=False
+        pg_enum(GameType, name="game_type"), nullable=False
     )
     tournament_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), nullable=True
@@ -149,7 +149,7 @@ class AggCompositionStats(UUIDMixin, Base):
     __tablename__ = "agg_composition_stats"
 
     game: Mapped[GameType] = mapped_column(
-        Enum(GameType, name="game_type"), nullable=False
+        pg_enum(GameType, name="game_type"), nullable=False
     )
     tournament_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), nullable=True
