@@ -44,7 +44,7 @@ function LoginForm() {
       formData.set("password", password);
 
       const tokenRes = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api/v1/auth/token`,
+        `/api/v1/auth/token`,
         {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },

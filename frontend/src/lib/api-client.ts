@@ -1,4 +1,8 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+// ブラウザは相対URL（CloudFront/Nginx経由）、SSRは環境変数のAPIホストを使用
+const API_BASE =
+  typeof window !== "undefined"
+    ? ""
+    : (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000");
 
 export class ApiError extends Error {
   constructor(
