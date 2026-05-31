@@ -1,4 +1,5 @@
 import re
+import uuid
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
@@ -37,7 +38,7 @@ class RefreshRequest(BaseModel):
 
 
 class UserResponse(BaseModel):
-    id: str
+    id: uuid.UUID
     email: str
     username: str
     role: UserRole
