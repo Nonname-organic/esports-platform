@@ -26,12 +26,14 @@ export interface Team {
 
 export interface TeamMember {
   id: string;
-  user_id: string;
-  username: string;
-  display_name: string;
+  player_id: string;
+  user_id: string | null;
+  username: string | null;
+  display_name: string | null;
   avatar_url: string | null;
   role: TeamRole;
   in_game_name: string | null;
+  jersey_number: number | null;
   agent_specialty: string[] | null;
   joined_at: string;
   is_active: boolean;
