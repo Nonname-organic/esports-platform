@@ -6,6 +6,7 @@ class UserRole(str, enum.Enum):
     ORGANIZER = "organizer"
     TEAM_MANAGER = "team_manager"
     PLAYER = "player"
+    VIEWER = "viewer"  # 後方互換: 既存ユーザーのマイグレーション完了後に削除予定
 
 
 class GameType(str, enum.Enum):
