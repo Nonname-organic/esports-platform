@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, use } from "react";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -40,12 +40,13 @@ const addSchema = z.object({
 
 type AddFormValues = z.infer<typeof addSchema>;
 
-export default function TeamMembersPage({ params }: { params: { id: string } }) {
+export default function TeamMembersPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const user = useAuthStore((s) => s.user);
-  const { data: team, isLoading: teamLoading } = useTeam(params.id);
-  const { data: members, isLoading: membersLoading } = useTeamMembers(params.id);
-  const addMember = useAddMember(params.id);
-  const removeMember = useRemoveMember(params.id);
+  const { data: team, isLoading: teamLoading } = useTeam(id);
+  const { data: members, isLoading: membersLoading } = useTeamMembers(id);
+  const addMember = useAddMember(id);
+  const removeMember = useRemoveMember(id);
 
   const [showAddForm, setShowAddForm] = useState(false);
 
@@ -90,7 +91,7 @@ export default function TeamMembersPage({ params }: { params: { id: string } }) 
     <div className="mx-auto max-w-3xl px-4 py-8">
       {/* パンくず */}
       <nav className="mb-6 flex items-center gap-2 text-sm text-slate-400">
-        <Link href={`/teams/${params.id}`} className="hover:text-white transition-colors">{team.name}</Link>
+        <Link href={`/teams/${id}`} className="hover:text-white transition-colors">{team.name}</Link>
         <ChevronRight className="h-3.5 w-3.5" />
         <span className="text-white">メンバー管理</span>
       </nav>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -22,11 +22,12 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
-export default function TeamEditPage({ params }: { params: { id: string } }) {
+export default function TeamEditPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
-  const { data: team, isLoading } = useTeam(params.id);
-  const updateTeam = useUpdateTeam(params.id);
+  const { data: team, isLoading } = useTeam(id);
+  const updateTeam = useUpdateTeam(id);
   const deleteTeam = useDeleteTeam();
 
   const {
@@ -60,12 +61,12 @@ export default function TeamEditPage({ params }: { params: { id: string } }) {
       logo_url: values.logo_url || undefined,
       banner_url: values.banner_url || undefined,
     });
-    router.push(`/teams/${params.id}`);
+    router.push(`/teams/${id}`);
   });
 
   const handleDelete = async () => {
     if (!confirm("チームを削除しますか？この操作は取り消せません。")) return;
-    await deleteTeam.mutateAsync(params.id);
+    await deleteTeam.mutateAsync(id);
     router.push("/dashboard");
   };
 
