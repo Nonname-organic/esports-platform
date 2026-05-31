@@ -13,13 +13,11 @@ interface LoginResponse {
 }
 
 interface MeResponse {
-  data: {
-    id: string;
-    email: string;
-    username: string;
-    role: string;
-    avatar_url: string | null;
-  };
+  id: string;
+  email: string;
+  username: string;
+  role: string;
+  avatar_url: string | null;
 }
 
 function LoginForm() {
@@ -62,11 +60,11 @@ function LoginForm() {
 
       const meRes = await apiClient.get<MeResponse>("/api/v1/auth/me");
       setUser({
-        id: meRes.data.id,
-        email: meRes.data.email,
-        username: meRes.data.username,
-        role: meRes.data.role as import("@/store/auth-store").UserRole,
-        avatar_url: meRes.data.avatar_url,
+        id: meRes.id,
+        email: meRes.email,
+        username: meRes.username,
+        role: meRes.role as import("@/store/auth-store").UserRole,
+        avatar_url: meRes.avatar_url,
       });
 
       const next = searchParams.get("next") ?? "/dashboard";

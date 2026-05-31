@@ -100,13 +100,13 @@ export default function RegisterPage() {
       setTokens(tokenRes.access_token, tokenRes.refresh_token);
 
       // 3. ユーザー情報取得
-      const me = await apiClient.get<{ data: { id: string; email: string; username: string; role: string; avatar_url: string | null } }>("/api/v1/auth/me");
+      const me = await apiClient.get<{ id: string; email: string; username: string; role: string; avatar_url: string | null }>("/api/v1/auth/me");
       setUser({
-        id: me.data.id,
-        email: me.data.email,
-        username: me.data.username,
-        role: me.data.role as UserRole,
-        avatar_url: me.data.avatar_url,
+        id: me.id,
+        email: me.email,
+        username: me.username,
+        role: me.role as UserRole,
+        avatar_url: me.avatar_url,
       });
 
       router.replace("/dashboard");
