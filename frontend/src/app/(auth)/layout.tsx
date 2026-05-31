@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { LayoutDashboard, BarChart3, Plus, Shield } from "lucide-react";
@@ -17,14 +17,18 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   const pathname = usePathname();
   const { isAuthenticated, user } = useAuthStore();
 
-  // 未認証ならログインページへリダイレクト
+  // Zustandのlocalストレージhydrationを待つ（SSRで未認証と誤検知するのを防ぐ）
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => { setHydrated(true); }, []);
+
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (hydrated && !isAuthenticated) {
       router.replace(`/login?next=${encodeURIComponent(pathname)}`);
     }
-  }, [isAuthenticated, router, pathname]);
+  }, [hydrated, isAuthenticated, router, pathname]);
 
-  if (!isAuthenticated || !user) {
+  // hydration前またはローディング中はスピナー表示
+  if (!hydrated || !isAuthenticated || !user) {
     return (
       <div className="flex h-[calc(100vh-3.5rem)] items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
@@ -41,11 +45,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           <div className="mb-6 rounded-xl bg-white/5 p-3">
             <div className="flex items-center gap-2.5">
               {user.avatar_url ? (
-                <img
-                  src={user.avatar_url}
-                  alt={user.username}
-                  className="h-8 w-8 rounded-full object-cover"
-                />
+                <img src={user.avatar_url} alt={user.username} className="h-8 w-8 rounded-full object-cover" />
               ) : (
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-500/20">
                   <span className="text-sm font-bold text-brand-400">
@@ -86,7 +86,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
                 主催者メニュー
               </p>
               <Link
-                href="/dashboard/tournaments/new"
+                href="/dashboard"
                 className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-400 transition-colors hover:bg-white/5 hover:text-white"
               >
                 <Plus className="h-4 w-4 flex-shrink-0" />
