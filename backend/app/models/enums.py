@@ -6,7 +6,6 @@ class UserRole(str, enum.Enum):
     ORGANIZER = "organizer"
     TEAM_MANAGER = "team_manager"
     PLAYER = "player"
-    VIEWER = "viewer"
 
 
 class GameType(str, enum.Enum):

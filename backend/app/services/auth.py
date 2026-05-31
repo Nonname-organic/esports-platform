@@ -43,7 +43,7 @@ class AuthService:
             email=data.email,
             username=data.username,
             hashed_password=hash_password(data.password),
-            role=UserRole.VIEWER,
+            role=UserRole.PLAYER,
             is_active=True,
         )
         self._db.add(user)
