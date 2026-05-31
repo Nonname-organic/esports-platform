@@ -95,11 +95,11 @@ function MemberCard({ member }: { member: TeamMember }) {
       {/* アバター */}
       <div className="h-10 w-10 flex-shrink-0 overflow-hidden rounded-full border border-white/10 bg-slate-800">
         {member.avatar_url ? (
-          <img src={member.avatar_url} alt={member.display_name} className="h-full w-full object-cover" />
+          <img src={member.avatar_url} alt={member.display_name ?? member.username ?? ""} className="h-full w-full object-cover" />
         ) : (
           <div className="flex h-full w-full items-center justify-center">
             <span className="text-sm font-bold text-slate-500">
-              {member.display_name.charAt(0).toUpperCase()}
+              {(member.display_name ?? member.username ?? "?").charAt(0).toUpperCase()}
             </span>
           </div>
         )}
@@ -108,7 +108,7 @@ function MemberCard({ member }: { member: TeamMember }) {
       {/* 名前 + IGN */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <p className="truncate font-semibold text-white">{member.display_name}</p>
+          <p className="truncate font-semibold text-white">{member.display_name ?? member.username ?? "Unknown"}</p>
           {member.rating != null && member.rating >= 2000 && (
             <Star className="h-3.5 w-3.5 flex-shrink-0 text-yellow-400" fill="currentColor" />
           )}

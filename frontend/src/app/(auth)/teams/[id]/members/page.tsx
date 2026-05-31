@@ -219,7 +219,7 @@ function MemberRow({
     <div className="flex items-center gap-4 rounded-xl border border-white/8 bg-slate-900 px-4 py-3">
       <div className="h-10 w-10 flex-shrink-0 overflow-hidden rounded-full border border-white/10 bg-slate-800 flex items-center justify-center">
         {member.avatar_url ? (
-          <img src={member.avatar_url} alt={member.display_name} className="h-full w-full object-cover" />
+          <img src={member.avatar_url} alt={member.display_name ?? member.username ?? ""} className="h-full w-full object-cover" />
         ) : (
           <span className="text-sm font-bold text-slate-500">
             {(member.display_name || member.username || "?").charAt(0).toUpperCase()}
