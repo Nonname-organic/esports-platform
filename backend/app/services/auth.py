@@ -43,7 +43,7 @@ class AuthService:
             email=data.email,
             username=data.username,
             hashed_password=hash_password(data.password),
-            role=UserRole.PLAYER,
+            role=data.role if data.role in (UserRole.PLAYER, UserRole.ORGANIZER) else UserRole.PLAYER,
             is_active=True,
         )
         self._db.add(user)

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Trophy, Eye, EyeOff, Check, X } from "lucide-react";
+import { Trophy, Eye, EyeOff, Check, X, Users, Shield } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { useAuthStore } from "@/store/auth-store";
 import { cn } from "@/lib/utils";
@@ -44,6 +44,7 @@ export default function RegisterPage() {
   const router = useRouter();
   const { setTokens, setUser } = useAuthStore();
 
+  const [role, setRole] = useState<"player" | "organizer">("player");
   const [form, setForm] = useState({ username: "", email: "", password: "", confirm: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -90,6 +91,7 @@ export default function RegisterPage() {
         username: form.username,
         email: form.email,
         password: form.password,
+        role,
       });
 
       // 2. 登録後に自動ログイン
@@ -133,6 +135,45 @@ export default function RegisterPage() {
 
         {/* フォーム */}
         <form onSubmit={handleSubmit} className="space-y-4 rounded-2xl border border-white/10 bg-slate-900 p-6">
+          {/* ロール選択 */}
+          <div>
+            <label className="mb-2 block text-sm font-medium text-slate-400">アカウントの種類</label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setRole("player")}
+                className={cn(
+                  "flex flex-col items-center gap-2 rounded-xl border p-4 transition-all",
+                  role === "player"
+                    ? "border-brand-500 bg-brand-500/10 text-brand-400"
+                    : "border-white/10 text-slate-400 hover:border-white/20 hover:text-white",
+                )}
+              >
+                <Users className="h-6 w-6" />
+                <div className="text-center">
+                  <p className="text-sm font-bold">参加者</p>
+                  <p className="text-xs opacity-70">大会に参加する</p>
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setRole("organizer")}
+                className={cn(
+                  "flex flex-col items-center gap-2 rounded-xl border p-4 transition-all",
+                  role === "organizer"
+                    ? "border-brand-500 bg-brand-500/10 text-brand-400"
+                    : "border-white/10 text-slate-400 hover:border-white/20 hover:text-white",
+                )}
+              >
+                <Shield className="h-6 w-6" />
+                <div className="text-center">
+                  <p className="text-sm font-bold">主催者</p>
+                  <p className="text-xs opacity-70">大会を開催する</p>
+                </div>
+              </button>
+            </div>
+          </div>
+
           {/* サーバーエラー */}
           {error && (
             <div className="flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">

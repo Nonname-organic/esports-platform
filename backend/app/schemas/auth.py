@@ -10,6 +10,7 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     username: str = Field(..., min_length=3, max_length=50, pattern=r"^[a-zA-Z0-9_-]+$")
     password: str = Field(..., min_length=8, max_length=100)
+    role: UserRole = Field(default=UserRole.PLAYER)
 
     @field_validator("password")
     @classmethod
