@@ -1,8 +1,9 @@
-// ブラウザは相対URL（CloudFront/Nginx経由）、SSRは環境変数のAPIホストを使用
+// ブラウザは相対URL（CloudFront/Nginx経由）
+// SSRはINTERNAL_API_URL（Docker内部）またはフォールバック
 const API_BASE =
   typeof window !== "undefined"
     ? ""
-    : (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000");
+    : (process.env.INTERNAL_API_URL ?? "http://api:8000");
 
 export class ApiError extends Error {
   constructor(
@@ -41,7 +42,6 @@ async function request<T>(
     throw new ApiError(res.status, err.type ?? "unknown", err.title ?? err.detail ?? "エラー");
   }
 
-  // 204 No Content
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
@@ -68,17 +68,19 @@ export const apiClient = {
     request<T>(path, { method: "DELETE", ...init }),
 };
 
-/** Server Component / getServerSideProps 用（Cookieヘッダーを受け渡す） */
+/** Server Component 用（Docker内部ネットワークで直接APIを呼ぶ） */
 export async function serverFetch<T>(
   path: string,
   token: string | undefined,
   init?: RequestInit,
 ): Promise<T> {
+  // サーバーサイドは常にDocker内部URLを使用（NEXT_PUBLIC_*はビルド時に空になるため使えない）
+  const serverBase = process.env.INTERNAL_API_URL ?? "http://api:8000";
   const headers: HeadersInit = {
     "Content-Type": "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(`${serverBase}${path}`, {
     ...init,
     headers,
     cache: init?.cache ?? "no-store",
