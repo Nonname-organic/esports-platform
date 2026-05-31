@@ -18,11 +18,14 @@ interface AuthState {
   accessToken: string | null;
   refreshToken: string | null;
   isAuthenticated: boolean;
+  /** localStorageからの読み込みが完了したか */
+  _hasHydrated: boolean;
 
   setTokens: (access: string, refresh: string) => void;
   setUser: (user: AuthUser) => void;
   logout: () => void;
   hasRole: (...roles: UserRole[]) => boolean;
+  setHasHydrated: (v: boolean) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -32,6 +35,9 @@ export const useAuthStore = create<AuthState>()(
       accessToken: null,
       refreshToken: null,
       isAuthenticated: false,
+      _hasHydrated: false,
+
+      setHasHydrated: (v) => set({ _hasHydrated: v }),
 
       setTokens: (access, refresh) => {
         set({ accessToken: access, refreshToken: refresh, isAuthenticated: true });
@@ -64,6 +70,10 @@ export const useAuthStore = create<AuthState>()(
         refreshToken: state.refreshToken,
         isAuthenticated: state.isAuthenticated,
       }),
+      onRehydrateStorage: () => (state) => {
+        // localStorageの読み込み完了を通知
+        state?.setHasHydrated(true);
+      },
     },
   ),
 );

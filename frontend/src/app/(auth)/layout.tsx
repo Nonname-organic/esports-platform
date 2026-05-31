@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { LayoutDashboard, BarChart3, Plus, Shield, Users } from "lucide-react";
@@ -15,20 +15,17 @@ const NAV_ITEMS = [
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { isAuthenticated, user } = useAuthStore();
+  const { isAuthenticated, user, _hasHydrated } = useAuthStore();
 
-  // Zustandのlocalストレージhydrationを待つ（SSRで未認証と誤検知するのを防ぐ）
-  const [hydrated, setHydrated] = useState(false);
-  useEffect(() => { setHydrated(true); }, []);
-
+  // _hasHydrated: Zustand persist がlocalStorageから読み込み完了したタイミング
   useEffect(() => {
-    if (hydrated && !isAuthenticated) {
+    if (_hasHydrated && !isAuthenticated) {
       router.replace(`/login?next=${encodeURIComponent(pathname)}`);
     }
-  }, [hydrated, isAuthenticated, router, pathname]);
+  }, [_hasHydrated, isAuthenticated, router, pathname]);
 
-  // hydration前またはローディング中はスピナー表示
-  if (!hydrated || !isAuthenticated || !user) {
+  // localStorage読み込み完了前 or 未認証はスピナー表示
+  if (!_hasHydrated || !isAuthenticated || !user) {
     return (
       <div className="flex h-[calc(100vh-3.5rem)] items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
