@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Shield, RefreshCw, AlertCircle } from "lucide-react";
 import { useAuthStore } from "@/store/auth-store";
@@ -31,18 +31,21 @@ function PageSkeleton() {
 export default function AdminDashboardPage() {
   const router = useRouter();
   const hasRole = useAuthStore((s) => s.hasRole);
+  const [hydrated, setHydrated] = useState(false);
 
-  // 管理者のみアクセス可能
+  useEffect(() => { setHydrated(true); }, []);
+
+  // 管理者のみアクセス可能（hydration後に判定）
   useEffect(() => {
-    if (!hasRole("admin")) {
+    if (hydrated && !hasRole("admin")) {
       router.replace("/dashboard");
     }
-  }, [hasRole, router]);
+  }, [hydrated, hasRole, router]);
 
   const { data, isLoading, isError, refetch, isFetching } = useAdminDashboard();
 
-  // ─ 管理者でない場合は空表示（useEffectでリダイレクト）
-  if (!hasRole("admin")) return null;
+  // hydration前またはadminでない場合はスケルトン表示
+  if (!hydrated || !hasRole("admin")) return <PageSkeleton />;
 
   return (
     <div className="min-h-screen bg-slate-950 px-4 py-6 sm:px-6 lg:px-8">
