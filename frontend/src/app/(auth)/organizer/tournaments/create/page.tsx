@@ -771,7 +771,7 @@ export default function TournamentCreatePage() {
   const [currentStep, setCurrentStep] = useState(0);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [draftId, setDraftId] = useState<string | null>(null);
-  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // ドラフト読み込み
   const loadDraft = (): Partial<FormValues> => {
