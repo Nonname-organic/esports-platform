@@ -1,254 +1,205 @@
 "use client";
 
-// 主催者ダッシュボード: CSR
-// 主催者が管理する大会の一覧と各種ステータスを表示
-
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Plus, Trophy, Users, ChevronRight, AlertCircle } from "lucide-react";
-import { useTournaments, useCreateTournament, useGenerateBracket } from "@/features/tournaments/hooks/use-tournaments";
-import { GameType } from "@/types/tournament";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  Trophy, Plus, Users, Zap, Clock, PlayCircle, Settings,
+  Search, Calendar,
+} from "lucide-react";
+import { tournamentApi } from "@/features/tournaments/api/tournament-api";
 import { useAuthStore } from "@/store/auth-store";
-import { formatDate, getStatusColor, getStatusLabel } from "@/lib/utils";
+import { cn, formatDate, getGameColor, getStatusColor, getStatusLabel } from "@/lib/utils";
+import type { TournamentDetail, TournamentStatus } from "@/types/tournament";
 
-export default function DashboardPage() {
-  const { user } = useAuthStore();
-  const [showCreateModal, setShowCreateModal] = useState(false);
+const STATUS_NEXT: Partial<Record<TournamentStatus, { next: TournamentStatus; label: string }>> = {
+  draft: { next: "registration_open", label: "受付開始" },
+  registration_open: { next: "registration_closed", label: "受付終了" },
+  registration_closed: { next: "ongoing", label: "開催開始" },
+  check_in: { next: "ongoing", label: "開催開始" },
+  ongoing: { next: "completed", label: "完了にする" },
+};
 
-  // 主催者の全大会を取得（APIではorganizer_idでフィルタされる想定）
-  const { data, isLoading } = useTournaments();
-  const createMutation = useCreateTournament();
-
-  const tournaments = data?.pages.flatMap((p) => p.data) ?? [];
+function TournamentCard({
+  tournament, onStatusChange,
+}: {
+  tournament: TournamentDetail;
+  onStatusChange: (id: string, status: TournamentStatus) => void;
+}) {
+  const next = STATUS_NEXT[tournament.status as TournamentStatus];
+  const fillPct = tournament.max_teams > 0
+    ? Math.min((tournament.registered_teams / tournament.max_teams) * 100, 100)
+    : 0;
 
   return (
-    <div className="px-4 py-8 sm:px-6 lg:px-8">
-      {/* ページヘッダー */}
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-black text-white">ダッシュボード</h1>
-          <p className="mt-0.5 text-sm text-slate-400">
-            {user?.username} さん、おかえりなさい
-          </p>
+    <div className="overflow-hidden rounded-2xl border border-white/8 bg-slate-900 transition-all hover:border-white/15">
+      <div className="relative h-20 bg-gradient-to-br from-slate-800 to-slate-950">
+        {tournament.banner_url && (
+          <img src={tournament.banner_url} alt="" className="h-full w-full object-cover opacity-25" />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-900 to-transparent" />
+        <div className="absolute left-3 top-3">
+          <span className={cn("rounded-full border px-2 py-0.5 text-[10px] font-bold", getGameColor(tournament.game))}>{tournament.game}</span>
         </div>
-        {(user?.role === "organizer" || user?.role === "admin") && (
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-600 transition-colors"
+        <div className="absolute right-3 top-3">
+          <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-bold", getStatusColor(tournament.status))}>{getStatusLabel(tournament.status)}</span>
+        </div>
+      </div>
+      <div className="p-4">
+        <h3 className="mb-1 font-bold text-white line-clamp-1">{tournament.name}</h3>
+        <div className="mb-3 flex items-center gap-3 text-xs text-slate-500">
+          <span>{tournament.registered_teams}/{tournament.max_teams} チーム</span>
+          {tournament.start_at && (
+            <span className="flex items-center gap-1">
+              <Calendar className="h-3 w-3" />
+              {new Date(tournament.start_at).toLocaleDateString("ja-JP", { month: "short", day: "numeric" })}
+            </span>
+          )}
+        </div>
+        <div className="mb-3 h-1 overflow-hidden rounded-full bg-white/10">
+          <div className={cn("h-full rounded-full", fillPct >= 100 ? "bg-red-500" : "bg-brand-500")} style={{ width: `${fillPct}%` }} />
+        </div>
+        <div className="flex gap-2">
+          <Link
+            href={`/organizer/tournaments/${tournament.id}`}
+            className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-white/10 py-2 text-xs font-semibold text-slate-300 hover:border-brand-500/40 hover:text-brand-400 transition-colors"
           >
-            <Plus className="h-4 w-4" />
-            大会を作成
-          </button>
-        )}
-      </div>
-
-      {/* サマリーカード */}
-      <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
-        {[
-          {
-            label: "管理中の大会",
-            value: tournaments.length,
-            icon: Trophy,
-            color: "text-brand-400",
-          },
-          {
-            label: "開催中",
-            value: tournaments.filter((t) => t.status === "ongoing").length,
-            icon: AlertCircle,
-            color: "text-red-400",
-          },
-          {
-            label: "受付中",
-            value: tournaments.filter((t) => t.status === "registration_open").length,
-            icon: Users,
-            color: "text-green-400",
-          },
-          {
-            label: "完了",
-            value: tournaments.filter((t) => t.status === "completed").length,
-            icon: Trophy,
-            color: "text-slate-400",
-          },
-        ].map(({ label, value, icon: Icon, color }) => (
-          <div key={label} className="rounded-xl border border-white/10 bg-slate-900 p-4">
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-slate-500">{label}</p>
-              <Icon className={`h-4 w-4 ${color}`} />
-            </div>
-            <p className="mt-2 text-2xl font-black text-white">{value}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* 大会リスト */}
-      <div className="rounded-xl border border-white/10 bg-slate-900 overflow-hidden">
-        <div className="border-b border-white/10 px-5 py-4">
-          <h2 className="font-bold text-white">大会一覧</h2>
-        </div>
-
-        {isLoading ? (
-          <div className="space-y-px">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="h-16 animate-pulse bg-white/5" />
-            ))}
-          </div>
-        ) : tournaments.length === 0 ? (
-          <div className="py-16 text-center">
-            <Trophy className="mx-auto mb-3 h-10 w-10 text-slate-600" />
-            <p className="text-sm text-slate-400">大会がありません</p>
+            <Settings className="h-3.5 w-3.5" />管理
+          </Link>
+          {next && (
             <button
-              onClick={() => setShowCreateModal(true)}
-              className="mt-3 text-sm text-brand-400 hover:text-brand-300"
+              onClick={() => onStatusChange(String(tournament.id), next.next)}
+              className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-brand-500/10 py-2 text-xs font-semibold text-brand-400 hover:bg-brand-500/20 transition-colors"
             >
-              最初の大会を作成する
+              <PlayCircle className="h-3.5 w-3.5" />{next.label}
             </button>
-          </div>
-        ) : (
-          <div className="divide-y divide-white/5">
-            {tournaments.map((t) => (
-              <div
-                key={t.id}
-                className="flex items-center justify-between px-5 py-4 hover:bg-white/5 transition-colors"
-              >
-                <div className="flex items-center gap-4 min-w-0">
-                  <div className="min-w-0">
-                    <p className="truncate font-semibold text-white">{t.name}</p>
-                    <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-500">
-                      <span>{t.game}</span>
-                      <span>·</span>
-                      <span>{t.registered_teams}/{t.max_teams} チーム</span>
-                      {t.start_at && (
-                        <>
-                          <span>·</span>
-                          <span>{formatDate(t.start_at)}</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  <span
-                    className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${getStatusColor(t.status)}`}
-                  >
-                    {getStatusLabel(t.status)}
-                  </span>
-                  <Link
-                    href={`/tournaments/${t.id}`}
-                    className="rounded-lg p-1.5 text-slate-500 hover:bg-white/10 hover:text-white transition-colors"
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Link>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+          )}
+        </div>
       </div>
-
-      {/* 大会作成モーダル (簡易版) */}
-      {showCreateModal && (
-        <CreateTournamentModal
-          onClose={() => setShowCreateModal(false)}
-          onSubmit={async (data) => {
-            await createMutation.mutateAsync(data);
-            setShowCreateModal(false);
-          }}
-          isPending={createMutation.isPending}
-        />
-      )}
     </div>
   );
 }
 
-interface CreateTournamentModalProps {
-  onClose: () => void;
-  onSubmit: (data: { name: string; game: GameType; format: string; max_teams: number }) => Promise<void>;
-  isPending: boolean;
-}
+export default function DashboardPage() {
+  const router = useRouter();
+  const user = useAuthStore((s) => s.user);
+  const hasRole = useAuthStore((s) => s.hasRole);
+  const qc = useQueryClient();
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<TournamentStatus | "all">("all");
 
-function CreateTournamentModal({ onClose, onSubmit, isPending }: CreateTournamentModalProps) {
-  const [form, setForm] = useState<{ name: string; game: GameType; format: string; max_teams: number }>({
-    name: "",
-    game: "VALORANT",
-    format: "single_elimination",
-    max_teams: 16,
+  const isOrganizer = hasRole("organizer", "admin");
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["tournaments", "mine"],
+    queryFn: () => tournamentApi.mine(),
+    select: (res) => res.data,
+    enabled: isOrganizer,
   });
 
+  const changeStatus = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: TournamentStatus }) =>
+      tournamentApi.changeStatus(id, status),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["tournaments", "mine"] }),
+  });
+
+  const tournaments = data ?? [];
+  const filtered = tournaments.filter((t) => {
+    if (filter !== "all" && t.status !== filter) return false;
+    if (search && !t.name.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
+
+  const stats = {
+    total: tournaments.length,
+    ongoing: tournaments.filter((t) => t.status === "ongoing").length,
+    open: tournaments.filter((t) => t.status === "registration_open").length,
+    draft: tournaments.filter((t) => t.status === "draft").length,
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900 p-6">
-        <h2 className="mb-5 text-lg font-bold text-white">大会を作成</h2>
-
-        <div className="space-y-4">
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-400">大会名</label>
-            <input
-              type="text"
-              value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder-slate-600 outline-none focus:border-brand-500"
-              placeholder="VALORANT 秋季大会 2025"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-400">ゲーム</label>
-            <select
-              value={form.game}
-              onChange={(e) => setForm((f) => ({ ...f, game: e.target.value as GameType }))}
-              className="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none focus:border-brand-500"
-            >
-              {["VALORANT", "LOL", "APEX", "CS2", "OVERWATCH"].map((g) => (
-                <option key={g} value={g}>{g}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-400">形式</label>
-            <select
-              value={form.format}
-              onChange={(e) => setForm((f) => ({ ...f, format: e.target.value }))}
-              className="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none focus:border-brand-500"
-            >
-              <option value="single_elimination">シングルエリミネーション</option>
-              <option value="double_elimination">ダブルエリミネーション</option>
-              <option value="round_robin">ラウンドロビン</option>
-              <option value="swiss">スイス式</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-400">最大チーム数</label>
-            <select
-              value={form.max_teams}
-              onChange={(e) => setForm((f) => ({ ...f, max_teams: Number(e.target.value) }))}
-              className="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none focus:border-brand-500"
-            >
-              {[4, 8, 16, 32].map((n) => (
-                <option key={n} value={n}>{n} チーム</option>
-              ))}
-            </select>
-          </div>
+    <div className="min-h-screen bg-slate-950 px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-black text-white">ダッシュボード</h1>
+          <p className="mt-0.5 text-sm text-slate-500">{user?.username} の大会管理</p>
         </div>
+        <button
+          onClick={() => router.push("/organizer/tournaments/new")}
+          className="flex items-center gap-2 rounded-xl bg-brand-500 px-5 py-2.5 text-sm font-bold text-white hover:bg-brand-600 transition-colors"
+        >
+          <Plus className="h-4 w-4" />大会を作成
+        </button>
+      </div>
 
-        <div className="mt-6 flex gap-3">
-          <button
-            onClick={onClose}
-            disabled={isPending}
-            className="flex-1 rounded-xl border border-white/10 py-2.5 text-sm font-semibold text-slate-400 hover:text-white transition-colors"
-          >
-            キャンセル
-          </button>
-          <button
-            onClick={() => onSubmit(form)}
-            disabled={isPending || !form.name.trim()}
-            className="flex-1 rounded-xl bg-brand-500 py-2.5 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-50 transition-colors"
-          >
-            {isPending ? "作成中..." : "作成する"}
-          </button>
+      {/* KPI */}
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {[
+          { label: "総大会数", value: stats.total, icon: Trophy, color: "text-brand-400", bg: "bg-brand-500/10" },
+          { label: "開催中", value: stats.ongoing, icon: Zap, color: "text-red-400", bg: "bg-red-500/10" },
+          { label: "受付中", value: stats.open, icon: Users, color: "text-green-400", bg: "bg-green-500/10" },
+          { label: "下書き", value: stats.draft, icon: Clock, color: "text-slate-400", bg: "bg-slate-500/10" },
+        ].map(({ label, value, icon: Icon, color, bg }) => (
+          <div key={label} className="rounded-2xl border border-white/8 bg-slate-900 p-4">
+            <div className={cn("mb-2 inline-flex rounded-xl p-2", bg)}>
+              <Icon className={cn("h-5 w-5", color)} />
+            </div>
+            <p className="text-2xl font-black text-white">{value}</p>
+            <p className="text-xs text-slate-500">{label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Filter */}
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="大会名で検索..."
+            className="w-full rounded-xl border border-white/10 bg-slate-900 py-2.5 pl-9 pr-4 text-sm text-white placeholder-slate-600 outline-none focus:border-brand-500" />
+        </div>
+        <div className="flex gap-1 rounded-xl border border-white/10 bg-slate-900 p-1">
+          {(["all", "draft", "registration_open", "ongoing", "completed"] as const).map((s) => (
+            <button key={s} onClick={() => setFilter(s as TournamentStatus | "all")}
+              className={cn("rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors",
+                filter === s ? "bg-brand-500 text-white" : "text-slate-500 hover:text-white")}>
+              {s === "all" ? "すべて" : getStatusLabel(s)}
+            </button>
+          ))}
         </div>
       </div>
+
+      {/* Grid */}
+      {isLoading ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="h-56 animate-pulse rounded-2xl bg-white/5" />
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="flex flex-col items-center py-20 text-center">
+          <div className="mb-4 rounded-2xl bg-brand-500/10 p-5">
+            <Trophy className="h-12 w-12 text-brand-400" />
+          </div>
+          <h3 className="text-lg font-bold text-white">
+            {search || filter !== "all" ? "該当する大会がありません" : "まだ大会がありません"}
+          </h3>
+          <p className="mt-2 text-sm text-slate-400">最初の大会を作成してコミュニティを盛り上げましょう</p>
+          {!search && filter === "all" && (
+            <button onClick={() => router.push("/organizer/tournaments/new")}
+              className="mt-5 flex items-center gap-2 rounded-xl bg-brand-500 px-6 py-3 text-sm font-bold text-white hover:bg-brand-600 transition-colors">
+              <Plus className="h-4 w-4" />大会を作成
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {filtered.map((t) => (
+            <TournamentCard key={String(t.id)} tournament={t}
+              onStatusChange={(id, status) => changeStatus.mutate({ id, status })} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

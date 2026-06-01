@@ -117,6 +117,46 @@ class TournamentRepository(BaseRepository[Tournament]):
         await self._db.flush()
         return brackets
 
+    async def list_by_organizer(
+        self, organizer_id: uuid.UUID, limit: int = 50
+    ) -> list[Tournament]:
+        result = await self._db.execute(
+            select(Tournament)
+            .where(Tournament.organizer_id == organizer_id)
+            .order_by(Tournament.created_at.desc())
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+
+    async def get_all_registrations(
+        self, tournament_id: uuid.UUID
+    ) -> list[TournamentRegistration]:
+        result = await self._db.execute(
+            select(TournamentRegistration)
+            .where(TournamentRegistration.tournament_id == tournament_id)
+            .options(selectinload(TournamentRegistration.team))
+            .order_by(TournamentRegistration.registered_at.asc())
+        )
+        return list(result.scalars().all())
+
+    async def get_registration_by_id(
+        self, registration_id: uuid.UUID
+    ) -> TournamentRegistration | None:
+        result = await self._db.execute(
+            select(TournamentRegistration)
+            .where(TournamentRegistration.id == registration_id)
+            .options(selectinload(TournamentRegistration.team))
+        )
+        return result.scalar_one_or_none()
+
+    async def update_registration_status(
+        self, reg: TournamentRegistration, status: RegistrationStatus
+    ) -> TournamentRegistration:
+        reg.status = status
+        reg.updated_at = datetime.now(timezone.utc)
+        await self._db.flush()
+        return reg
+
     async def get_brackets_with_matches(self, tournament_id: uuid.UUID) -> list[Bracket]:
         from app.models.match import Match
 

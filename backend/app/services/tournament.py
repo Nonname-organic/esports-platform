@@ -9,6 +9,7 @@ from app.core.exceptions import BusinessRuleError, ForbiddenError, NotFoundError
 from app.core.redis import CacheKeys, CacheTTL, RedisCache
 from app.models.enums import (
     MatchStatus,
+    RegistrationStatus,
     TournamentFormat,
     TournamentStatus,
     UserRole,
@@ -34,9 +35,9 @@ class TournamentService:
         self._db = db
 
     async def create(self, data: TournamentCreate, organizer: User) -> Tournament:
-        from python_slugify import slugify
-
-        slug_base = slugify(data.name)
+        import re
+        slug_base = re.sub(r"[^\w\s-]", "", data.name.lower()).strip()
+        slug_base = re.sub(r"[\s_-]+", "-", slug_base) or "tournament"
         slug = slug_base
         counter = 1
         while True:
@@ -303,6 +304,73 @@ class TournamentService:
                 ]
             },
         )
+
+    async def get_my_tournaments(self, organizer_id: uuid.UUID) -> list[Tournament]:
+        return await self._repo.list_by_organizer(organizer_id)
+
+    async def delete(self, tournament_id: uuid.UUID, current_user: User) -> None:
+        tournament = await self._repo.get_by_id(tournament_id)
+        if not tournament:
+            raise NotFoundError("大会", str(tournament_id))
+        if current_user.role != UserRole.ADMIN and tournament.organizer_id != current_user.id:
+            raise ForbiddenError("この大会を削除する権限がありません")
+        if tournament.status == TournamentStatus.ONGOING:
+            raise BusinessRuleError("開催中の大会は削除できません")
+        await self._repo.delete(tournament)
+        await self._cache.delete_pattern("cache:tournament:*")
+
+    async def change_status(
+        self, tournament_id: uuid.UUID, new_status: TournamentStatus, current_user: User
+    ) -> Tournament:
+        tournament = await self._repo.get_by_id(tournament_id)
+        if not tournament:
+            raise NotFoundError("大会", str(tournament_id))
+        if current_user.role != UserRole.ADMIN and tournament.organizer_id != current_user.id:
+            raise ForbiddenError("ステータス変更の権限がありません")
+
+        # 有効なステータス遷移チェック
+        valid_transitions = {
+            TournamentStatus.DRAFT: [TournamentStatus.REGISTRATION_OPEN, TournamentStatus.CANCELLED],
+            TournamentStatus.REGISTRATION_OPEN: [TournamentStatus.REGISTRATION_CLOSED, TournamentStatus.CANCELLED],
+            TournamentStatus.REGISTRATION_CLOSED: [TournamentStatus.CHECK_IN, TournamentStatus.ONGOING, TournamentStatus.CANCELLED],
+            TournamentStatus.CHECK_IN: [TournamentStatus.ONGOING, TournamentStatus.CANCELLED],
+            TournamentStatus.ONGOING: [TournamentStatus.COMPLETED, TournamentStatus.CANCELLED],
+            TournamentStatus.COMPLETED: [],
+            TournamentStatus.CANCELLED: [],
+        }
+        if new_status not in valid_transitions.get(tournament.status, []):
+            raise BusinessRuleError(
+                f"{tournament.status.value} から {new_status.value} への変更はできません"
+            )
+
+        tournament = await self._repo.update(tournament, status=new_status)
+        await self._cache.delete(CacheKeys.TOURNAMENT_DETAIL.replace("{id}", str(tournament_id)))
+        return tournament
+
+    async def list_registrations(self, tournament_id: uuid.UUID, current_user: User) -> list:
+        tournament = await self._repo.get_by_id(tournament_id)
+        if not tournament:
+            raise NotFoundError("大会", str(tournament_id))
+        if current_user.role != UserRole.ADMIN and tournament.organizer_id != current_user.id:
+            raise ForbiddenError("登録一覧を閲覧する権限がありません")
+        return await self._repo.get_all_registrations(tournament_id)
+
+    async def update_registration(
+        self,
+        tournament_id: uuid.UUID,
+        registration_id: uuid.UUID,
+        status: RegistrationStatus,
+        current_user: User,
+    ):
+        tournament = await self._repo.get_by_id(tournament_id)
+        if not tournament:
+            raise NotFoundError("大会", str(tournament_id))
+        if current_user.role != UserRole.ADMIN and tournament.organizer_id != current_user.id:
+            raise ForbiddenError("この操作を行う権限がありません")
+        reg = await self._repo.get_registration_by_id(registration_id)
+        if not reg or reg.tournament_id != tournament_id:
+            raise NotFoundError("登録", str(registration_id))
+        return await self._repo.update_registration_status(reg, status)
 
     async def get_bracket(self, tournament_id: uuid.UUID) -> BracketResponse:
         cache_key = CacheKeys.BRACKET.replace("{tournament_id}", str(tournament_id))

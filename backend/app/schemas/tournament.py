@@ -94,6 +94,21 @@ class RegistrationRequest(BaseModel):
     notes: str | None = None
 
 
+class RegistrationInfo(BaseModel):
+    id: str
+    team_id: str
+    team_name: str
+    team_tag: str
+    team_logo_url: str | None
+    status: str
+    notes: str | None
+    registered_at: datetime
+
+
+class StatusChangeRequest(BaseModel):
+    status: TournamentStatus
+
+
 class BracketMatchTeam(BaseModel):
     id: str | None
     name: str | None
