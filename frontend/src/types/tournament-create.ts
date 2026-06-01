@@ -18,7 +18,7 @@ export const SUPPORTED_GAMES = {
       "シルバー1", "シルバー2", "シルバー3", "ゴールド1", "ゴールド2", "ゴールド3",
       "プラチナ1", "プラチナ2", "プラチナ3", "ダイヤモンド1", "ダイヤモンド2", "ダイヤモンド3",
       "アセンダント1", "アセンダント2", "アセンダント3",
-      "イモータル1", "イモータル2", "イモータル3", "ラディアント"],
+      "イモータル1", "イモータル2", "イモータル3", "レディアント"],
     maps: ["Ascent", "Bind", "Haven", "Icebox", "Pearl", "Lotus", "Fracture", "Breeze", "Sunset", "Abyss"],
     servers: ["Tokyo", "Singapore", "Seoul", "Hong Kong", "Mumbai"],
     gameSettings: {
