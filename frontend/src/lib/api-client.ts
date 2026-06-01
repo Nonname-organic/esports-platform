@@ -114,7 +114,11 @@ async function request<T>(
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ title: "エラーが発生しました", type: "unknown" }));
-    throw new ApiError(res.status, err.type ?? "unknown", err.title ?? err.detail ?? "エラー");
+    // FastAPI validation errors: detail is an array of {loc, msg, type}
+    const detail = Array.isArray(err.detail)
+      ? err.detail.map((e: any) => e.msg ?? String(e)).join(" / ")
+      : err.detail;
+    throw new ApiError(res.status, err.type ?? "unknown", err.title ?? detail ?? "エラーが発生しました");
   }
 
   if (res.status === 204) return undefined as T;
@@ -143,7 +147,10 @@ async function uploadRequest<T>(path: string, formData: FormData, retry = true):
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ title: "アップロードに失敗しました", type: "unknown" }));
-    throw new ApiError(res.status, err.type ?? "unknown", err.detail ?? err.title ?? "エラー");
+    const detail = Array.isArray(err.detail)
+      ? err.detail.map((e: any) => e.msg ?? String(e)).join(" / ")
+      : err.detail;
+    throw new ApiError(res.status, err.type ?? "unknown", detail ?? err.title ?? "アップロードに失敗しました");
   }
 
   return res.json() as Promise<T>;
