@@ -114,10 +114,10 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
                 主催者メニュー
               </p>
               <Link
-                href="/organizer/tournaments/new"
+                href="/organizer/tournaments/create"
                 className={cn(
                   "flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                  pathname === "/organizer/tournaments/new"
+                  pathname.startsWith("/organizer/tournaments/create")
                     ? "bg-brand-500/20 text-brand-400"
                     : "text-slate-400 hover:bg-white/5 hover:text-white",
                 )}
