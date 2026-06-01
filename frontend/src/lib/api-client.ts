@@ -21,9 +21,57 @@ function getAccessToken(): string | null {
   return localStorage.getItem("access_token");
 }
 
+function getRefreshToken(): string | null {
+  if (typeof window === "undefined") return null;
+  // Zustand storeから読む（persisted state）
+  try {
+    const stored = localStorage.getItem("esports-auth");
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      return parsed?.state?.refreshToken ?? null;
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+let isRefreshing = false;
+let refreshQueue: Array<(token: string) => void> = [];
+
+async function tryRefreshToken(): Promise<string | null> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return null;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const newToken = data.access_token;
+    if (newToken) {
+      localStorage.setItem("access_token", newToken);
+      // Zustand storeも更新
+      try {
+        const stored = localStorage.getItem("esports-auth");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          parsed.state.accessToken = newToken;
+          parsed.state.refreshToken = data.refresh_token ?? refreshToken;
+          localStorage.setItem("esports-auth", JSON.stringify(parsed));
+        }
+      } catch { /* ignore */ }
+      return newToken;
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
 async function request<T>(
   path: string,
   options: RequestInit = {},
+  retry = true,
 ): Promise<T> {
   const token = getAccessToken();
   const headers: HeadersInit = {
@@ -32,10 +80,37 @@ async function request<T>(
     ...options.headers,
   };
 
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers,
-  });
+  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+
+  // 401 → トークンリフレッシュを試みる
+  if (res.status === 401 && retry) {
+    if (isRefreshing) {
+      // 他のリフレッシュを待つ
+      return new Promise((resolve, reject) => {
+        refreshQueue.push((newToken) => {
+          request<T>(path, { ...options, headers: { ...headers, Authorization: `Bearer ${newToken}` } }, false)
+            .then(resolve)
+            .catch(reject);
+        });
+      });
+    }
+
+    isRefreshing = true;
+    const newToken = await tryRefreshToken();
+    isRefreshing = false;
+
+    if (newToken) {
+      refreshQueue.forEach((cb) => cb(newToken));
+      refreshQueue = [];
+      return request<T>(path, options, false);
+    } else {
+      // リフレッシュ失敗 → ログアウト
+      localStorage.removeItem("access_token");
+      if (typeof window !== "undefined") {
+        window.location.href = `/login?next=${encodeURIComponent(window.location.pathname)}`;
+      }
+    }
+  }
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ title: "エラーが発生しました", type: "unknown" }));
@@ -74,7 +149,6 @@ export async function serverFetch<T>(
   token: string | undefined,
   init?: RequestInit,
 ): Promise<T> {
-  // サーバーサイドは常にDocker内部URLを使用（NEXT_PUBLIC_*はビルド時に空になるため使えない）
   const serverBase = process.env.INTERNAL_API_URL ?? "http://api:8000";
   const headers: HeadersInit = {
     "Content-Type": "application/json",
