@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { Upload, X, Image as ImageIcon } from "lucide-react";
+import { apiClient } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
 interface ImageUploadProps {
@@ -39,19 +40,10 @@ export function ImageUpload({
       const formData = new FormData();
       formData.append("file", file);
 
-      const token = localStorage.getItem("access_token");
-      const res = await fetch(`/api/v1/upload/image?purpose=${purpose}`, {
-        method: "POST",
-        body: formData,
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail ?? "アップロードに失敗しました");
-      }
-
-      const data = await res.json();
+      const data = await apiClient.upload<{ url: string; key: string }>(
+        `/api/v1/upload/image?purpose=${purpose}`,
+        formData,
+      );
       onChange(data.url);
     } catch (e) {
       setError(e instanceof Error ? e.message : "アップロードに失敗しました");

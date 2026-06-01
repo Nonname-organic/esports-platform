@@ -121,9 +121,40 @@ async function request<T>(
   return res.json() as Promise<T>;
 }
 
+/** FormData（ファイルアップロード）用 - Content-Typeを自動設定させる */
+async function uploadRequest<T>(path: string, formData: FormData, retry = true): Promise<T> {
+  const token = getAccessToken();
+  const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    body: formData,
+    headers,
+  });
+
+  if (res.status === 401 && retry) {
+    const newToken = await tryRefreshToken();
+    if (newToken) return uploadRequest<T>(path, formData, false);
+    localStorage.removeItem("access_token");
+    if (typeof window !== "undefined") {
+      window.location.href = `/login?next=${encodeURIComponent(window.location.pathname)}`;
+    }
+  }
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ title: "アップロードに失敗しました", type: "unknown" }));
+    throw new ApiError(res.status, err.type ?? "unknown", err.detail ?? err.title ?? "エラー");
+  }
+
+  return res.json() as Promise<T>;
+}
+
 export const apiClient = {
   get: <T>(path: string, init?: RequestInit) =>
     request<T>(path, { method: "GET", ...init }),
+
+  upload: <T>(path: string, formData: FormData) =>
+    uploadRequest<T>(path, formData),
 
   post: <T>(path: string, body?: unknown, init?: RequestInit) =>
     request<T>(path, {
