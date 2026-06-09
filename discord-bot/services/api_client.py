@@ -163,6 +163,14 @@ class PlatformAPIClient:
     async def resolve(self, discord_user_id):
         return await self._bot("GET", "/api/v1/bot/resolve", discord_user_id=discord_user_id)
 
+    async def link(self, code, discord_user_id, discord_username=None):
+        return await self._bot("POST", "/api/v1/bot/link",
+                               json={"code": code, "discord_username": discord_username},
+                               discord_user_id=discord_user_id)
+
+    async def unlink(self, discord_user_id):
+        return await self._bot("POST", "/api/v1/bot/unlink", discord_user_id=discord_user_id)
+
     async def change_tournament_status(self, tid, status, discord_user_id):
         return await self._bot("POST", f"/api/v1/bot/tournaments/{tid}/status",
                                json={"status": status}, discord_user_id=discord_user_id)

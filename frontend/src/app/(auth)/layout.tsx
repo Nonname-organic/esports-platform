@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { LayoutDashboard, BarChart3, Plus, Shield, Users } from "lucide-react";
+import { LayoutDashboard, BarChart3, Plus, Shield, Users, Link2 } from "lucide-react";
 import { useAuthStore } from "@/store/auth-store";
 import { cn } from "@/lib/utils";
 
@@ -104,6 +104,18 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             >
               <Users className="h-4 w-4 flex-shrink-0" />
               プレイヤー登録
+            </Link>
+            <Link
+              href="/discord-link"
+              className={cn(
+                "flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                pathname === "/discord-link"
+                  ? "bg-brand-500/20 text-brand-400"
+                  : "text-slate-400 hover:bg-white/5 hover:text-white",
+              )}
+            >
+              <Link2 className="h-4 w-4 flex-shrink-0" />
+              Discord連携
             </Link>
           </div>
 

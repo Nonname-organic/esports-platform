@@ -34,6 +34,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 metrics = Metrics(api_client)
 
 COGS = [
+    "cogs.account",
     "cogs.tournament", "cogs.bracket", "cogs.checkin", "cogs.match", "cogs.veto",
     "cogs.team", "cogs.player", "cogs.scout", "cogs.analytics", "cogs.career",
     "cogs.notification", "cogs.stream", "cogs.moderator", "cogs.support", "cogs.help",

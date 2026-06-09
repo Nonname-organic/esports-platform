@@ -12,7 +12,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Header, Query
 from pydantic import BaseModel
 from sqlalchemy import func, select
 
@@ -82,6 +82,65 @@ async def _actor_context(db, user: User) -> dict:
 
 def _is_organizer(user: User) -> bool:
     return user.role in (UserRole.ADMIN, UserRole.ORGANIZER, UserRole.TEAM_MANAGER)
+
+
+# ── account linking (code方式) ────────────────────────────────────────────────
+class LinkBody(BaseModel):
+    code: str
+    discord_username: Optional[str] = None
+
+
+@router.post("/link")
+async def link_account(
+    body: LinkBody, db: DBSession, cache: Cache, _: BotAuth,
+    x_discord_user_id: Optional[str] = Header(default=None, alias="X-Discord-User-Id"),
+):
+    """Webで発行した連携コードで Discord↔プラットフォーム を紐付け。
+
+    BotActorは未連携時Noneになるため、ここでは生の X-Discord-User-Id を使う。
+    """
+    from app.models.discord import DiscordLink
+
+    if not x_discord_user_id:
+        raise BusinessRuleError("Discordユーザーを特定できません")
+    rec = await cache.get(f"discord_link_code:{body.code.strip().upper()}")
+    if not rec:
+        raise BusinessRuleError("コードが無効、または期限切れです")
+    user_id = uuid.UUID(rec["user_id"] if isinstance(rec, dict) else rec)
+
+    now = datetime.now(timezone.utc)
+    existing = (
+        await db.execute(select(DiscordLink).where(DiscordLink.user_id == user_id))
+    ).scalar_one_or_none()
+    if existing:
+        existing.discord_user_id = str(x_discord_user_id)
+        existing.discord_username = body.discord_username
+        existing.linked_at = now
+    else:
+        db.add(DiscordLink(
+            user_id=user_id, discord_user_id=str(x_discord_user_id),
+            discord_username=body.discord_username, linked_at=now,
+        ))
+    await cache.delete(f"discord_link_code:{body.code.strip().upper()}")
+    await db.flush()
+
+    # 連携直後にロール等を返す（Bot側でDiscordロール付与に使う）
+    user = (await db.execute(select(User).where(User.id == user_id))).scalar_one()
+    return {"data": {"linked": True, "role": user.role.value}}
+
+
+@router.post("/unlink")
+async def unlink_account(db: DBSession, _: BotAuth, actor: BotActor):
+    """連携解除。"""
+    from app.models.discord import DiscordLink
+    user = await _require_actor(actor)
+    link = (
+        await db.execute(select(DiscordLink).where(DiscordLink.user_id == user.id))
+    ).scalar_one_or_none()
+    if link:
+        await db.delete(link)
+        await db.flush()
+    return {"data": {"unlinked": True}}
 
 
 # ── resolve ─────────────────────────────────────────────────────────────────

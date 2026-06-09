@@ -1,9 +1,11 @@
 """
 Discord連携 API
 - 大会Discordセットアップ
-- OAuth連携
+- OAuth連携 / コード連携
 """
 
+import secrets
+import string
 import uuid
 
 from fastapi import APIRouter, Query
@@ -15,6 +17,8 @@ from app.services.discord_service import DiscordService
 
 router = APIRouter(prefix="/discord", tags=["Discord連携"])
 
+LINK_CODE_TTL = 300  # 連携コードの有効期間（秒）
+
 
 class SetupRequest(BaseModel):
     guild_id: str
@@ -22,6 +26,18 @@ class SetupRequest(BaseModel):
 
 class OAuthCallbackRequest(BaseModel):
     code: str
+
+
+@router.post("/link-code")
+async def issue_link_code(db: DBSession, cache: Cache, current_user: CurrentUser):
+    """Discordコード連携用のワンタイムコードを発行（Webログインユーザー）。
+
+    ユーザーはこのコードを Discord で `/link code:XXXX` として入力し、
+    自分のDiscordアカウントとプラットフォームアカウントを紐付ける。
+    """
+    code = "".join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(6))
+    await cache.set(f"discord_link_code:{code}", {"user_id": str(current_user.id)}, ttl=LINK_CODE_TTL)
+    return {"data": {"code": code, "expires_in": LINK_CODE_TTL}}
 
 
 @router.get("/oauth/login")

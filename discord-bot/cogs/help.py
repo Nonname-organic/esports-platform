@@ -9,6 +9,11 @@ from ui.common import brand_embed
 
 # (category, [(command, min_role, desc)])
 CATALOG: list[tuple[str, list[tuple[str, Role, str]]]] = [
+    ("🔗 Account", [
+        ("/link", Role.SPECTATOR, "アカウント連携"),
+        ("/whoami", Role.SPECTATOR, "連携情報"),
+        ("/unlink", Role.SPECTATOR, "連携解除"),
+    ]),
     ("🏆 Tournament", [
         ("/tournament", Role.SPECTATOR, "大会情報"),
         ("/tournament-rules", Role.SPECTATOR, "ルール"),
