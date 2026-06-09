@@ -189,9 +189,30 @@ class MatchCog(commands.Cog):
         if not (screenshot.content_type or "").startswith("image/"):
             await interaction.response.send_message(embed=info_embed("⚠️ 画像を添付してください"), ephemeral=True)
             return
+        # 証跡として保存（B8）
+        try:
+            await api_client.add_evidence(match_id, screenshot.url, "screenshot", None, interaction.user.id)
+        except Exception:
+            pass  # 保存失敗でも掲示はする
         e = brand_embed("📸 スクリーンショット", f"試合 `{match_id[:8]}` / 提出: {interaction.user.mention}")
         e.set_image(url=screenshot.url)
+        e.set_footer(text="証跡として保存しました")
         await interaction.response.send_message(embed=e)
+
+    @app_commands.command(name="match-evidence", description="試合の証跡（スクショ）一覧")
+    @app_commands.describe(match_id="試合ID")
+    @app_commands.autocomplete(match_id=my_match_autocomplete)
+    async def match_evidence(self, interaction: discord.Interaction, match_id: str):
+        await interaction.response.defer()
+        items = await api_client.get_evidence(match_id)
+        if not items:
+            await interaction.followup.send(embed=info_embed("証跡はまだありません"), ephemeral=True)
+            return
+        e = brand_embed(f"📸 証跡 ({len(items)}件)")
+        for i, it in enumerate(items[:10], 1):
+            e.add_field(name=f"{i}. {it.get('kind')}", value=it.get("url", "—")[:1024], inline=False)
+        e.set_image(url=items[0].get("url"))
+        await interaction.followup.send(embed=e)
 
 
 async def setup(bot: commands.Bot):

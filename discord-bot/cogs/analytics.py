@@ -99,6 +99,23 @@ class AnalyticsCog(commands.Cog):
             )
         await interaction.followup.send(embed=e)
 
+    @app_commands.command(name="activity", description="最近のアクティビティ（確定試合）")
+    async def activity(self, interaction):
+        await interaction.response.defer()
+        items = await api_client.activity(limit=12)
+        e = brand_embed("📰 Activity Feed")
+        if not items:
+            e.description = "最近のアクティビティはありません。"
+        else:
+            lines = []
+            for it in items:
+                w = it.get("winner_name") or "?"
+                tag = f"[{it.get('winner_tag')}]" if it.get("winner_tag") else ""
+                when = (it.get("ended_at") or "")[:16].replace("T", " ")
+                lines.append(f"🏅 **{w}** {tag} がR{it.get('round_number')}を勝利 — {when}")
+            e.description = "\n".join(lines)[:4000]
+        await interaction.followup.send(embed=e)
+
     @app_commands.command(name="meta-analysis", description="メタ分析（マップ+構成）")
     @app_commands.describe(game="ゲーム", tournament_id="大会ID（任意）")
     @app_commands.choices(game=GAME_CHOICES)

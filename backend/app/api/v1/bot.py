@@ -617,6 +617,71 @@ async def set_looking(
     return {"data": {"player_id": str(player_id), "is_looking": body.looking}}
 
 
+# ── match evidence (B8) ──────────────────────────────────────────────────────
+class EvidenceBody(BaseModel):
+    url: str
+    kind: str = "screenshot"
+    note: Optional[str] = None
+
+
+@router.post("/matches/{match_id}/evidence")
+async def add_evidence(
+    match_id: uuid.UUID, body: EvidenceBody, db: DBSession, _: BotAuth,
+    x_discord_user_id: Optional[str] = Header(default=None, alias="X-Discord-User-Id"),
+):
+    from app.models.bot_ops import MatchEvidence
+    db.add(MatchEvidence(
+        match_id=match_id, url=body.url, kind=body.kind, note=body.note,
+        submitted_by_discord=x_discord_user_id,
+    ))
+    await db.flush()
+    return {"data": {"saved": True}}
+
+
+@router.get("/matches/{match_id}/evidence")
+async def list_evidence(match_id: uuid.UUID, db: DBSession, _: BotAuth):
+    from app.models.bot_ops import MatchEvidence
+    rows = (
+        await db.execute(
+            select(MatchEvidence).where(MatchEvidence.match_id == match_id)
+            .order_by(MatchEvidence.created_at.desc()).limit(25)
+        )
+    ).scalars().all()
+    return {"data": [
+        {"url": r.url, "kind": r.kind, "note": r.note,
+         "submitted_by_discord": r.submitted_by_discord,
+         "created_at": r.created_at.isoformat() if r.created_at else None}
+        for r in rows
+    ]}
+
+
+# ── activity feed (B10) ──────────────────────────────────────────────────────
+@router.get("/activity")
+async def activity_feed(db: DBSession, _: BotAuth, limit: int = Query(10, ge=1, le=25)):
+    """直近の確定試合を中心にしたアクティビティ。"""
+    rows = (
+        await db.execute(
+            select(Match, Team)
+            .join(Team, Team.id == Match.winner_id)
+            .where(Match.status.in_([MatchStatus.COMPLETED, MatchStatus.FORFEIT]))
+            .order_by(Match.ended_at.desc().nullslast())
+            .limit(limit)
+        )
+    ).all()
+    items = []
+    for m, winner in rows:
+        items.append({
+            "type": "match_result",
+            "match_id": str(m.id),
+            "tournament_id": str(m.tournament_id),
+            "winner_name": winner.name if winner else None,
+            "winner_tag": winner.tag if winner else None,
+            "round_number": m.round_number,
+            "ended_at": m.ended_at.isoformat() if m.ended_at else None,
+        })
+    return {"data": items}
+
+
 # ── map veto 永続化（Redis、channel/match単位） ──────────────────────────────
 class VetoState(BaseModel):
     state: dict

@@ -233,6 +233,19 @@ class PlatformAPIClient:
         return await self._bot("POST", f"/api/v1/bot/players/{player_id}/looking",
                                json={"looking": looking}, discord_user_id=discord_user_id)
 
+    # match evidence (B8)
+    async def add_evidence(self, match_id, url, kind, note, discord_user_id):
+        return await self._bot("POST", f"/api/v1/bot/matches/{match_id}/evidence",
+                               json={"url": url, "kind": kind, "note": note},
+                               discord_user_id=discord_user_id)
+
+    async def get_evidence(self, match_id):
+        return await self._bot("GET", f"/api/v1/bot/matches/{match_id}/evidence") or []
+
+    # activity feed (B10)
+    async def activity(self, limit: int = 10):
+        return await self._bot("GET", "/api/v1/bot/activity", params={"limit": limit}) or []
+
     # map veto 永続化
     async def veto_get(self, key):
         return await self._bot("GET", f"/api/v1/bot/veto/{key}")

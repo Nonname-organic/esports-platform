@@ -46,26 +46,29 @@ class StreamCog(commands.Cog):
     async def stream_info(self, interaction, match_id: str):
         await self._stream_of(interaction, match_id, with_vod=True)
 
-    @app_commands.command(name="live", description="進行中の試合（配信付き）")
+    @app_commands.command(name="live", description="Stream Hub: 進行中の試合と配信リンク")
     @app_commands.describe(tournament_id="大会ID")
     @app_commands.autocomplete(tournament_id=tournament_autocomplete)
     async def live(self, interaction, tournament_id: str):
         await interaction.response.defer()
         bracket = await api_client.get_bracket(tournament_id)
-        e = brand_embed("🔴 LIVE")
-        live_matches = []
-        for matches in (bracket or {}).get("rounds", {}).values():
-            for m in matches:
-                if m.get("status") == "ongoing":
-                    live_matches.append(m)
+        e = brand_embed("📺 Stream Hub — LIVE")
+        live_matches = [
+            m for matches in (bracket or {}).get("rounds", {}).values()
+            for m in matches if m.get("status") == "ongoing"
+        ]
         if not live_matches:
             e.description = "進行中の試合はありません。"
-        else:
-            e.description = "\n".join(
-                f"`M{m.get('match_number')}` "
-                f"{(m.get('team1') or {}).get('name','TBD')} vs {(m.get('team2') or {}).get('name','TBD')}"
-                for m in live_matches
-            )[:4000]
+            await interaction.followup.send(embed=e)
+            return
+        # 各試合の配信URLを取得（最大8件）
+        for m in live_matches[:8]:
+            detail = await api_client.get_match(m["id"])
+            t1 = (m.get("team1") or {}).get("name", "TBD")
+            t2 = (m.get("team2") or {}).get("name", "TBD")
+            url = (detail or {}).get("stream_url")
+            value = f"🔴 [配信を見る]({url})" if url else "配信URL未設定"
+            e.add_field(name=f"M{m.get('match_number')}: {t1} vs {t2}", value=value, inline=False)
         await interaction.followup.send(embed=e)
 
 

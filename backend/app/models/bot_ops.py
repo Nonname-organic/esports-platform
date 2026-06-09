@@ -48,6 +48,22 @@ class BotErrorLog(UUIDMixin, Base):
     )
 
 
+class MatchEvidence(UUIDMixin, Base):
+    """試合の証跡（スクリーンショット等のURL）。"""
+    __tablename__ = "match_evidence"
+
+    match_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("matches.id", ondelete="CASCADE"), nullable=False, index=True,
+    )
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    kind: Mapped[str] = mapped_column(String(20), nullable=False, default="screenshot")
+    submitted_by_discord: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    note: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False,
+    )
+
+
 class MatchDispute(UUIDMixin, Base):
     """試合結果への異議申し立て。"""
     __tablename__ = "match_disputes"
