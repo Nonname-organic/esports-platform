@@ -97,6 +97,7 @@ services:
       - DISCORD_GUILD_ID=${DISCORD_GUILD_ID:-}
       - API_BASE_URL=http://api:8000
       - BOT_API_TOKEN=${BOT_API_TOKEN:-}
+      - PUBLIC_WEB_URL=${PUBLIC_WEB_URL:-https://d3r8lgt0kvo61v.cloudfront.net}
       - USE_REDIS_QUEUE=true
       - REDIS_URL=redis://redis:6379/0
     depends_on:

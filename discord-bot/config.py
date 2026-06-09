@@ -9,6 +9,10 @@ class Config:
     # Platform API
     API_BASE_URL: str = os.environ.get("API_BASE_URL", "http://api:8000")
     BOT_API_TOKEN: str = os.environ.get("BOT_API_TOKEN", "")  # Bot用サービストークン
+    # 公開Web URL（埋め込みリンク用。API_BASE_URLは内部DNSなのでリンクには使えない）
+    PUBLIC_WEB_URL: str = os.environ.get(
+        "PUBLIC_WEB_URL", "https://d3r8lgt0kvo61v.cloudfront.net"
+    ).rstrip("/")
 
     # Queue (SQS or Redis)
     SQS_DISCORD_QUEUE_URL: str = os.environ.get("SQS_DISCORD_QUEUE_URL", "")

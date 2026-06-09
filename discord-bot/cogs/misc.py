@@ -4,6 +4,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from config import config
 from services.api_client import api_client
 
 
@@ -11,16 +12,34 @@ class CheckInCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    @app_commands.command(name="check-in", description="大会にチェックインします")
+    @app_commands.command(name="check-in", description="大会のチェックイン状況を確認します")
     @app_commands.describe(tournament_id="大会ID")
     async def check_in(self, interaction: discord.Interaction, tournament_id: str):
-        # プラットフォームのcheck-in APIを呼ぶ（将来実装）
-        embed = discord.Embed(
-            title="✅ チェックイン完了",
-            description=f"{interaction.user.mention} がチェックインしました",
-            color=0x2ECC71,
-        )
-        await interaction.response.send_message(embed=embed)
+        await interaction.response.defer(ephemeral=True)
+        tournament = await api_client.get_tournament(tournament_id)
+        if not tournament:
+            await interaction.followup.send("❌ 大会が見つかりません", ephemeral=True)
+            return
+
+        url = f"{config.PUBLIC_WEB_URL}/tournaments/{tournament_id}"
+        if not tournament.get("require_check_in"):
+            embed = discord.Embed(
+                title="ℹ️ チェックイン不要",
+                description=f"**{tournament['name']}** はチェックイン不要の大会です。",
+                color=0x95A5A6,
+            )
+        else:
+            embed = discord.Embed(
+                title="✅ チェックイン",
+                description=f"**{tournament['name']}** のチェックインはプラットフォーム上で行ってください。",
+                color=0x2ECC71,
+            )
+            if tournament.get("check_in_start_at"):
+                embed.add_field(
+                    name="チェックイン開始", value=tournament["check_in_start_at"], inline=False
+                )
+        embed.add_field(name="🔗 チェックインページ", value=url, inline=False)
+        await interaction.followup.send(embed=embed, ephemeral=True)
 
 
 class TeamCog(commands.Cog):
@@ -30,8 +49,9 @@ class TeamCog(commands.Cog):
     @app_commands.command(name="team", description="チーム情報を表示します")
     @app_commands.describe(team_id="チームID")
     async def team(self, interaction: discord.Interaction, team_id: str):
-        base = api_client._base.replace("http://api:8000", "")
-        await interaction.response.send_message(f"🔗 チーム: {base}/teams/{team_id}")
+        await interaction.response.send_message(
+            f"🔗 チーム: {config.PUBLIC_WEB_URL}/teams/{team_id}"
+        )
 
 
 class PlayerCog(commands.Cog):
@@ -41,8 +61,9 @@ class PlayerCog(commands.Cog):
     @app_commands.command(name="player", description="プレイヤー情報を表示します")
     @app_commands.describe(player_id="プレイヤーID")
     async def player(self, interaction: discord.Interaction, player_id: str):
-        base = api_client._base.replace("http://api:8000", "")
-        await interaction.response.send_message(f"🔗 プレイヤー: {base}/players/{player_id}")
+        await interaction.response.send_message(
+            f"🔗 プレイヤー: {config.PUBLIC_WEB_URL}/players/{player_id}"
+        )
 
 
 class HelpCog(commands.Cog):

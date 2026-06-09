@@ -4,6 +4,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from config import config
 from services.api_client import api_client
 
 
@@ -30,7 +31,7 @@ class MatchCog(commands.Cog):
     @app_commands.describe(match_id="試合ID")
     async def match(self, interaction: discord.Interaction, match_id: str):
         await interaction.response.send_message(
-            f"🔗 試合詳細: {api_client._base.replace('http://api:8000', '')}/matches/{match_id}",
+            f"🔗 試合詳細: {config.PUBLIC_WEB_URL}/matches/{match_id}",
         )
 
 
