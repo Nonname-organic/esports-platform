@@ -540,6 +540,51 @@ async def my_notifications(
     return {"data": {"items": out, "unread_count": unread_count}}
 
 
+# ── scout: recruitment (A7) ──────────────────────────────────────────────────
+class RecruitmentBody(BaseModel):
+    post_type: str  # team_seeks | player_seeks
+    game: str
+    title: str
+    description: Optional[str] = None
+
+
+@router.post("/recruitment")
+async def create_recruitment(
+    body: RecruitmentBody, db: DBSession, cache: Cache, _: BotAuth, actor: BotActor,
+):
+    user = await _require_actor(actor)
+    from app.schemas.scout import RecruitmentCreate
+    from app.services.scout_service import ScoutService
+    ctx = await _actor_context(db, user)
+    data = RecruitmentCreate(
+        post_type=body.post_type, game=body.game, title=body.title, description=body.description,
+        player_id=ctx["player_id"] if body.post_type == "player_seeks" else None,
+        team_id=(str(ctx["captain_team_ids"][0]) if body.post_type == "team_seeks" and ctx["captain_team_ids"] else None),
+    )
+    post = await ScoutService(db, cache).create_post(user.id, data)
+    return {"data": {"id": str(post.id), "title": post.title, "post_type": post.post_type}}
+
+
+class ApplyBody(BaseModel):
+    post_id: str
+    message: Optional[str] = None
+
+
+@router.post("/recruitment/apply")
+async def apply_recruitment(
+    body: ApplyBody, db: DBSession, cache: Cache, _: BotAuth, actor: BotActor,
+):
+    user = await _require_actor(actor)
+    from app.schemas.scout import ApplicationCreate
+    from app.services.scout_service import ScoutService
+    ctx = await _actor_context(db, user)
+    data = ApplicationCreate(
+        post_id=body.post_id, kind="apply", message=body.message, player_id=ctx["player_id"],
+    )
+    app = await ScoutService(db, cache).apply(user.id, data)
+    return {"data": {"id": str(app.id), "status": "applied"}}
+
+
 # ── scout: open/close to work ────────────────────────────────────────────────
 class LookingBody(BaseModel):
     looking: bool
@@ -570,6 +615,28 @@ async def set_looking(
         profile.updated_at = datetime.now(timezone.utc)
     await db.flush()
     return {"data": {"player_id": str(player_id), "is_looking": body.looking}}
+
+
+# ── map veto 永続化（Redis、channel/match単位） ──────────────────────────────
+class VetoState(BaseModel):
+    state: dict
+
+
+@router.put("/veto/{key}")
+async def veto_put(key: str, body: VetoState, cache: Cache, _: BotAuth):
+    await cache.set(f"veto:{key}", body.state, ttl=86400)
+    return {"data": {"ok": True}}
+
+
+@router.get("/veto/{key}")
+async def veto_get(key: str, cache: Cache, _: BotAuth):
+    return {"data": await cache.get(f"veto:{key}")}
+
+
+@router.delete("/veto/{key}")
+async def veto_delete(key: str, cache: Cache, _: BotAuth):
+    await cache.delete(f"veto:{key}")
+    return {"data": {"ok": True}}
 
 
 # ── monitoring ingest ────────────────────────────────────────────────────────

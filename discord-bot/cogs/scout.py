@@ -8,7 +8,7 @@ from config import config
 from core.rbac import Role, requires
 from services.api_client import api_client
 from services.autocomplete import player_autocomplete, team_autocomplete
-from ui.common import brand_embed, info_embed
+from ui.common import brand_embed, info_embed, ok_embed
 
 
 class ScoutCog(commands.Cog):
@@ -63,9 +63,12 @@ class ScoutCog(commands.Cog):
         posts = await api_client.list_recruitment(game=game, limit=15)
         e = brand_embed("📋 募集投稿")
         e.description = "\n".join(
-            f"**{p.get('title')}** ({p.get('post_type')}) — 応募{p.get('application_count',0)}"
+            f"**{p.get('title')}** ({p.get('post_type')}) — 応募{p.get('application_count',0)}\n"
+            f"　ID: `{p.get('id')}`"
             for p in posts
         )[:4000] or "募集はありません"
+        if posts:
+            e.set_footer(text="応募: /apply-recruitment post_id:<ID> message:<任意>")
         await interaction.followup.send(embed=e)
 
     @app_commands.command(name="recommend-players", description="チームへのおすすめ選手")
@@ -94,19 +97,34 @@ class ScoutCog(commands.Cog):
         )[:4000] or "推薦なし"
         await interaction.followup.send(embed=e)
 
-    @app_commands.command(name="post-recruitment", description="募集を投稿（Web）")
+    @app_commands.command(name="post-recruitment", description="募集を投稿")
+    @app_commands.describe(post_type="募集種別", game="ゲーム")
+    @app_commands.choices(
+        post_type=[
+            app_commands.Choice(name="選手がチームを探す", value="player_seeks"),
+            app_commands.Choice(name="チームが選手を探す", value="team_seeks"),
+        ],
+        game=[
+            app_commands.Choice(name="VALORANT", value="VALORANT"),
+            app_commands.Choice(name="CS2", value="CS2"),
+            app_commands.Choice(name="LOL", value="LOL"),
+        ],
+    )
     @requires(Role.PLAYER)
-    async def post_recruitment(self, interaction):
-        await interaction.response.send_message(
-            embed=info_embed("📝 募集投稿", f"{config.web}/scout/recruitment"), ephemeral=True
-        )
+    async def post_recruitment(
+        self, interaction: discord.Interaction,
+        post_type: app_commands.Choice[str], game: app_commands.Choice[str],
+    ):
+        from ui.modals import RecruitmentModal
+        await interaction.response.send_modal(RecruitmentModal(post_type.value, game.value))
 
-    @app_commands.command(name="apply-recruitment", description="募集に応募（Web）")
+    @app_commands.command(name="apply-recruitment", description="募集に応募")
+    @app_commands.describe(post_id="募集ID", message="メッセージ")
     @requires(Role.PLAYER)
-    async def apply_recruitment(self, interaction):
-        await interaction.response.send_message(
-            embed=info_embed("✉️ 応募", f"{config.web}/scout/recruitment"), ephemeral=True
-        )
+    async def apply_recruitment(self, interaction: discord.Interaction, post_id: str, message: str = ""):
+        await interaction.response.defer(ephemeral=True)
+        await api_client.apply_recruitment(post_id, message or None, interaction.user.id)
+        await interaction.followup.send(embed=ok_embed("✅ 応募しました"), ephemeral=True)
 
     @app_commands.command(name="invite-candidate", description="候補者を招待（Web）")
     @requires(Role.CAPTAIN)

@@ -6,6 +6,31 @@ from core.errors import to_user_embed
 from services.api_client import api_client
 
 
+class RecruitmentModal(discord.ui.Modal, title="募集を投稿"):
+    title_in = discord.ui.TextInput(label="タイトル", max_length=100, required=True)
+    desc_in = discord.ui.TextInput(
+        label="詳細", style=discord.TextStyle.paragraph, max_length=1000, required=False,
+    )
+
+    def __init__(self, post_type: str, game: str):
+        super().__init__()
+        self.post_type = post_type
+        self.game = game
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            res = await api_client.create_recruitment(
+                self.post_type, self.game, str(self.title_in), str(self.desc_in) or None,
+                interaction.user.id,
+            )
+        except Exception as e:
+            await interaction.response.send_message(embed=to_user_embed(e), ephemeral=True)
+            return
+        await interaction.response.send_message(
+            f"✅ 募集を投稿しました: **{res.get('title')}**", ephemeral=True
+        )
+
+
 class DisputeModal(discord.ui.Modal, title="結果に異議を申し立て"):
     reason = discord.ui.TextInput(
         label="理由",

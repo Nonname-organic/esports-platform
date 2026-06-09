@@ -219,9 +219,29 @@ class PlatformAPIClient:
                                params={"unread": str(unread).lower(), "limit": limit},
                                discord_user_id=discord_user_id)
 
+    async def create_recruitment(self, post_type, game, title, description, discord_user_id):
+        return await self._bot("POST", "/api/v1/bot/recruitment", json={
+            "post_type": post_type, "game": game, "title": title, "description": description,
+        }, discord_user_id=discord_user_id)
+
+    async def apply_recruitment(self, post_id, message, discord_user_id):
+        return await self._bot("POST", "/api/v1/bot/recruitment/apply",
+                               json={"post_id": post_id, "message": message},
+                               discord_user_id=discord_user_id)
+
     async def set_looking(self, player_id, looking: bool, discord_user_id):
         return await self._bot("POST", f"/api/v1/bot/players/{player_id}/looking",
                                json={"looking": looking}, discord_user_id=discord_user_id)
+
+    # map veto 永続化
+    async def veto_get(self, key):
+        return await self._bot("GET", f"/api/v1/bot/veto/{key}")
+
+    async def veto_put(self, key, state: dict):
+        return await self._bot("PUT", f"/api/v1/bot/veto/{key}", json={"state": state})
+
+    async def veto_delete(self, key):
+        return await self._bot("DELETE", f"/api/v1/bot/veto/{key}")
 
     async def record_match_channel(self, discord_server_id, match_id, channel_id, name=None):
         return await self._bot("POST", "/api/v1/bot/discord/match-channel", json={

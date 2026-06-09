@@ -216,21 +216,23 @@ async def handle_event(event: dict):
                     payload["discord_server_id"], payload["match_id"],
                     channel_id, payload.get("channel_name"),
                 )
-            # 自動: 試合チャンネルに操作ガイドを掲示
+            # 自動: 試合チャンネルに操作パネル（常設ボタン）を掲示
             ch = guild.get_channel(int(channel_id)) if channel_id else None
             if isinstance(ch, discord.TextChannel):
+                from ui.matchroom import MatchRoomView
                 e = discord.Embed(
-                    title="⚔️ 試合チャンネル開設",
+                    title="⚔️ Match Room",
                     description=(
-                        "進行に使うコマンド:\n"
+                        "下のボタン、またはコマンドで進行できます:\n"
                         "• `/ban-map` `/pick-map` `/confirm-veto` — マップveto\n"
-                        "• `/report-result` — 結果報告（相手が `確認` で確定）\n"
-                        "• `/dispute-result` — 異議申し立て\n"
+                        "• **🏆 結果報告** / `/report-result`（相手が確認で確定）\n"
+                        "• **⚠️ 異議** / `/dispute-result`\n"
                         "• `/upload-screenshot` — スクショ提出"
                     ),
                     color=config.BRAND_COLOR,
                 )
-                await ch.send(embed=e)
+                view = MatchRoomView(payload["match_id"]) if payload.get("match_id") else None
+                await ch.send(embed=e, view=view)
 
         elif event_type == "archive_match_channel":
             await archive_channel(guild, payload["channel_id"], payload.get("archive_category_id"))
@@ -246,6 +248,8 @@ async def main():
         logger.error("DISCORD_BOT_TOKEN is not set. Bot will not start.")
         return
     async with bot:
+        from ui.matchroom import register as register_matchroom
+        register_matchroom(bot)  # 永続ボタンハンドラ登録
         for ext in COGS:
             await bot.load_extension(ext)
         await bot.start(config.BOT_TOKEN)

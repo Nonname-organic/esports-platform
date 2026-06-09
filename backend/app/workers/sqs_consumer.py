@@ -142,6 +142,39 @@ class SQSConsumer:
             logger.warning(f"Unknown event type: {event_type}")
 
 
+async def riot_auto_sync_loop() -> None:
+    """A6: Riotプロフィールを定期同期。RIOT_API_KEY未設定/間隔0でOFF。"""
+    if not settings.RIOT_API_KEY or settings.RIOT_SYNC_INTERVAL_HOURS <= 0:
+        logger.info("Riot auto-sync disabled")
+        return
+    from sqlalchemy import select
+    interval = settings.RIOT_SYNC_INTERVAL_HOURS * 3600
+    # 起動直後の集中を避けるため初回は少し待つ
+    await asyncio.sleep(60)
+    while True:
+        synced = 0
+        try:
+            from app.models.riot import RiotProfile
+            from app.services.riot_service import RiotService
+            async with AsyncSessionLocal() as db:
+                cache = RedisCache(await get_redis())
+                profiles = (await db.execute(select(RiotProfile))).scalars().all()
+                svc = RiotService(db, cache)
+                for p in profiles:
+                    try:
+                        await svc.sync(p.player_id)
+                        await db.commit()
+                        synced += 1
+                    except Exception as e:
+                        logger.warning(f"Riot sync failed for {p.player_id}: {e}")
+                        await db.rollback()
+                    await asyncio.sleep(settings.RIOT_SYNC_DELAY_SECONDS)
+            logger.info(f"Riot auto-sync done: {synced} profiles")
+        except Exception as e:
+            logger.error(f"Riot auto-sync loop error: {e}")
+        await asyncio.sleep(interval)
+
+
 async def main() -> None:
     consumer = SQSConsumer()
 
@@ -152,7 +185,8 @@ async def main() -> None:
     signal.signal(signal.SIGTERM, handle_signal)
     signal.signal(signal.SIGINT, handle_signal)
 
-    await consumer.run()
+    # キュー消費 と Riot定期同期 を並行実行
+    await asyncio.gather(consumer.run(), riot_auto_sync_loop())
 
 
 if __name__ == "__main__":

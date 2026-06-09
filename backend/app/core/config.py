@@ -104,6 +104,8 @@ class Settings(BaseSettings):
     RIOT_API_KEY: str | None = None
     RIOT_ACCOUNT_REGION: str = "asia"   # asia / americas / europe
     RIOT_VAL_REGION: str = "ap"          # ap / na / eu / kr
+    RIOT_SYNC_INTERVAL_HOURS: int = 6    # 0 で自動同期OFF
+    RIOT_SYNC_DELAY_SECONDS: float = 2.0  # プロフィール間の待機（レート制限緩和）
 
     # CORS
     ALLOWED_ORIGINS: list[str] = ["http://localhost:3000"]
