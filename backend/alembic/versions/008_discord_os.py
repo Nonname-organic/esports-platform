@@ -28,10 +28,8 @@ def upgrade() -> None:
         sa.Column("checked_in_via", sa.String(20), nullable=True),  # discord / web / admin
     )
 
-    # ── discord_links: discord_user_id の逆引きを高速化 ──────────────────────────
-    op.create_index(
-        "idx_discord_links_discord_user", "discord_links", ["discord_user_id"]
-    )
+    # ── discord_links: discord_user_id の逆引きインデックスは 006 で作成済みのため
+    #    ここでは作成しない（重複作成を避ける）。
 
     # ── command_metrics（コマンド利用履歴） ─────────────────────────────────────
     op.create_table(
@@ -97,6 +95,5 @@ def downgrade() -> None:
     op.drop_index("idx_command_metrics_guild", "command_metrics")
     op.drop_index("idx_command_metrics_command", "command_metrics")
     op.drop_table("command_metrics")
-    op.drop_index("idx_discord_links_discord_user", "discord_links")
     op.drop_column("tournament_registrations", "checked_in_via")
     op.drop_column("tournament_registrations", "checked_in_at")
