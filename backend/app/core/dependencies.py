@@ -1,10 +1,11 @@
 import uuid
-from typing import Annotated
+from typing import Annotated, Optional
 
 import redis.asyncio as aioredis
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -71,8 +72,41 @@ def require_roles(*roles: UserRole):
     return _check
 
 
+# ── Discord Bot service auth (X-Bot-Secret) ──────────────────────────────────
+async def verify_bot_secret(
+    x_bot_secret: Optional[str] = Header(default=None, alias="X-Bot-Secret"),
+) -> None:
+    """Bot↔Backend 共有秘密を検証。/api/v1/bot/* 全体のゲート。"""
+    expected = settings.BOT_API_TOKEN
+    if not expected or x_bot_secret != expected:
+        raise UnauthorizedError("Bot認証に失敗しました")
+
+
+async def resolve_discord_user(
+    x_discord_user_id: Optional[str] = Header(default=None, alias="X-Discord-User-Id"),
+    db: AsyncSession = Depends(get_db),
+) -> "Optional[User]":  # type: ignore[name-defined]  # noqa: F821
+    """X-Discord-User-Id → DiscordLink → User を解決（未連携ならNone）。
+
+    Bot経由の代理実行で「実ユーザーの権限」を権威判定するために使う。
+    """
+    from app.models.discord import DiscordLink
+    from app.models.user import User
+
+    if not x_discord_user_id:
+        return None
+    result = await db.execute(
+        select(User)
+        .join(DiscordLink, DiscordLink.user_id == User.id)
+        .where(DiscordLink.discord_user_id == str(x_discord_user_id), User.is_active == True)
+    )
+    return result.scalar_one_or_none()
+
+
 # よく使う型エイリアス
 CurrentUser = Annotated["User", Depends(get_current_user)]  # type: ignore[name-defined]  # noqa: F821
+BotAuth = Annotated[None, Depends(verify_bot_secret)]
+BotActor = Annotated["Optional[User]", Depends(resolve_discord_user)]  # type: ignore[name-defined]  # noqa: F821
 DBSession = Annotated[AsyncSession, Depends(get_db)]
 Cache = Annotated[RedisCache, Depends(get_cache)]
 AdminUser = Annotated["User", Depends(require_roles(UserRole.ADMIN))]  # type: ignore[name-defined]  # noqa: F821

@@ -45,6 +45,7 @@ from app.models.analytics import (
 from app.models.audit_log import AuditLog
 from app.models.scout import ScoutProfile, RecruitmentPost, RecruitmentApplication
 from app.models.discord import DiscordServer, DiscordChannel, DiscordLink
+from app.models.bot_ops import CommandMetric, BotErrorLog, MatchDispute
 from app.models.riot import RiotProfile, RiotMatch
 
 __all__ = [
@@ -54,6 +55,9 @@ __all__ = [
     "DiscordServer",
     "DiscordChannel",
     "DiscordLink",
+    "CommandMetric",
+    "BotErrorLog",
+    "MatchDispute",
     "RiotProfile",
     "RiotMatch",
     "Base",

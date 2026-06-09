@@ -138,6 +138,11 @@ class TournamentRegistration(UUIDMixin, Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
+    # 出欠（migration 008）: Discord/Web/管理者からのチェックイン
+    checked_in_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    checked_in_via: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
 
     # Relationships
     tournament: Mapped["Tournament"] = relationship(

@@ -21,8 +21,33 @@ class Config:
     REDIS_QUEUE_DISCORD_KEY: str = os.environ.get("REDIS_QUEUE_DISCORD_KEY", "queue:discord_events")
     USE_REDIS_QUEUE: bool = os.environ.get("USE_REDIS_QUEUE", "true").lower() == "true"
 
+    # Embedの基調色
+    BRAND_COLOR: int = 0x3498DB
+
+    @property
+    def web(self) -> str:
+        return self.PUBLIC_WEB_URL
+
 
 config = Config()
+
+
+# ── Map veto カタログ（VALORANT / CS2） ───────────────────────────────────────
+# autocomplete / select / veto進行で使用。
+MAP_POOLS = {
+    "VALORANT": ["Ascent", "Bind", "Haven", "Split", "Lotus", "Sunset", "Icebox", "Breeze", "Pearl", "Abyss"],
+    "CS2": ["Mirage", "Inferno", "Nuke", "Overpass", "Vertigo", "Ancient", "Anubis", "Dust2", "Train"],
+}
+
+
+# ── ロール表示ラベル ──────────────────────────────────────────────────────────
+ROLE_LABELS = {
+    "admin": "Admin",
+    "organizer": "Organizer",
+    "captain": "Captain",
+    "player": "Player",
+    "spectator": "Spectator",
+}
 
 
 # ── サーバーテンプレート定義 ───────────────────────────────────────────────────

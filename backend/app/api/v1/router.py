@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.v1 import (
-    admin, analytics, auth, discord, matches, notifications, players,
+    admin, analytics, auth, bot, discord, matches, notifications, players,
     rankings, riot, scout, teams, tournaments, upload,
 )
 
@@ -20,3 +20,4 @@ api_router.include_router(scout.router)
 api_router.include_router(notifications.router)
 api_router.include_router(discord.router)
 api_router.include_router(riot.router)
+api_router.include_router(bot.router)

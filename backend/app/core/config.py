@@ -95,6 +95,10 @@ class Settings(BaseSettings):
     DISCORD_REDIRECT_URI: str | None = None
     SQS_DISCORD_QUEUE_URL: str | None = None
     REDIS_QUEUE_DISCORD_KEY: str = "queue:discord_events"
+    # Bot↔Backend 共有秘密（/api/v1/bot/* のservice認証）。Discord Botと同値を設定する。
+    BOT_API_TOKEN: str | None = None
+    # Botが埋め込みリンクに使う公開URL（バックエンドでは通知action_url等に利用可）
+    PUBLIC_WEB_URL: str = "https://d3r8lgt0kvo61v.cloudfront.net"
 
     # Riot Games API
     RIOT_API_KEY: str | None = None

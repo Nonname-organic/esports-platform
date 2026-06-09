@@ -1,22 +1,27 @@
 """
-Esports Platform Discord Bot
-- スラッシュコマンド（cogs）
-- イベントコンシューマ（SQS/Redis）でプラットフォームからの指示を処理
-  - setup_tournament: サーバーテンプレート生成
-  - create_match_channel: 試合チャンネル生成
-  - archive_match_channel: 試合チャンネルをアーカイブ
+Discord Tournament Operating System — Bot エントリポイント
+
+- スラッシュコマンド（cogs: 全カテゴリ）
+- RBAC（core/rbac）+ グローバルエラーハンドラ（core/errors）
+- コマンドメトリクス/エラーログ（core/monitoring → /api/v1/bot/*）
+- イベントコンシューマ（SQS/Redis）で自動チャンネル生成/Archive
+  - setup_tournament / create_match_channel / archive_match_channel
 """
 
 import asyncio
 import json
 import logging
+import traceback
 
 import discord
+from discord import app_commands
 from discord.ext import commands
 
 from config import config
+from core.errors import to_user_embed
+from core.monitoring import Metrics
 from services.api_client import api_client
-from services.template import build_tournament_server, create_match_channel, archive_channel
+from services.template import archive_channel, build_tournament_server, create_match_channel
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("bot")
@@ -26,8 +31,18 @@ intents.guilds = True
 intents.members = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
+metrics = Metrics(api_client)
+
+COGS = [
+    "cogs.tournament", "cogs.bracket", "cogs.checkin", "cogs.match", "cogs.veto",
+    "cogs.team", "cogs.player", "cogs.scout", "cogs.analytics", "cogs.career",
+    "cogs.notification", "cogs.stream", "cogs.moderator", "cogs.support", "cogs.help",
+]
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# lifecycle
+# ══════════════════════════════════════════════════════════════════════════════
 @bot.event
 async def on_ready():
     logger.info(f"Bot logged in as {bot.user}")
@@ -42,18 +57,56 @@ async def on_ready():
     except Exception as e:
         logger.error(f"Command sync failed: {e}")
 
-    # イベントコンシューマをバックグラウンド起動
     bot.loop.create_task(event_consumer())
+    bot.loop.create_task(metrics_flusher())
+
+
+async def metrics_flusher():
+    """コマンドメトリクスを定期フラッシュ。"""
+    await bot.wait_until_ready()
+    while not bot.is_closed():
+        await asyncio.sleep(30)
+        await metrics.flush()
+
+
+# ── メトリクス & エラーハンドリング ───────────────────────────────────────────
+@bot.event
+async def on_app_command_completion(interaction: discord.Interaction, command: app_commands.Command):
+    metrics.record(interaction, command.qualified_name, success=True)
+
+
+@bot.tree.error
+async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    err = getattr(error, "original", error)
+    cmd = interaction.command.qualified_name if interaction.command else None
+
+    # ユーザーへ整形メッセージ
+    embed = to_user_embed(err)
+    try:
+        if interaction.response.is_done():
+            await interaction.followup.send(embed=embed, ephemeral=True)
+        else:
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+    except discord.HTTPException:
+        pass
+
+    # メトリクス + エラーログ
+    metrics.record(interaction, cmd or "unknown", success=False, error_type=type(err).__name__)
+    # 想定内（権限/業務）は詳細ログ不要。想定外のみtraceback保存。
+    from core.errors import ApiError
+    from core.rbac import MissingRole
+    if not isinstance(err, (ApiError, MissingRole, app_commands.CheckFailure, app_commands.CommandOnCooldown)):
+        tb = "".join(traceback.format_exception(type(err), err, err.__traceback__))
+        logger.error("Command error in %s: %s", cmd, tb)
+        await metrics.log_error(interaction, cmd, type(err).__name__, str(err), tb)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# イベントコンシューマ
+# イベントコンシューマ（自動化）
 # ══════════════════════════════════════════════════════════════════════════════
 async def event_consumer():
-    """SQS or Redis からプラットフォームイベントを消費"""
     await bot.wait_until_ready()
     logger.info("Event consumer started")
-
     if config.USE_REDIS_QUEUE:
         await _redis_consumer()
     else:
@@ -125,12 +178,25 @@ async def handle_event(event: dict):
             logger.info(f"Tournament server setup complete for guild {guild_id}")
 
         elif event_type == "create_match_channel":
-            from services.template import create_match_channel
-            # MATCHES カテゴリを探す
             matches_cat = discord.utils.get(guild.categories, name="🏆 MATCHES")
             cat_id = str(matches_cat.id) if matches_cat else None
             channel_id = await create_match_channel(guild, payload["channel_name"], cat_id)
             logger.info(f"Match channel created: {channel_id}")
+            # 自動: 試合チャンネルに操作ガイドを掲示
+            ch = guild.get_channel(int(channel_id)) if channel_id else None
+            if isinstance(ch, discord.TextChannel):
+                e = discord.Embed(
+                    title="⚔️ 試合チャンネル開設",
+                    description=(
+                        "進行に使うコマンド:\n"
+                        "• `/ban-map` `/pick-map` `/confirm-veto` — マップveto\n"
+                        "• `/report-result` — 結果報告（相手が `確認` で確定）\n"
+                        "• `/dispute-result` — 異議申し立て\n"
+                        "• `/upload-screenshot` — スクショ提出"
+                    ),
+                    color=config.BRAND_COLOR,
+                )
+                await ch.send(embed=e)
 
         elif event_type == "archive_match_channel":
             await archive_channel(guild, payload["channel_id"], payload.get("archive_category_id"))
@@ -140,14 +206,14 @@ async def handle_event(event: dict):
         logger.error(f"Event handling failed ({event_type}): {e}")
 
 
+# ══════════════════════════════════════════════════════════════════════════════
 async def main():
     if not config.BOT_TOKEN:
         logger.error("DISCORD_BOT_TOKEN is not set. Bot will not start.")
         return
     async with bot:
-        await bot.load_extension("cogs.tournament")
-        await bot.load_extension("cogs.match")
-        await bot.load_extension("cogs.misc")
+        for ext in COGS:
+            await bot.load_extension(ext)
         await bot.start(config.BOT_TOKEN)
 
 
