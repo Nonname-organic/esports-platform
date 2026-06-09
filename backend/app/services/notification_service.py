@@ -62,7 +62,27 @@ class NotificationService:
 
         # WebSocket Push（Redis Pub/Sub）
         await self._publish_push(user_id, notif)
+        # Discord連携済みユーザーにはDMでも通知（双方向同期 / platform→Discord）
+        await self._publish_discord(user_id, notif)
         return notif
+
+    async def _publish_discord(self, user_id: uuid.UUID, notif: Notification) -> None:
+        try:
+            from app.models.discord import DiscordLink
+            link = await self._db.scalar(
+                select(DiscordLink).where(DiscordLink.user_id == user_id)
+            )
+            if not link:
+                return
+            from app.services.discord_service import DiscordEventPublisher
+            await DiscordEventPublisher(self._cache).publish("notify_user", {
+                "discord_user_id": link.discord_user_id,
+                "title": notif.title,
+                "body": notif.body,
+                "action_url": notif.action_url,
+            })
+        except Exception:
+            pass  # Discord通知失敗は本処理を妨げない
 
     async def _publish_push(self, user_id: uuid.UUID, notif: Notification) -> None:
         try:

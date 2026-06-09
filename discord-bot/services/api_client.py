@@ -223,6 +223,12 @@ class PlatformAPIClient:
         return await self._bot("POST", f"/api/v1/bot/players/{player_id}/looking",
                                json={"looking": looking}, discord_user_id=discord_user_id)
 
+    async def record_match_channel(self, discord_server_id, match_id, channel_id, name=None):
+        return await self._bot("POST", "/api/v1/bot/discord/match-channel", json={
+            "discord_server_id": str(discord_server_id), "match_id": str(match_id),
+            "channel_id": str(channel_id), "name": name,
+        })
+
     # monitoring
     async def ingest_metrics(self, items: list[dict]):
         return await self._bot("POST", "/api/v1/bot/metrics", json={"items": items})

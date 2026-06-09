@@ -129,6 +129,30 @@ async def link_account(
     return {"data": {"linked": True, "role": user.role.value}}
 
 
+class MatchChannelBody(BaseModel):
+    discord_server_id: str
+    match_id: str
+    channel_id: str
+    name: Optional[str] = None
+
+
+@router.post("/discord/match-channel")
+async def record_match_channel(body: MatchChannelBody, db: DBSession, _: BotAuth):
+    """Botが生成した試合チャンネルを記録（後でArchive対象を特定するため）。"""
+    from app.models.discord import DiscordChannel
+    db.add(DiscordChannel(
+        discord_server_id=uuid.UUID(body.discord_server_id),
+        channel_id=body.channel_id,
+        channel_type="match",
+        name=body.name,
+        match_id=uuid.UUID(body.match_id),
+        archived=False,
+        created_at=datetime.now(timezone.utc),
+    ))
+    await db.flush()
+    return {"data": {"recorded": True}}
+
+
 @router.post("/unlink")
 async def unlink_account(db: DBSession, _: BotAuth, actor: BotActor):
     """連携解除。"""

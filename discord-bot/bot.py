@@ -155,10 +155,37 @@ async def _sqs_consumer():
             await asyncio.sleep(3)
 
 
+async def _dm_user(payload: dict):
+    """連携ユーザーへDM通知（guild不要）。"""
+    did = payload.get("discord_user_id")
+    if not did:
+        return
+    try:
+        user = bot.get_user(int(did)) or await bot.fetch_user(int(did))
+        if not user:
+            return
+        e = discord.Embed(
+            title=f"🔔 {payload.get('title', '通知')}",
+            description=payload.get("body") or None,
+            color=config.BRAND_COLOR,
+        )
+        url = payload.get("action_url")
+        if url:
+            e.add_field(name="リンク", value=f"{config.web}{url}" if url.startswith('/') else url, inline=False)
+        await user.send(embed=e)
+    except discord.HTTPException:
+        pass  # DM拒否設定などは無視
+
+
 async def handle_event(event: dict):
     event_type = event.get("event_type")
     payload = event.get("payload", {})
     logger.info(f"Handling event: {event_type}")
+
+    # DM系イベントはguild不要
+    if event_type == "notify_user":
+        await _dm_user(payload)
+        return
 
     guild_id = payload.get("guild_id")
     if not guild_id:
@@ -183,6 +210,12 @@ async def handle_event(event: dict):
             cat_id = str(matches_cat.id) if matches_cat else None
             channel_id = await create_match_channel(guild, payload["channel_name"], cat_id)
             logger.info(f"Match channel created: {channel_id}")
+            # チャンネルを記録（Archive対象特定用）
+            if channel_id and payload.get("discord_server_id") and payload.get("match_id"):
+                await api_client.record_match_channel(
+                    payload["discord_server_id"], payload["match_id"],
+                    channel_id, payload.get("channel_name"),
+                )
             # 自動: 試合チャンネルに操作ガイドを掲示
             ch = guild.get_channel(int(channel_id)) if channel_id else None
             if isinstance(ch, discord.TextChannel):

@@ -57,6 +57,12 @@ class MatchService:
         await self._db.flush()
         await self._invalidate_match_cache(match_id)
 
+        # 自動進行: Discord試合チャンネルを生成（Discord未設定なら何もしない）
+        from app.services.discord_service import DiscordService
+        await DiscordService(self._db, self._cache).notify_match_start(
+            match.id, match.tournament_id, match.match_number
+        )
+
     async def update_game_score(
         self,
         match_id: uuid.UUID,
@@ -206,6 +212,10 @@ class MatchService:
 
             # 次の試合にチームを自動セット
             await self._advance_bracket(match, winner_id)
+
+            # 自動進行: Discord試合チャンネルをArchiveへ
+            from app.services.discord_service import DiscordService
+            await DiscordService(self._db, self._cache).notify_match_end(match_id, match.tournament_id)
 
             # SQSへイベント送信（ランキング更新・通知）
             await self._publish_result_event(match_id, winner_id, loser_id, match.tournament_id)
