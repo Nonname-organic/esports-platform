@@ -267,6 +267,7 @@ class Notification(UUIDMixin, Base):
     # {"match_id": "...", "team_id": "..."} など追加情報
     # "metadata" はSQLAlchemy予約語のため属性名を extra_data に変更（DBカラム名は維持）
     extra_data: Mapped[Optional[dict]] = mapped_column("metadata", JSONB, nullable=True)
+    action_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )

@@ -14,9 +14,33 @@ from app.schemas.team import (
     TeamSummarySchema,
     TeamUpdate,
 )
+from app.schemas.career import TeamCareerSchema, AchievementItem, RivalItem
 from app.services.team import TeamService
+from app.services.career_service import CareerAggregationService
 
 router = APIRouter(prefix="/teams", tags=["チーム管理"])
+
+
+# ── Career / Achievements / Rivals ──────────────────────────────────────────
+@router.get("/{team_id}/career", response_model=Response[TeamCareerSchema])
+async def get_team_career(team_id: uuid.UUID, db: DBSession, cache: Cache):
+    service = CareerAggregationService(db, cache)
+    career = await service.get_team_career(team_id)
+    return Response(data=TeamCareerSchema(**career), meta=None)
+
+
+@router.get("/{team_id}/achievements", response_model=Response[list[AchievementItem]])
+async def get_team_achievements(team_id: uuid.UUID, db: DBSession, cache: Cache):
+    service = CareerAggregationService(db, cache)
+    achievements = await service.get_team_achievements(team_id)
+    return Response(data=[AchievementItem(**a) for a in achievements], meta=None)
+
+
+@router.get("/{team_id}/rivals", response_model=Response[list[RivalItem]])
+async def get_team_rivals(team_id: uuid.UUID, db: DBSession, cache: Cache):
+    service = CareerAggregationService(db, cache)
+    career = await service.get_team_career(team_id)
+    return Response(data=[RivalItem(**r) for r in career["rivals"]], meta=None)
 
 
 def _team_detail(team) -> TeamDetailSchema:

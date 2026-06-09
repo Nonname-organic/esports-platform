@@ -86,5 +86,27 @@ services:
       timeout: 3s
       retries: 3
 
+  # Discord Bot（profile指定時のみ起動: docker compose --profile discord up -d）
+  discord-bot:
+    build:
+      context: ./discord-bot
+      dockerfile: Dockerfile
+    profiles: ["discord"]
+    environment:
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+      - DISCORD_GUILD_ID=${DISCORD_GUILD_ID:-}
+      - API_BASE_URL=http://api:8000
+      - BOT_API_TOKEN=${BOT_API_TOKEN:-}
+      - USE_REDIS_QUEUE=true
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 150M
+
 # ===== ローカル開発用 =====
 # docker-compose -f docker-compose.yml -f docker-compose.dev.yml up

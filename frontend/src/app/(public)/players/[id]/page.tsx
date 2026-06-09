@@ -12,13 +12,16 @@ import { OverviewTab } from "./_components/overview-tab";
 import { TrendTab } from "./_components/trend-tab";
 import { MatchHistoryTab } from "./_components/match-history-tab";
 import { AgentsTab } from "./_components/agents-tab";
+import { CareerTab } from "./_components/career-tab";
+import { AchievementsTab } from "./_components/achievements-tab";
+import { RiotTab } from "./_components/riot-tab";
 
 interface Props {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ tab?: string }>;
 }
 
-const VALID_TABS: PlayerTabId[] = ["overview", "trend", "matches", "agents"];
+const VALID_TABS: PlayerTabId[] = ["overview", "career", "achievements", "trend", "matches", "agents", "riot"];
 
 function isValidTab(tab: string | undefined): tab is PlayerTabId {
   return VALID_TABS.includes(tab as PlayerTabId);
@@ -123,9 +126,12 @@ export default async function PlayerDetailPage({ params, searchParams }: Props) 
         }
       >
         {activeTab === "overview" && <OverviewTab player={player} stats={stats} />}
+        {activeTab === "career" && <CareerTab playerId={id} />}
+        {activeTab === "achievements" && <AchievementsTab playerId={id} />}
         {activeTab === "trend" && <TrendTab playerId={id} />}
         {activeTab === "matches" && <MatchHistoryTab playerId={id} />}
         {activeTab === "agents" && <AgentsTab playerId={id} />}
+        {activeTab === "riot" && <RiotTab playerId={id} playerUserId={player.user_id ?? undefined} />}
       </Suspense>
     </div>
   );

@@ -89,6 +89,17 @@ class Settings(BaseSettings):
 
     # Discord
     DISCORD_WEBHOOK_URL: str | None = None
+    DISCORD_BOT_TOKEN: str | None = None
+    DISCORD_CLIENT_ID: str | None = None
+    DISCORD_CLIENT_SECRET: str | None = None
+    DISCORD_REDIRECT_URI: str | None = None
+    SQS_DISCORD_QUEUE_URL: str | None = None
+    REDIS_QUEUE_DISCORD_KEY: str = "queue:discord_events"
+
+    # Riot Games API
+    RIOT_API_KEY: str | None = None
+    RIOT_ACCOUNT_REGION: str = "asia"   # asia / americas / europe
+    RIOT_VAL_REGION: str = "ap"          # ap / na / eu / kr
 
     # CORS
     ALLOWED_ORIGINS: list[str] = ["http://localhost:3000"]

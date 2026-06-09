@@ -43,8 +43,19 @@ from app.models.analytics import (
     AnalyticsEvent,
 )
 from app.models.audit_log import AuditLog
+from app.models.scout import ScoutProfile, RecruitmentPost, RecruitmentApplication
+from app.models.discord import DiscordServer, DiscordChannel, DiscordLink
+from app.models.riot import RiotProfile, RiotMatch
 
 __all__ = [
+    "ScoutProfile",
+    "RecruitmentPost",
+    "RecruitmentApplication",
+    "DiscordServer",
+    "DiscordChannel",
+    "DiscordLink",
+    "RiotProfile",
+    "RiotMatch",
     "Base",
     "TimestampMixin",
     "UUIDMixin",

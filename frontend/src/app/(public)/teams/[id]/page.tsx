@@ -12,13 +12,15 @@ import { OverviewTab } from "./_components/overview-tab";
 import { PlayersTab } from "./_components/players-tab";
 import { MatchesTab } from "./_components/matches-tab";
 import { AnalyticsTab } from "./_components/analytics-tab";
+import { CareerTab } from "./_components/career-tab";
+import { RivalsTab } from "./_components/rivals-tab";
 
 interface Props {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ tab?: string }>;
 }
 
-const VALID_TABS: TeamTabId[] = ["overview", "players", "matches", "analytics"];
+const VALID_TABS: TeamTabId[] = ["overview", "career", "players", "rivals", "matches", "analytics"];
 
 function isValidTab(tab: string | undefined): tab is TeamTabId {
   return VALID_TABS.includes(tab as TeamTabId);
@@ -115,7 +117,9 @@ export default async function TeamDetailPage({ params, searchParams }: Props) {
         }
       >
         {activeTab === "overview" && <OverviewTab team={team} stats={stats} />}
+        {activeTab === "career" && <CareerTab teamId={id} />}
         {activeTab === "players" && <PlayersTab teamId={id} />}
+        {activeTab === "rivals" && <RivalsTab teamId={id} />}
         {activeTab === "matches" && <MatchesTab teamId={id} />}
         {activeTab === "analytics" && <AnalyticsTab teamId={id} />}
       </Suspense>

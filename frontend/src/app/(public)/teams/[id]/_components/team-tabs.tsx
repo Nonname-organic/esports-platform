@@ -1,12 +1,14 @@
 import Link from "next/link";
-import { LayoutDashboard, Users, Swords, BarChart2 } from "lucide-react";
+import { LayoutDashboard, Users, Swords, BarChart2, Trophy, Crosshair } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type TeamTabId = "overview" | "players" | "matches" | "analytics";
+export type TeamTabId = "overview" | "career" | "players" | "rivals" | "matches" | "analytics";
 
 const TABS: Array<{ id: TeamTabId; label: string; icon: React.ElementType }> = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
-  { id: "players", label: "Players", icon: Users },
+  { id: "career", label: "Career", icon: Trophy },
+  { id: "players", label: "Roster", icon: Users },
+  { id: "rivals", label: "Rivals", icon: Crosshair },
   { id: "matches", label: "Matches", icon: Swords },
   { id: "analytics", label: "Analytics", icon: BarChart2 },
 ];

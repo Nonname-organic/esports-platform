@@ -6,9 +6,36 @@ from fastapi import APIRouter, Query
 from app.core.dependencies import Cache, CurrentUser, DBSession
 from app.schemas.common import ListResponse, Meta, Response
 from app.schemas.player import GAME_ROLES, PlayerCreate, PlayerSchema, PlayerUpdate
+from app.schemas.career import PlayerCareerSchema, AchievementItem, RatingPoint
 from app.services.player import PlayerService
+from app.services.career_service import CareerAggregationService
 
 router = APIRouter(prefix="/players", tags=["プレイヤー管理"])
+
+
+# ── Career / Achievements / Ratings ─────────────────────────────────────────
+@router.get("/{player_id}/career", response_model=Response[PlayerCareerSchema])
+async def get_player_career(player_id: uuid.UUID, db: DBSession, cache: Cache):
+    service = CareerAggregationService(db, cache)
+    career = await service.get_player_career(player_id)
+    return Response(data=PlayerCareerSchema(**career), meta=None)
+
+
+@router.get("/{player_id}/achievements", response_model=Response[list[AchievementItem]])
+async def get_player_achievements(player_id: uuid.UUID, db: DBSession, cache: Cache):
+    service = CareerAggregationService(db, cache)
+    achievements = await service.get_player_achievements(player_id)
+    return Response(data=[AchievementItem(**a) for a in achievements], meta=None)
+
+
+@router.get("/{player_id}/rating-history", response_model=Response[list[RatingPoint]])
+async def get_player_rating_history(
+    player_id: uuid.UUID, db: DBSession, cache: Cache,
+    game: str = Query(default="VALORANT"),
+):
+    service = CareerAggregationService(db, cache)
+    history = await service.get_player_rating_history(player_id, game)
+    return Response(data=[RatingPoint(**h) for h in history], meta=None)
 
 
 @router.get("/roles", tags=["プレイヤー管理"])
