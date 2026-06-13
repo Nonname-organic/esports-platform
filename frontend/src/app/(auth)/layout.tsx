@@ -3,12 +3,13 @@
 import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { LayoutDashboard, BarChart3, Plus, Shield, Users, Link2 } from "lucide-react";
+import { LayoutDashboard, BarChart3, Plus, Shield, Users, Link2, Trophy } from "lucide-react";
 import { useAuthStore } from "@/store/auth-store";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "ダッシュボード", icon: LayoutDashboard },
+  { href: "/tournaments", label: "大会一覧", icon: Trophy },
   { href: "/analytics", label: "統計分析", icon: BarChart3 },
 ];
 
