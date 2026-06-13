@@ -372,7 +372,7 @@ export default function TournamentManagePage({ params }: { params: Promise<{ id:
           <div className="rounded-xl border border-white/10 bg-slate-900 p-5">
             <h3 className="mb-3 text-sm font-bold text-white">大会設定</h3>
             <Link
-              href={`/tournaments/${id}?tab=overview`}
+              href={`/organizer/tournaments/${id}/edit`}
               className="flex items-center gap-2 rounded-lg border border-white/10 px-4 py-3 text-sm text-slate-300 hover:border-white/20 hover:text-white transition-colors"
             >
               <Settings className="h-4 w-4" />

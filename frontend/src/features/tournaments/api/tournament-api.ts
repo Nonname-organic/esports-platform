@@ -70,7 +70,18 @@ export const tournamentApi = {
 
   update: (
     id: string,
-    data: Partial<{ name: string; status: TournamentStatus; description: string; prize_pool: number }>,
+    data: Partial<{
+      name: string;
+      status: TournamentStatus;
+      description: string;
+      prize_pool: number;
+      max_teams: number;
+      registration_start_at: string;
+      registration_end_at: string;
+      start_at: string;
+      end_at: string;
+      is_public: boolean;
+    }>,
   ): Promise<ApiResponse<TournamentDetail>> =>
     apiClient.patch(`/api/v1/tournaments/${id}`, data),
 
