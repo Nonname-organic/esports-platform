@@ -15,6 +15,14 @@
     @apply bg-slate-950 text-white;
   }
 
+  /* ネイティブ<select>のドロップダウンがダークテーマで白背景になり
+     文字が見えなくなるのを防ぐ（全selectに適用） */
+  select option,
+  select optgroup {
+    background-color: #1e293b; /* slate-800 */
+    color: #f1f5f9;            /* slate-100 */
+  }
+
   /* スクロールバースタイル */
   .scrollbar-thin {
     scrollbar-width: thin;
