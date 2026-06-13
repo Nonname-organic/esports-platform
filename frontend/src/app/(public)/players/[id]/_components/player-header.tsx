@@ -17,8 +17,9 @@ interface PlayerHeaderProps {
 }
 
 export function PlayerHeader({ player, stats }: PlayerHeaderProps) {
-  const winRatePct = (stats.win_rate * 100).toFixed(1);
-  const hsRatePct = (stats.headshot_rate * 100).toFixed(1);
+  const winRatePct = ((stats.win_rate ?? 0) * 100).toFixed(1);
+  const hsRatePct = ((stats.headshot_rate ?? 0) * 100).toFixed(1);
+  const displayName = player.display_name ?? player.in_game_name ?? player.username ?? "Player";
 
   return (
     <div className="overflow-hidden rounded-2xl border border-white/10 bg-slate-900">
@@ -36,7 +37,7 @@ export function PlayerHeader({ player, stats }: PlayerHeaderProps) {
               {player.avatar_url ? (
                 <img
                   src={player.avatar_url}
-                  alt={player.display_name}
+                  alt={displayName}
                   className="h-full w-full object-cover"
                 />
               ) : (
@@ -62,8 +63,8 @@ export function PlayerHeader({ player, stats }: PlayerHeaderProps) {
                 <span className="text-xs text-slate-500">{player.country}</span>
               )}
             </div>
-            <h1 className="mt-1 text-2xl font-black text-white">{player.display_name}</h1>
-            {player.in_game_name && player.in_game_name !== player.display_name && (
+            <h1 className="mt-1 text-2xl font-black text-white">{displayName}</h1>
+            {player.in_game_name && player.in_game_name !== displayName && (
               <p className="text-sm text-slate-500">
                 IGN: <span className="text-slate-400">{player.in_game_name}</span>
               </p>
@@ -105,12 +106,12 @@ export function PlayerHeader({ player, stats }: PlayerHeaderProps) {
 
         {/* キャリアスタッツ */}
         <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
-          <StatCard label="Rating" value={player.rating.toLocaleString()} color="text-brand-400" />
-          <StatCard label="KDA" value={stats.avg_kda.toFixed(2)} />
-          <StatCard label="勝率" value={`${winRatePct}%`} color={stats.win_rate >= 0.6 ? "text-green-400" : undefined} />
-          <StatCard label="K/D/A" value={`${stats.avg_kills.toFixed(1)}/${stats.avg_deaths.toFixed(1)}/${stats.avg_assists.toFixed(1)}`} small />
+          <StatCard label="Rating" value={(player.rating ?? 0).toLocaleString()} color="text-brand-400" />
+          <StatCard label="KDA" value={(stats.avg_kda ?? 0).toFixed(2)} />
+          <StatCard label="勝率" value={`${winRatePct}%`} color={(stats.win_rate ?? 0) >= 0.6 ? "text-green-400" : undefined} />
+          <StatCard label="K/D/A" value={`${(stats.avg_kills ?? 0).toFixed(1)}/${(stats.avg_deaths ?? 0).toFixed(1)}/${(stats.avg_assists ?? 0).toFixed(1)}`} small />
           <StatCard label="HS率" value={`${hsRatePct}%`} />
-          <StatCard label="試合数" value={stats.total_matches.toString()} />
+          <StatCard label="試合数" value={(stats.total_matches ?? 0).toString()} />
         </div>
       </div>
     </div>

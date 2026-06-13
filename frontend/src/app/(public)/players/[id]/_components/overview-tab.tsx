@@ -8,9 +8,11 @@ interface OverviewTabProps {
 }
 
 export function OverviewTab({ player, stats }: OverviewTabProps) {
-  const winRatePct = (stats.win_rate * 100).toFixed(1);
-  const hsRatePct = (stats.headshot_rate * 100).toFixed(1);
-  const fbRatePct = (stats.first_blood_rate * 100).toFixed(1);
+  const winRatePct = ((stats.win_rate ?? 0) * 100).toFixed(1);
+  const hsRatePct = ((stats.headshot_rate ?? 0) * 100).toFixed(1);
+  const fbRatePct = ((stats.first_blood_rate ?? 0) * 100).toFixed(1);
+  const rating = player.rating ?? 0;
+  const peakRating = player.peak_rating ?? 0;
 
   return (
     <div className="space-y-6 pt-6">
@@ -29,8 +31,8 @@ export function OverviewTab({ player, stats }: OverviewTabProps) {
           iconBg="bg-green-500/10"
           iconColor="text-green-400"
           label="KDA"
-          main={stats.avg_kda.toFixed(2)}
-          sub={`${stats.avg_kills.toFixed(1)} / ${stats.avg_deaths.toFixed(1)} / ${stats.avg_assists.toFixed(1)}`}
+          main={(stats.avg_kda ?? 0).toFixed(2)}
+          sub={`${(stats.avg_kills ?? 0).toFixed(1)} / ${(stats.avg_deaths ?? 0).toFixed(1)} / ${(stats.avg_assists ?? 0).toFixed(1)}`}
         />
         <SummaryCard
           icon={Target}
@@ -57,17 +59,17 @@ export function OverviewTab({ player, stats }: OverviewTabProps) {
           <div>
             <p className="text-slate-500">現在レーティング</p>
             <p className="mt-0.5 text-3xl font-black text-brand-400">
-              {player.rating.toLocaleString()}
+              {rating.toLocaleString()}
             </p>
           </div>
           <div>
             <p className="text-slate-500">ピークレーティング</p>
             <p className="mt-0.5 text-3xl font-black text-yellow-400">
-              {player.peak_rating.toLocaleString()}
+              {peakRating.toLocaleString()}
             </p>
           </div>
         </div>
-        <RatingBar current={player.rating} peak={player.peak_rating} />
+        <RatingBar current={rating} peak={peakRating} />
       </section>
 
       {/* 詳細スタッツ */}
@@ -76,10 +78,10 @@ export function OverviewTab({ player, stats }: OverviewTabProps) {
         <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm lg:grid-cols-3">
           {[
             { label: "勝率", value: `${winRatePct}%` },
-            { label: "平均スコア", value: stats.avg_score.toFixed(0) },
-            { label: "平均Kill", value: stats.avg_kills.toFixed(1) },
-            { label: "平均Death", value: stats.avg_deaths.toFixed(1) },
-            { label: "平均Assist", value: stats.avg_assists.toFixed(1) },
+            { label: "平均スコア", value: (stats.avg_score ?? 0).toFixed(0) },
+            { label: "平均Kill", value: (stats.avg_kills ?? 0).toFixed(1) },
+            { label: "平均Death", value: (stats.avg_deaths ?? 0).toFixed(1) },
+            { label: "平均Assist", value: (stats.avg_assists ?? 0).toFixed(1) },
             { label: "HS率", value: `${hsRatePct}%` },
             { label: "FB率", value: `${fbRatePct}%` },
             {
