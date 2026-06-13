@@ -58,25 +58,15 @@ export default async function PlayerDetailPage({ params, searchParams }: Props) 
   const { tab: rawTab } = await searchParams;
   const activeTab: PlayerTabId = isValidTab(rawTab) ? rawTab : "overview";
 
-  // SSR: プレイヤー + スタッツを並列取得
+  // SSR: プレイヤー（必須）。存在しない場合のみ404。
   let player: Player;
-  let stats: PlayerCareerStats;
-
   try {
-    const [playerRes, statsRes] = await Promise.all([
-      serverFetch<ApiResponse<Player>>(
-        `/api/v1/players/${id}`,
-        undefined,
-        { cache: "no-store" },
-      ),
-      serverFetch<ApiResponse<PlayerCareerStats>>(
-        `/api/v1/players/${id}/stats`,
-        undefined,
-        { cache: "no-store" },
-      ),
-    ]);
+    const playerRes = await serverFetch<ApiResponse<Player>>(
+      `/api/v1/players/${id}`,
+      undefined,
+      { cache: "no-store" },
+    );
     player = playerRes.data;
-    stats = statsRes.data;
   } catch (err: unknown) {
     if (
       err &&
@@ -87,6 +77,24 @@ export default async function PlayerDetailPage({ params, searchParams }: Props) 
       notFound();
     }
     throw err;
+  }
+
+  // スタッツは任意（未集計の新規プレイヤーでもページを404にしない）
+  const EMPTY_STATS: PlayerCareerStats = {
+    total_matches: 0, wins: 0, losses: 0, win_rate: 0, total_games: 0,
+    avg_kills: 0, avg_deaths: 0, avg_assists: 0, avg_kda: 0, avg_score: 0,
+    headshot_rate: 0, first_blood_rate: 0, most_played_agent: null, most_played_agent_games: 0,
+  };
+  let stats: PlayerCareerStats = EMPTY_STATS;
+  try {
+    const statsRes = await serverFetch<ApiResponse<PlayerCareerStats>>(
+      `/api/v1/players/${id}/stats`,
+      undefined,
+      { cache: "no-store" },
+    );
+    stats = statsRes.data ?? EMPTY_STATS;
+  } catch {
+    // /stats 未集計・取得失敗は許容（空スタッツで表示）
   }
 
   return (

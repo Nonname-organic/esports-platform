@@ -38,6 +38,35 @@ async def get_player_rating_history(
     return Response(data=[RatingPoint(**h) for h in history], meta=None)
 
 
+@router.get("/{player_id}/stats")
+async def get_player_stats(player_id: uuid.UUID, db: DBSession, cache: Cache):
+    """プレイヤー詳細ヘッダー用の集計スタッツ（キャリア集計から導出）。
+
+    実績の無い新規プレイヤーでもゼロ値を返す（404にしない）。
+    """
+    service = CareerAggregationService(db, cache)
+    c = await service.get_player_career(player_id)
+    agents = c.get("agent_usage") or []
+    top = agents[0] if agents else None
+    data = {
+        "total_matches": c.get("total_matches", 0),
+        "wins": c.get("total_wins", 0),
+        "losses": c.get("total_losses", 0),
+        "win_rate": c.get("win_rate", 0.0),
+        "total_games": c.get("total_matches", 0),
+        "avg_kills": c.get("avg_kills", 0.0),
+        "avg_deaths": c.get("avg_deaths", 0.0),
+        "avg_assists": c.get("avg_assists", 0.0),
+        "avg_kda": c.get("avg_kda", 0.0),
+        "avg_score": c.get("avg_acs", 0.0),
+        "headshot_rate": 0.0,
+        "first_blood_rate": 0.0,
+        "most_played_agent": (top or {}).get("agent"),
+        "most_played_agent_games": (top or {}).get("games", 0),
+    }
+    return {"data": data, "meta": None}
+
+
 @router.get("/roles", tags=["プレイヤー管理"])
 async def get_game_roles():
     """ゲーム別ロール一覧（フロントエンドのセレクター用）"""
