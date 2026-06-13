@@ -1,11 +1,12 @@
 "use client";
 
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { User2, AlertCircle, Info, CheckCircle2, Gamepad2 } from "lucide-react";
+import { User2, AlertCircle, Info, Gamepad2 } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import type { GameType } from "@/types/tournament";
@@ -40,7 +41,7 @@ export default function PlayerCreatePage() {
   const router = useRouter();
   const qc = useQueryClient();
 
-  const { data: myPlayer } = useQuery({
+  const { data: myPlayer, isLoading: meLoading } = useQuery({
     queryKey: ["players", "me"],
     queryFn: () => apiClient.get<{ data: any | null }>("/api/v1/players/me"),
     select: (res) => res.data,
@@ -77,18 +78,21 @@ export default function PlayerCreatePage() {
     err ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-brand-500",
   );
 
-  if (myPlayer) {
+  // 登録済みなら自動でプロフィールへ遷移（クリック不要）
+  useEffect(() => {
+    if (myPlayer?.id) {
+      router.replace(`/players/${myPlayer.id}`);
+    }
+  }, [myPlayer, router]);
+
+  // 読み込み中、または登録済み（リダイレクト中）はスピナー表示
+  if (meLoading || myPlayer) {
     return (
-      <div className="mx-auto max-w-lg px-4 py-20 text-center">
-        <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-2xl bg-green-500/10">
-          <CheckCircle2 className="h-10 w-10 text-green-400" />
-        </div>
-        <h1 className="text-xl font-black text-white">登録済みです</h1>
-        <p className="mt-2 text-sm text-slate-400">既にプレイヤープロフィールが作成されています。</p>
-        <button onClick={() => router.push(`/players/${myPlayer.id}`)}
-          className="mt-6 rounded-xl bg-brand-500 px-6 py-2.5 text-sm font-bold text-white hover:bg-brand-600 transition-colors">
-          プロフィールを見る
-        </button>
+      <div className="mx-auto flex max-w-lg flex-col items-center px-4 py-24 text-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
+        <p className="mt-4 text-sm text-slate-400">
+          {myPlayer ? "プロフィールへ移動中..." : "読み込み中..."}
+        </p>
       </div>
     );
   }
