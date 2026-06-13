@@ -7,6 +7,7 @@ import { serverFetch } from "@/lib/api-client";
 import type { ApiResponse, TournamentDetail, BracketResponse } from "@/types/tournament";
 import { TournamentHeader } from "./_components/tournament-header";
 import { TournamentTabs, type TabId } from "./_components/tournament-tabs";
+import { CheckInButton } from "./_components/check-in-button";
 import { OverviewTab } from "./_components/overview-tab";
 import { MatchesTab } from "./_components/matches-tab";
 import { BracketTab } from "./_components/bracket-tab";
@@ -96,6 +97,9 @@ export default async function TournamentDetailPage({ params, searchParams }: Pro
 
       {/* ヘッダー */}
       <TournamentHeader tournament={tournament} />
+
+      {/* チェックイン（要チェックイン大会のみ・ログイン済み登録チームに表示） */}
+      {tournament.require_check_in && <CheckInButton tournamentId={id} />}
 
       {/* タブナビゲーション */}
       <TournamentTabs activeTab={activeTab} id={id} />

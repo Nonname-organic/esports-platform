@@ -1,9 +1,12 @@
 import uuid
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Query
+from sqlalchemy import select
 
 from app.core.dependencies import Cache, CurrentUser, DBSession, OrganizerUser
+from app.core.exceptions import BusinessRuleError, NotFoundError
 from app.models.enums import GameType, RegistrationStatus, TournamentStatus
 from app.schemas.common import ListResponse, Meta, Response
 from app.schemas.tournament import (
@@ -198,6 +201,69 @@ async def register_team(
 ):
     service = TournamentService(db, cache)
     await service.register_team(tournament_id, uuid.UUID(data.team_id), data.notes)
+
+
+async def _user_registration(db, tournament_id: uuid.UUID, user):
+    """ログインユーザーの所属チームの、この大会への登録を解決。"""
+    from app.models.player import Player
+    from app.models.team import TeamMember
+    from app.schemas.tournament import RegistrationInfo  # noqa: F401 (型参照回避)
+
+    player = (await db.execute(select(Player).where(Player.user_id == user.id))).scalar_one_or_none()
+    if not player:
+        return None
+    team_ids = (
+        await db.execute(
+            select(TeamMember.team_id).where(
+                TeamMember.player_id == player.id, TeamMember.left_at.is_(None)
+            )
+        )
+    ).scalars().all()
+    if not team_ids:
+        return None
+    from app.models.tournament import TournamentRegistration
+    return (
+        await db.execute(
+            select(TournamentRegistration).where(
+                TournamentRegistration.tournament_id == tournament_id,
+                TournamentRegistration.team_id.in_(team_ids),
+            )
+        )
+    ).scalar_one_or_none()
+
+
+@router.get("/{tournament_id}/check-in/me")
+async def my_check_in(
+    tournament_id: uuid.UUID, db: DBSession, cache: Cache, current_user: CurrentUser,
+):
+    """自分のチームのチェックイン状態（フロントのボタン表示用）。"""
+    reg = await _user_registration(db, tournament_id, current_user)
+    if not reg:
+        return {"data": {"registered": False, "checked_in": False}}
+    return {"data": {
+        "registered": True,
+        "approved": reg.status == RegistrationStatus.APPROVED,
+        "checked_in": reg.checked_in_at is not None,
+        "team_id": str(reg.team_id),
+        "checked_in_at": reg.checked_in_at.isoformat() if reg.checked_in_at else None,
+    }}
+
+
+@router.post("/{tournament_id}/check-in", status_code=200)
+async def check_in(
+    tournament_id: uuid.UUID, db: DBSession, cache: Cache, current_user: CurrentUser,
+):
+    """Webからチェックイン（自分の所属チームの登録を出席にする）。"""
+    reg = await _user_registration(db, tournament_id, current_user)
+    if not reg:
+        raise NotFoundError("登録", "この大会にあなたのチームは登録されていません")
+    if reg.status != RegistrationStatus.APPROVED:
+        raise BusinessRuleError("承認済みの登録のみチェックインできます")
+    reg.checked_in_at = datetime.now(timezone.utc)
+    reg.checked_in_via = "web"
+    await db.flush()
+    return {"data": {"checked_in": True, "team_id": str(reg.team_id),
+                     "checked_in_at": reg.checked_in_at.isoformat()}}
 
 
 @router.post("/{tournament_id}/bracket", response_model=Response[BracketResponse], status_code=201)

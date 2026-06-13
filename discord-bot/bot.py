@@ -33,11 +33,14 @@ intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 metrics = Metrics(api_client)
 
+# 設計方針: 参加者はWebで基本操作、Discordは「試合チャンネル内で完結する進行」に限定。
+# 運営操作・閲覧系・スカウト等はWebに集約（該当cogは廃止）。
 COGS = [
-    "cogs.account",
-    "cogs.tournament", "cogs.bracket", "cogs.checkin", "cogs.match", "cogs.veto",
-    "cogs.team", "cogs.player", "cogs.scout", "cogs.analytics", "cogs.career",
-    "cogs.notification", "cogs.stream", "cogs.moderator", "cogs.support", "cogs.help",
+    "cogs.account",   # /link /unlink /whoami（結果報告の本人解決に必要）
+    "cogs.veto",      # マップban/pick
+    "cogs.dice",      # ダイス/コイントス/抽選
+    "cogs.match",     # 結果報告/確認/異議/スクショ/証跡/情報
+    "cogs.help",      # コマンド一覧
 ]
 
 
