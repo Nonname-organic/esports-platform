@@ -9,6 +9,25 @@ const FORMAT_LABEL: Record<string, string> = {
   swiss: "スイス式",
 };
 
+const BANPICK_LABEL: Record<string, string> = {
+  team_veto: "チームVeto（交互）",
+  organizer_pick: "主催者指定",
+  blind_pick: "ブラインドピック",
+};
+
+const OVERTIME_LABEL: Record<string, string> = {
+  sudden_death: "サドンデス",
+  best_of_3: "ベスト・オブ・3",
+  unlimited: "無制限",
+};
+
+const CURRENCY_SYMBOL: Record<string, string> = { JPY: "¥", USD: "$", EUR: "€" };
+
+function formatPrizeAmount(p: { amount?: number; currency?: string }): string {
+  const sym = CURRENCY_SYMBOL[p.currency ?? "JPY"] ?? "";
+  return `${sym}${(p.amount ?? 0).toLocaleString()}`;
+}
+
 interface OverviewTabProps {
   tournament: TournamentDetail;
 }
@@ -80,15 +99,103 @@ export function OverviewTab({ tournament }: OverviewTabProps) {
           </dl>
         </section>
 
-        {/* ルール */}
-        {tournament.rules && Object.keys(tournament.rules).length > 0 && (
-          <section className="rounded-xl border border-white/10 bg-slate-900 p-5">
-            <h2 className="mb-3 font-bold text-white">ルール</h2>
-            <pre className="text-sm text-slate-400 whitespace-pre-wrap font-sans">
-              {JSON.stringify(tournament.rules, null, 2)}
-            </pre>
-          </section>
-        )}
+        {/* レギュレーション（rules を人間可読に整形。生JSONは表示しない） */}
+        {(() => {
+          const r = (tournament.rules ?? {}) as Record<string, any>;
+          const gs = (r.game_settings ?? {}) as Record<string, any>;
+          const mapPool: string[] = Array.isArray(gs.map_pool) ? gs.map_pool : [];
+          const prizes: Array<{ rank_position?: number; amount?: number; currency?: string }> =
+            Array.isArray(r.prizes) ? r.prizes : [];
+          const contact = (r.contact ?? {}) as Record<string, any>;
+          const discordInvite: string | undefined =
+            (r.discord && typeof r.discord.invite_url === "string" && r.discord.invite_url) || undefined;
+
+          const regItems: Array<{ label: string; value: string }> = [];
+          if (r.bo_format) regItems.push({ label: "試合形式", value: String(r.bo_format) });
+          if (gs.server) regItems.push({ label: "サーバー", value: String(gs.server) });
+          if (gs.ban_pick_format)
+            regItems.push({ label: "Ban/Pick", value: BANPICK_LABEL[gs.ban_pick_format] ?? gs.ban_pick_format });
+          if (gs.overtime_rule)
+            regItems.push({ label: "オーバータイム", value: OVERTIME_LABEL[gs.overtime_rule] ?? gs.overtime_rule });
+          if (r.tier) regItems.push({ label: "ティア", value: String(r.tier) });
+
+          const hasContent =
+            regItems.length > 0 || mapPool.length > 0 || prizes.length > 0 ||
+            discordInvite || contact.twitter || contact.discord;
+          if (!hasContent) return null;
+
+          return (
+            <section className="rounded-xl border border-white/10 bg-slate-900 p-5 space-y-5">
+              <h2 className="flex items-center gap-2 font-bold text-white">
+                <Shield className="h-4 w-4 text-brand-400" />
+                レギュレーション
+              </h2>
+
+              {regItems.length > 0 && (
+                <dl className="grid grid-cols-2 gap-4 text-sm">
+                  {regItems.map(({ label, value }) => (
+                    <div key={label}>
+                      <dt className="text-slate-500">{label}</dt>
+                      <dd className="mt-0.5 font-semibold text-white">{value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
+
+              {mapPool.length > 0 && (
+                <div>
+                  <p className="mb-2 text-sm text-slate-500">マッププール</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {mapPool.map((m) => (
+                      <span key={m} className="rounded-lg bg-white/5 px-2.5 py-1 text-xs font-medium text-slate-300">
+                        {m}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {prizes.length > 0 && (
+                <div>
+                  <p className="mb-2 text-sm text-slate-500">賞金</p>
+                  <ul className="space-y-1 text-sm">
+                    {prizes.map((p, i) => (
+                      <li key={i} className="flex items-center gap-2">
+                        <span className="text-yellow-400">{p.rank_position ?? i + 1}位</span>
+                        <span className="font-semibold text-white">{formatPrizeAmount(p)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {(discordInvite || contact.twitter || contact.discord) && (
+                <div>
+                  <p className="mb-2 text-sm text-slate-500">参加・連絡先</p>
+                  <div className="flex flex-wrap gap-2 text-sm">
+                    {discordInvite && (
+                      <a href={discordInvite} target="_blank" rel="noopener noreferrer"
+                        className="rounded-lg bg-[#5865F2]/15 px-3 py-1.5 font-medium text-[#aab2ff] hover:bg-[#5865F2]/25 transition-colors">
+                        Discordに参加
+                      </a>
+                    )}
+                    {contact.twitter && (
+                      <a href={`https://twitter.com/${String(contact.twitter).replace(/^@/, "")}`} target="_blank" rel="noopener noreferrer"
+                        className="rounded-lg bg-white/5 px-3 py-1.5 text-slate-300 hover:bg-white/10 transition-colors">
+                        @{String(contact.twitter).replace(/^@/, "")}
+                      </a>
+                    )}
+                    {contact.discord && (
+                      <span className="rounded-lg bg-white/5 px-3 py-1.5 text-slate-300">
+                        Discord: {String(contact.discord)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </section>
+          );
+        })()}
       </div>
 
       {/* サイドバー */}
