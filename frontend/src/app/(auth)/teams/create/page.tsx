@@ -59,7 +59,8 @@ export default function TeamCreatePage() {
       country: values.country || undefined,
       twitter_handle: values.twitter_handle || undefined,
     });
-    router.push(`/teams/${res.data.id}`);
+    // 作成後はチーム管理画面（メンバー管理）へ
+    router.push(`/teams/${res.data.id}/members`);
   });
 
   return (

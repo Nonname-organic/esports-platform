@@ -4,6 +4,7 @@ export type TeamRole = "player" | "coach" | "analyst" | "manager" | "substitute"
 
 export interface Team {
   id: string;
+  owner_id: string;
   name: string;
   tag: string;
   logo_url: string | null;

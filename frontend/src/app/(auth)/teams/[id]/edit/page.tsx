@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, use } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -78,10 +79,23 @@ export default function TeamEditPage({ params }: { params: Promise<{ id: string 
 
   if (!team) return <div className="p-8 text-center text-slate-400">チームが見つかりません</div>;
 
-  const isOwner = user?.id === String(team.id) || user?.role === "admin";
+  const isOwner = String(team.owner_id) === String(user?.id) || user?.role === "admin";
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8">
+      {/* 管理サブナビ */}
+      <div className="mb-6 flex gap-1 border-b border-white/10">
+        <Link href={`/teams/${id}/members`} className="border-b-2 border-transparent px-4 py-2 text-sm font-medium text-slate-400 hover:text-white">
+          メンバー管理
+        </Link>
+        <Link href={`/teams/${id}/edit`} className="border-b-2 border-brand-500 px-4 py-2 text-sm font-semibold text-brand-400">
+          チーム編集
+        </Link>
+        <Link href={`/teams/${id}`} className="border-b-2 border-transparent px-4 py-2 text-sm font-medium text-slate-400 hover:text-white">
+          公開ページ
+        </Link>
+      </div>
+
       <div className="mb-6 flex items-center gap-3">
         <div className="rounded-xl bg-brand-500/10 p-2">
           <Settings className="h-6 w-6 text-brand-400" />

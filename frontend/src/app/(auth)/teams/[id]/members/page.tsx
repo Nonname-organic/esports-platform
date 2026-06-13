@@ -85,16 +85,29 @@ export default function TeamMembersPage({ params }: { params: Promise<{ id: stri
 
   if (!team) return <div className="p-8 text-center text-slate-400">チームが見つかりません</div>;
 
-  const isOwnerOrCaptain = user?.role === "admin" || String(team.id) === user?.id;
+  const isOwnerOrCaptain = user?.role === "admin" || String(team.owner_id) === String(user?.id);
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
       {/* パンくず */}
-      <nav className="mb-6 flex items-center gap-2 text-sm text-slate-400">
+      <nav className="mb-4 flex items-center gap-2 text-sm text-slate-400">
         <Link href={`/teams/${id}`} className="hover:text-white transition-colors">{team.name}</Link>
         <ChevronRight className="h-3.5 w-3.5" />
-        <span className="text-white">メンバー管理</span>
+        <span className="text-white">チーム管理</span>
       </nav>
+
+      {/* 管理サブナビ */}
+      <div className="mb-6 flex gap-1 border-b border-white/10">
+        <Link href={`/teams/${id}/members`} className="border-b-2 border-brand-500 px-4 py-2 text-sm font-semibold text-brand-400">
+          メンバー管理
+        </Link>
+        <Link href={`/teams/${id}/edit`} className="border-b-2 border-transparent px-4 py-2 text-sm font-medium text-slate-400 hover:text-white">
+          チーム編集
+        </Link>
+        <Link href={`/teams/${id}`} className="border-b-2 border-transparent px-4 py-2 text-sm font-medium text-slate-400 hover:text-white">
+          公開ページ
+        </Link>
+      </div>
 
       {/* ヘッダー */}
       <div className="mb-6 flex items-center justify-between">
