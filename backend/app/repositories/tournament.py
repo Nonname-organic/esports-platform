@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -34,6 +34,8 @@ class TournamentRepository(BaseRepository[Tournament]):
         is_public: bool = True,
         limit: int = 20,
         cursor: uuid.UUID | None = None,
+        from_at: datetime | None = None,
+        to_at: datetime | None = None,
     ) -> tuple[list[Tournament], bool]:
         filters = [Tournament.is_public == is_public]
         if game:
@@ -42,6 +44,17 @@ class TournamentRepository(BaseRepository[Tournament]):
             filters.append(Tournament.status == status)
         if cursor:
             filters.append(Tournament.id < cursor)
+        # 期間（月）で絞り込み: 受付期間 or 開催期間 が [from_at, to_at) と重なる大会
+        if from_at and to_at:
+            reg_overlap = and_(
+                Tournament.registration_start_at < to_at,
+                Tournament.registration_end_at >= from_at,
+            )
+            event_overlap = and_(
+                Tournament.start_at < to_at,
+                func.coalesce(Tournament.end_at, Tournament.start_at) >= from_at,
+            )
+            filters.append(or_(reg_overlap, event_overlap))
 
         stmt = (
             select(Tournament)

@@ -16,6 +16,7 @@ export interface TournamentListParams {
   game?: GameType;
   status?: TournamentStatus;
   sort?: TournamentSortOrder;
+  month?: string; // "YYYY-MM"。その月に受付/開催する大会のみ
   cursor?: string;
   limit?: number;
 }
@@ -38,6 +39,7 @@ export const tournamentApi = {
     if (params?.game) qs.set("game", params.game);
     if (params?.status) qs.set("status", params.status);
     if (params?.sort) qs.set("sort", params.sort);
+    if (params?.month) qs.set("month", params.month);
     if (params?.cursor) qs.set("cursor", params.cursor);
     if (params?.limit) qs.set("limit", String(params.limit));
     const query = qs.toString() ? `?${qs.toString()}` : "";

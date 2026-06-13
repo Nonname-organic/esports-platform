@@ -33,6 +33,20 @@ const SORTS: Array<{ value: TournamentSortOrder; label: string }> = [
   { value: "created_at_desc", label: "作成日が新しい順" },
 ];
 
+function ymNow(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+function shiftMonth(ym: string, delta: number): string {
+  const [y, m] = ym.split("-").map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+function ymLabel(ym: string): string {
+  const [y, m] = ym.split("-");
+  return `${y}年${Number(m)}月`;
+}
+
 function useDebounce<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -51,6 +65,11 @@ export function TournamentsClient() {
   const [game, setGame] = useState<GameType | "ALL">((searchParams.get("game") as GameType) ?? "ALL");
   const [status, setStatus] = useState<TournamentStatus | "ALL">((searchParams.get("status") as TournamentStatus) ?? "ALL");
   const [sort, setSort] = useState<TournamentSortOrder>((searchParams.get("sort") as TournamentSortOrder) ?? "start_at_asc");
+  // デフォルトは「当月」。"ALL" で全期間。
+  const [month, setMonth] = useState<string>(() => {
+    const mp = searchParams.get("month");
+    return mp === "all" ? "ALL" : (mp ?? ymNow());
+  });
 
   const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
   const [pageIdx, setPageIdx] = useState(0);
@@ -63,7 +82,7 @@ export function TournamentsClient() {
     setPageIdx(0);
   }, []);
 
-  useEffect(() => { resetPage(); }, [debouncedSearch, game, status, sort, resetPage]);
+  useEffect(() => { resetPage(); }, [debouncedSearch, game, status, sort, month, resetPage]);
 
   // URL同期
   useEffect(() => {
@@ -72,15 +91,18 @@ export function TournamentsClient() {
     if (game !== "ALL") params.set("game", game);
     if (status !== "ALL") params.set("status", status);
     if (sort !== "start_at_asc") params.set("sort", sort);
+    if (month === "ALL") params.set("month", "all");
+    else if (month !== ymNow()) params.set("month", month);
     const qs = params.toString();
     router.replace(`${pathname}${qs ? `?${qs}` : ""}`, { scroll: false });
-  }, [debouncedSearch, game, status, sort, pathname, router]);
+  }, [debouncedSearch, game, status, sort, month, pathname, router]);
 
   const params = {
     q: debouncedSearch || undefined,
     game: game !== "ALL" ? game : undefined,
     status: status !== "ALL" ? status : undefined,
     sort,
+    month: month !== "ALL" ? month : undefined,
     cursor: cursors[pageIdx],
   };
 
@@ -107,6 +129,7 @@ export function TournamentsClient() {
     setGame("ALL");
     setStatus("ALL");
     setSort("start_at_asc");
+    setMonth(ymNow());
   };
 
   const hasFilters = searchInput || game !== "ALL" || status !== "ALL";
@@ -117,9 +140,49 @@ export function TournamentsClient() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
       {/* ページヘッダー */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-black text-white">大会一覧</h1>
-        <p className="mt-1 text-slate-400">参加・観戦できる e-スポーツ大会を探す</p>
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-black text-white">大会一覧</h1>
+          <p className="mt-1 text-slate-400">
+            {month === "ALL" ? "すべての期間の大会" : `${ymLabel(month)}に受付・開催する大会`}
+          </p>
+        </div>
+
+        {/* 月ナビゲーション（デフォルト＝当月） */}
+        <div className="flex items-center gap-1.5">
+          {month === "ALL" ? (
+            <button
+              onClick={() => setMonth(ymNow())}
+              className="rounded-lg border border-white/10 px-3 py-2 text-sm text-slate-300 hover:bg-white/5 hover:text-white transition-colors"
+            >
+              今月を表示
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={() => setMonth(shiftMonth(month, -1))}
+                className="rounded-lg border border-white/10 p-2 text-slate-400 hover:bg-white/5 hover:text-white transition-colors"
+                aria-label="前の月"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <span className="min-w-[6.5rem] text-center text-sm font-bold text-white">{ymLabel(month)}</span>
+              <button
+                onClick={() => setMonth(shiftMonth(month, 1))}
+                className="rounded-lg border border-white/10 p-2 text-slate-400 hover:bg-white/5 hover:text-white transition-colors"
+                aria-label="次の月"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => setMonth("ALL")}
+                className="ml-1 rounded-lg border border-white/10 px-3 py-2 text-sm text-slate-400 hover:bg-white/5 hover:text-white transition-colors"
+              >
+                すべて
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* フィルターバー */}

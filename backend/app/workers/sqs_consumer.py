@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import signal
+from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -175,6 +176,58 @@ async def riot_auto_sync_loop() -> None:
         await asyncio.sleep(interval)
 
 
+def _compute_tournament_status(t, now):
+    """日程から大会ステータスを判定（公開済みのみ対象）。"""
+    from app.models.enums import TournamentStatus
+    if t.end_at and now >= t.end_at:
+        return TournamentStatus.COMPLETED
+    if t.start_at and now >= t.start_at:
+        return TournamentStatus.ONGOING
+    if t.registration_end_at and now >= t.registration_end_at:
+        return TournamentStatus.REGISTRATION_CLOSED
+    if t.registration_start_at and now >= t.registration_start_at:
+        return TournamentStatus.REGISTRATION_OPEN
+    return None  # 受付開始前 → 現状維持（公開＝受付）
+
+
+async def tournament_status_loop() -> None:
+    """公開済み大会のステータスを日程に応じて自動更新（手動操作は廃止）。
+
+    下書き(draft)/中止(cancelled)/終了(completed) は対象外。
+    draft→公開 は運営の「公開」操作（registration_open化）で行い、以降は自動。
+    """
+    from sqlalchemy import select
+    from app.models.enums import TournamentStatus
+    from app.models.tournament import Tournament
+
+    managed = [
+        TournamentStatus.REGISTRATION_OPEN,
+        TournamentStatus.REGISTRATION_CLOSED,
+        TournamentStatus.CHECK_IN,
+        TournamentStatus.ONGOING,
+    ]
+    await asyncio.sleep(15)
+    while True:
+        try:
+            now = datetime.now(timezone.utc)
+            async with AsyncSessionLocal() as db:
+                rows = (
+                    await db.execute(select(Tournament).where(Tournament.status.in_(managed)))
+                ).scalars().all()
+                changed = 0
+                for t in rows:
+                    new_status = _compute_tournament_status(t, now)
+                    if new_status and new_status != t.status:
+                        t.status = new_status
+                        changed += 1
+                if changed:
+                    await db.commit()
+                    logger.info(f"tournament status auto-update: {changed} changed")
+        except Exception as e:
+            logger.error(f"tournament status loop error: {e}")
+        await asyncio.sleep(60)
+
+
 async def main() -> None:
     consumer = SQSConsumer()
 
@@ -185,8 +238,8 @@ async def main() -> None:
     signal.signal(signal.SIGTERM, handle_signal)
     signal.signal(signal.SIGINT, handle_signal)
 
-    # キュー消費 と Riot定期同期 を並行実行
-    await asyncio.gather(consumer.run(), riot_auto_sync_loop())
+    # キュー消費 / Riot定期同期 / 大会ステータス自動更新 を並行実行
+    await asyncio.gather(consumer.run(), riot_auto_sync_loop(), tournament_status_loop())
 
 
 if __name__ == "__main__":

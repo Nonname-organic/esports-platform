@@ -22,13 +22,8 @@ const STATUS_FLOW: { status: TournamentStatus; label: string; icon: React.Elemen
   { status: "completed", label: "完了", icon: CheckCircle2, color: "text-slate-500" },
 ];
 
-const STATUS_NEXT: Partial<Record<TournamentStatus, TournamentStatus>> = {
-  draft: "registration_open",
-  registration_open: "registration_closed",
-  registration_closed: "ongoing",
-  check_in: "ongoing",
-  ongoing: "completed",
-};
+// ステータスは日程に応じてバックエンドが自動更新する（手動遷移は廃止）。
+// 運営の手動操作は draft → 公開（registration_open）のみ。
 
 // ── 登録カード ─────────────────────────────────────────────────────────────────
 function RegistrationRow({
@@ -146,7 +141,6 @@ export default function TournamentManagePage({ params }: { params: Promise<{ id:
   const registrations = regsRes ?? [];
   const pendingCount = registrations.filter((r) => r.status === "pending").length;
   const approvedCount = registrations.filter((r) => r.status === "approved").length;
-  const nextStatus = tournament ? STATUS_NEXT[tournament.status as TournamentStatus] : undefined;
 
   if (isLoading || !tournament) {
     return (
@@ -200,17 +194,19 @@ export default function TournamentManagePage({ params }: { params: Promise<{ id:
       {/* ステータスフロー */}
       <div className="mb-6 rounded-2xl border border-white/10 bg-slate-900 p-5">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-sm font-bold text-white">ステータス管理</h2>
-          {nextStatus && (
+          <h2 className="text-sm font-bold text-white">ステータス（自動）</h2>
+          {tournament.status === "draft" ? (
             <button
-              onClick={() => changeStatus.mutate(nextStatus)}
+              onClick={() => changeStatus.mutate("registration_open")}
               disabled={changeStatus.isPending}
               className="flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2 text-sm font-bold text-white hover:bg-brand-600 disabled:opacity-40 transition-colors"
             >
               <PlayCircle className="h-4 w-4" />
-              {STATUS_FLOW.find((s) => s.status === nextStatus)?.label}へ移行
+              {changeStatus.isPending ? "公開中..." : "公開する"}
             </button>
-          )}
+          ) : tournament.status !== "completed" && tournament.status !== "cancelled" ? (
+            <span className="text-xs text-slate-500">⏱ 日程に応じて自動更新されます</span>
+          ) : null}
         </div>
         <div className="flex items-center gap-2 overflow-x-auto pb-1">
           {STATUS_FLOW.map((s, i) => {

@@ -57,10 +57,20 @@ async def list_tournaments(
     status: TournamentStatus | None = Query(default=None),
     cursor: uuid.UUID | None = Query(default=None),
     limit: int = Query(default=20, ge=1, le=100),
+    month: str | None = Query(default=None, description="YYYY-MM。指定月に受付/開催する大会のみ"),
 ):
+    from_at = to_at = None
+    if month:
+        try:
+            y, m = (int(x) for x in month.split("-"))
+            from_at = datetime(y, m, 1, tzinfo=timezone.utc)
+            to_at = datetime(y + 1, 1, 1, tzinfo=timezone.utc) if m == 12 else datetime(y, m + 1, 1, tzinfo=timezone.utc)
+        except (ValueError, TypeError):
+            from_at = to_at = None  # 不正な月指定は無視（全件）
+
     service = TournamentService(db, cache)
     tournaments, has_next = await service._repo.list_by_game_status(
-        game=game, status=status, limit=limit, cursor=cursor
+        game=game, status=status, limit=limit, cursor=cursor, from_at=from_at, to_at=to_at
     )
 
     items = []
