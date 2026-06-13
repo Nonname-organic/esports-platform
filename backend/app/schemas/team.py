@@ -13,8 +13,8 @@ class TeamCreate(BaseModel):
     game: GameType
     description: Optional[str] = Field(None, max_length=1000)
     country: Optional[str] = Field(None, max_length=100)
-    logo_url: Optional[str] = Field(None, max_length=500)
-    banner_url: Optional[str] = Field(None, max_length=500)
+    logo_url: Optional[str] = Field(None, max_length=2048)
+    banner_url: Optional[str] = Field(None, max_length=2048)
     twitter_handle: Optional[str] = Field(None, max_length=50)
 
 
@@ -23,8 +23,8 @@ class TeamUpdate(BaseModel):
     tag: Optional[str] = Field(None, min_length=2, max_length=10, pattern=r"^[A-Za-z0-9]+$")
     description: Optional[str] = Field(None, max_length=1000)
     country: Optional[str] = Field(None, max_length=100)
-    logo_url: Optional[str] = Field(None, max_length=500)
-    banner_url: Optional[str] = Field(None, max_length=500)
+    logo_url: Optional[str] = Field(None, max_length=2048)
+    banner_url: Optional[str] = Field(None, max_length=2048)
     twitter_handle: Optional[str] = Field(None, max_length=50)
 
 

@@ -23,6 +23,7 @@ class Team(UUIDMixin, TimestampMixin, Base):
     tag: Mapped[str] = mapped_column(String(10), nullable=False)
     game: Mapped[GameType] = mapped_column(pg_enum(GameType, name="game_type"), nullable=False)
     logo_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    banner_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     owner_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
