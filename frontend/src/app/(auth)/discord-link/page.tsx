@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Copy, Link2, Loader2, RefreshCw } from "lucide-react";
+import { Check, Copy, Link2, Loader2, RefreshCw, Unlink } from "lucide-react";
 import { discordApi } from "@/features/discord/api/discord-api";
 import { useDiscordLink, useIssueLinkCode } from "@/features/discord/hooks/use-discord";
 
@@ -12,6 +12,7 @@ export default function DiscordLinkPage() {
   const [copied, setCopied] = useState(false);
   const [oauthLoading, setOauthLoading] = useState(false);
   const [oauthError, setOauthError] = useState<string | null>(null);
+  const [unlinking, setUnlinking] = useState(false);
 
   const handleIssue = async () => {
     const res = await issue.mutateAsync();
@@ -75,6 +76,17 @@ export default function DiscordLinkPage() {
               className="flex items-center gap-1.5 rounded-lg bg-white/5 px-3 py-2 text-xs text-slate-300 hover:bg-white/10"
             >
               <RefreshCw className="h-3.5 w-3.5" /> 更新
+            </button>
+            <button
+              onClick={async () => {
+                if (!confirm("Discord連携を解除しますか？")) return;
+                setUnlinking(true);
+                try { await discordApi.unlink(); await refetch(); } finally { setUnlinking(false); }
+              }}
+              disabled={unlinking}
+              className="flex items-center gap-1.5 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400 hover:bg-red-500/20 disabled:opacity-50"
+            >
+              {unlinking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Unlink className="h-3.5 w-3.5" />} 連携解除
             </button>
           </div>
         ) : (

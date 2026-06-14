@@ -17,7 +17,10 @@ export interface TournamentSummary {
   status: TournamentStatus;
   max_teams: number;
   registered_teams: number;
+  registration_start_at: string | null;
+  registration_end_at: string | null;
   start_at: string | null;
+  end_at: string | null;
   prize_pool: number | null;
   banner_url: string | null;
 }

@@ -84,7 +84,10 @@ async def list_tournaments(
             status=t.status,
             max_teams=t.max_teams,
             registered_teams=count,
+            registration_start_at=t.registration_start_at,
+            registration_end_at=t.registration_end_at,
             start_at=t.start_at,
+            end_at=t.end_at,
             prize_pool=t.prize_pool,
             banner_url=t.banner_url,
         ))

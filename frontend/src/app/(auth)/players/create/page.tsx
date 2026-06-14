@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { User2, AlertCircle, Info, Gamepad2 } from "lucide-react";
+import { User2, AlertCircle, Info, Gamepad2, CheckCircle2, ExternalLink } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import type { GameType } from "@/types/tournament";
@@ -78,21 +78,55 @@ export default function PlayerCreatePage() {
     err ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-brand-500",
   );
 
-  // 登録済みなら自動でプロフィールへ遷移（クリック不要）
-  useEffect(() => {
-    if (myPlayer?.id) {
-      router.replace(`/players/${myPlayer.id}`);
-    }
-  }, [myPlayer, router]);
-
-  // 読み込み中、または登録済み（リダイレクト中）はスピナー表示
-  if (meLoading || myPlayer) {
+  // 読み込み中はスピナー
+  if (meLoading) {
     return (
       <div className="mx-auto flex max-w-lg flex-col items-center px-4 py-24 text-center">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
-        <p className="mt-4 text-sm text-slate-400">
-          {myPlayer ? "プロフィールへ移動中..." : "読み込み中..."}
-        </p>
+        <p className="mt-4 text-sm text-slate-400">読み込み中...</p>
+      </div>
+    );
+  }
+
+  // 登録済み: サイドバーを保ったままインラインで表示（自動表示・リダイレクトしない）
+  if (myPlayer) {
+    return (
+      <div className="mx-auto max-w-lg px-4 py-10">
+        <div className="rounded-2xl border border-white/10 bg-slate-900 p-6">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="rounded-2xl bg-green-500/10 p-3">
+              <CheckCircle2 className="h-7 w-7 text-green-400" />
+            </div>
+            <div>
+              <h1 className="text-xl font-black text-white">登録済みです</h1>
+              <p className="text-sm text-slate-500">既にプレイヤープロフィールがあります</p>
+            </div>
+          </div>
+          <dl className="mb-5 space-y-2 text-sm">
+            <div className="flex justify-between border-b border-white/5 pb-2">
+              <dt className="text-slate-500">IGN</dt><dd className="font-semibold text-white">{myPlayer.in_game_name ?? "—"}</dd>
+            </div>
+            <div className="flex justify-between border-b border-white/5 pb-2">
+              <dt className="text-slate-500">ゲーム</dt><dd className="text-white">{myPlayer.game ?? "—"}</dd>
+            </div>
+            {myPlayer.rank && (
+              <div className="flex justify-between border-b border-white/5 pb-2">
+                <dt className="text-slate-500">ランク</dt><dd className="text-white">{myPlayer.rank}</dd>
+              </div>
+            )}
+            {myPlayer.team_name && (
+              <div className="flex justify-between border-b border-white/5 pb-2">
+                <dt className="text-slate-500">チーム</dt><dd className="text-white">{myPlayer.team_name}</dd>
+              </div>
+            )}
+          </dl>
+          <Link
+            href={`/players/${myPlayer.id}`}
+            className="inline-flex items-center gap-2 rounded-xl bg-brand-500 px-5 py-2.5 text-sm font-bold text-white hover:bg-brand-600 transition-colors"
+          >
+            <ExternalLink className="h-4 w-4" /> プロフィールを見る
+          </Link>
+        </div>
       </div>
     );
   }

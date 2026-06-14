@@ -67,7 +67,10 @@ class TournamentSummary(BaseModel):
     status: TournamentStatus
     max_teams: int
     registered_teams: int
+    registration_start_at: datetime | None = None
+    registration_end_at: datetime | None = None
     start_at: datetime | None
+    end_at: datetime | None = None
     prize_pool: Decimal | None
     banner_url: str | None
 

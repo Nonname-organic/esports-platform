@@ -11,6 +11,9 @@ export const discordApi = {
   getLink: (): Promise<ApiResponse<DiscordLinkStatus | null>> =>
     apiClient.get("/api/v1/discord/link"),
 
+  unlink: (): Promise<void> =>
+    apiClient.delete("/api/v1/discord/link"),
+
   issueCode: (): Promise<ApiResponse<{ code: string; expires_in: number }>> =>
     apiClient.post("/api/v1/discord/link-code"),
 

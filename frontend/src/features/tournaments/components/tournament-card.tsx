@@ -1,7 +1,18 @@
 import Link from "next/link";
-import { Calendar, Users, Trophy, Zap } from "lucide-react";
-import { cn, formatDate, formatPrize, getGameColor, getStatusColor, getStatusLabel } from "@/lib/utils";
+import { Calendar, Clock, Users, Trophy, Zap } from "lucide-react";
+import { cn, formatPrize, getGameColor, getStatusColor, getStatusLabel } from "@/lib/utils";
 import type { TournamentSummary } from "@/types/tournament";
+
+function fmtShort(iso: string | null): string {
+  if (!iso) return "未定";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "未定";
+  return d.toLocaleDateString("ja-JP", { month: "numeric", day: "numeric" });
+}
+function period(a: string | null, b: string | null): string {
+  if (!a && !b) return "未定";
+  return `${fmtShort(a)} 〜 ${fmtShort(b)}`;
+}
 
 interface TournamentCardProps {
   tournament: TournamentSummary;
@@ -70,12 +81,26 @@ export function TournamentCard({ tournament, className }: TournamentCardProps) {
           </h3>
 
           <div className="mt-3 space-y-1.5 text-sm text-slate-400">
+            {/* 申込受付期間（参加できるか一目で分かるよう、受付中は緑で強調） */}
             <div className="flex items-center gap-2">
-              <Calendar className="h-3.5 w-3.5 flex-shrink-0 text-slate-500" />
-              <span>{tournament.start_at ? formatDate(tournament.start_at) : "日程未定"}</span>
+              <Clock className="h-3.5 w-3.5 flex-shrink-0 text-slate-500" />
+              <span className="w-8 flex-shrink-0 text-slate-500">受付</span>
+              <span className={cn(tournament.status === "registration_open" ? "font-semibold text-green-400" : "text-slate-300")}>
+                {period(tournament.registration_start_at, tournament.registration_end_at)}
+              </span>
+              {tournament.status === "registration_open" && (
+                <span className="rounded bg-green-500/15 px-1.5 py-0.5 text-[10px] font-bold text-green-400">受付中</span>
+              )}
             </div>
 
-            <div className="flex items-center justify-between">
+            {/* 開催期間 */}
+            <div className="flex items-center gap-2">
+              <Calendar className="h-3.5 w-3.5 flex-shrink-0 text-slate-500" />
+              <span className="w-8 flex-shrink-0 text-slate-500">開催</span>
+              <span className="text-slate-300">{period(tournament.start_at, tournament.end_at)}</span>
+            </div>
+
+            <div className="flex items-center justify-between pt-0.5">
               <div className="flex items-center gap-2">
                 <Users className="h-3.5 w-3.5 flex-shrink-0 text-slate-500" />
                 <span>

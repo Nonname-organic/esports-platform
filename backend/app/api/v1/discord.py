@@ -74,6 +74,18 @@ async def get_link(db: DBSession, cache: Cache, current_user: CurrentUser):
     }}
 
 
+@router.delete("/link", status_code=204)
+async def unlink_discord(db: DBSession, cache: Cache, current_user: CurrentUser):
+    """Discord連携を解除（自分の連携を削除）。"""
+    from sqlalchemy import select as _select
+
+    from app.models.discord import DiscordLink
+    link = await db.scalar(_select(DiscordLink).where(DiscordLink.user_id == current_user.id))
+    if link:
+        await db.delete(link)
+        await db.flush()
+
+
 @router.post("/setup/{tournament_id}", status_code=201)
 async def setup_discord(
     tournament_id: uuid.UUID, data: SetupRequest,
