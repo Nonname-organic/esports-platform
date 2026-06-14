@@ -30,12 +30,12 @@ const schema = z.object({
   season: z.string().max(50).optional(),
   split: z.string().max(50).optional(),
   tier: z.enum(["community", "amateur", "semi_pro", "professional"]),
-  registration_start_at: z.string().optional(),
-  registration_end_at: z.string().optional(),
+  registration_start_at: z.string().min(1, "募集開始日時を入力してください"),
+  registration_end_at: z.string().min(1, "募集締切日時を入力してください"),
   check_in_start_at: z.string().optional(),
   check_in_end_at: z.string().optional(),
-  start_at: z.string().optional(),
-  end_at: z.string().optional(),
+  start_at: z.string().min(1, "大会開始日時を入力してください"),
+  end_at: z.string().min(1, "大会終了予定を入力してください"),
   max_teams: z.number().int().min(2).max(512),
   min_teams: z.number().int().min(2),
   require_team_membership: z.boolean(),
@@ -87,6 +87,19 @@ const schema = z.object({
 });
 
 type FormValues = z.infer<typeof schema>;
+
+const FIELD_LABELS: Record<string, string> = {
+  name: "大会名",
+  game: "ゲーム",
+  format: "形式",
+  min_teams: "最小チーム数",
+  max_teams: "最大チーム数",
+  registration_start_at: "募集開始日時",
+  registration_end_at: "募集締切日時",
+  start_at: "大会開始日時",
+  end_at: "大会終了予定",
+  contact_email: "連絡先メール",
+};
 
 // ── UIユーティリティ ──────────────────────────────────────────────────────────
 const DRAFT_KEY = "tournament_create_draft";
@@ -238,22 +251,22 @@ function Step2Schedule({ register }: any) {
     <SectionCard title="募集日程" subtitle="各フェーズの日時を設定してください（後から変更可能）">
       <div className="space-y-5">
         {[
-          { label: "募集開始日時", field: "registration_start_at" },
-          { label: "募集締切日時", field: "registration_end_at" },
+          { label: "募集開始日時", field: "registration_start_at", required: true },
+          { label: "募集締切日時", field: "registration_end_at", required: true },
           { label: "チェックイン開始", field: "check_in_start_at" },
           { label: "チェックイン終了", field: "check_in_end_at" },
-          { label: "大会開始日時", field: "start_at" },
-          { label: "大会終了予定", field: "end_at" },
-        ].map(({ label, field }) => (
+          { label: "大会開始日時", field: "start_at", required: true },
+          { label: "大会終了予定", field: "end_at", required: true },
+        ].map(({ label, field, required }) => (
           <div key={field}>
-            <Label>{label}</Label>
+            <Label>{label} {required && <span className="text-red-400">*</span>}</Label>
             <input type="datetime-local" {...register(field)} className={dateInputCls} />
           </div>
         ))}
       </div>
       <div className="mt-3 flex items-start gap-2 rounded-xl border border-brand-500/20 bg-brand-500/5 p-3 text-xs text-slate-400">
         <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-brand-400" />
-        日時は後から編集できます。今は空欄でも大会作成（下書き）は可能です。
+        <span className="text-red-400">*</span> は必須。日程に応じてステータス（受付→開催中→終了）が自動更新されます。
       </div>
     </SectionCard>
   );
@@ -449,6 +462,7 @@ function Step5Game({ register, control, watch }: any) {
           <Label>Ban/Pickルール</Label>
           <Controller name="game_settings" control={control} render={({ field }) => (
             <select value={field.value?.ban_pick_format ?? "team_veto"} onChange={(e) => field.onChange({ ...field.value, ban_pick_format: e.target.value })} className={selectCls()}>
+              <option value="none">なし</option>
               <option value="team_veto">チームVeto（交互）</option>
               <option value="organizer_pick">主催者指定</option>
               <option value="blind_pick">ブラインドピック</option>
@@ -802,6 +816,13 @@ export default function TournamentCreatePage() {
     return () => clearTimeout(saveTimeoutRef.current);
   }, [formValues, autoSave]);
 
+  // datetime-local（ローカル時刻・空可）→ ISO(UTC)。空はundefinedで送らない。
+  const toIso = (v?: string) => {
+    if (!v) return undefined;
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? undefined : d.toISOString();
+  };
+
   const create = useMutation({
     mutationFn: async (values: FormValues) => {
       const res = await tournamentApi.create({
@@ -811,11 +832,11 @@ export default function TournamentCreatePage() {
         max_teams: values.max_teams,
         description: values.description,
         prize_pool: values.prize_pool,
-        registration_start_at: values.registration_start_at,
-        registration_end_at: values.registration_end_at,
-        check_in_start_at: values.check_in_start_at,
-        start_at: values.start_at,
-        end_at: values.end_at,
+        registration_start_at: toIso(values.registration_start_at),
+        registration_end_at: toIso(values.registration_end_at),
+        check_in_start_at: toIso(values.check_in_start_at),
+        start_at: toIso(values.start_at),
+        end_at: toIso(values.end_at),
         require_check_in: values.require_check_in,
         is_public: values.is_public,
         rules: {
@@ -947,6 +968,19 @@ export default function TournamentCreatePage() {
                 <div className="mb-4 flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
                   <AlertCircle className="h-4 w-4 flex-shrink-0" />
                   {create.error instanceof Error ? create.error.message : "作成に失敗しました"}
+                </div>
+              )}
+
+              {Object.keys(errors).length > 0 && (
+                <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+                  <p className="flex items-center gap-2 font-semibold">
+                    <AlertCircle className="h-4 w-4" /> 未入力・不備の項目があります
+                  </p>
+                  <ul className="mt-1.5 list-disc pl-6 text-xs">
+                    {Object.entries(errors).map(([k, v]) => (
+                      <li key={k}>{FIELD_LABELS[k] ?? k}：{(v as { message?: string })?.message ?? "入力してください"}</li>
+                    ))}
+                  </ul>
                 </div>
               )}
 

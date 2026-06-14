@@ -11,6 +11,24 @@ import { tournamentApi } from "@/features/tournaments/api/tournament-api";
 import { cn } from "@/lib/utils";
 import type { GameType } from "@/types/tournament";
 
+// datetime-local（ローカル・空可）→ ISO(UTC)。空はundefined。
+function toIsoDt(v?: string): string | undefined {
+  if (!v) return undefined;
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? undefined : d.toISOString();
+}
+
+const FIELD_LABELS: Record<string, string> = {
+  name: "大会名",
+  game: "ゲーム",
+  format: "形式",
+  max_teams: "最大チーム数",
+  registration_start_at: "参加受付開始",
+  registration_end_at: "参加受付終了",
+  start_at: "大会開始",
+  end_at: "大会終了",
+};
+
 const GAMES: GameType[] = ["VALORANT", "LOL", "APEX", "CS2", "OVERWATCH"];
 const FORMATS = [
   { value: "single_elimination", label: "シングルエリミネーション", desc: "負けたら終わり。迅速な結果" },
@@ -28,10 +46,10 @@ const schema = z.object({
   max_teams: z.number().int().min(2).max(256),
   description: z.string().max(2000).optional(),
   prize_pool: z.coerce.number().min(0).optional(),
-  registration_start_at: z.string().optional(),
-  registration_end_at: z.string().optional(),
-  start_at: z.string().optional(),
-  end_at: z.string().optional(),
+  registration_start_at: z.string().min(1, "参加受付開始日時を入力してください"),
+  registration_end_at: z.string().min(1, "参加受付終了日時を入力してください"),
+  start_at: z.string().min(1, "大会開始日時を入力してください"),
+  end_at: z.string().min(1, "大会終了日時を入力してください"),
   require_check_in: z.boolean().default(false),
   is_public: z.boolean().default(true),
   bo_format: z.string().default("BO3"),
@@ -80,10 +98,10 @@ export default function TournamentNewPage() {
       max_teams: values.max_teams,
       description: values.description,
       prize_pool: values.prize_pool,
-      registration_start_at: values.registration_start_at,
-      registration_end_at: values.registration_end_at,
-      start_at: values.start_at,
-      end_at: values.end_at,
+      registration_start_at: toIsoDt(values.registration_start_at),
+      registration_end_at: toIsoDt(values.registration_end_at),
+      start_at: toIsoDt(values.start_at),
+      end_at: toIsoDt(values.end_at),
       require_check_in: values.require_check_in,
       is_public: values.is_public,
       rules: { bo_format: values.bo_format },
@@ -246,11 +264,14 @@ export default function TournamentNewPage() {
               { field: "end_at" as const, label: "大会終了" },
             ].map(({ field, label }) => (
               <div key={field}>
-                <label className="mb-2 block text-sm font-medium text-slate-400">{label}</label>
-                <input type="datetime-local" {...register(field)} className={inputCls()} />
+                <label className="mb-2 block text-sm font-medium text-slate-400">
+                  {label} <span className="text-red-400">*</span>
+                </label>
+                <input type="datetime-local" {...register(field)} className={cn(inputCls(!!errors[field]), "[color-scheme:dark]")} />
+                {errors[field] && <p className="mt-1 text-xs text-red-400">{errors[field]?.message}</p>}
               </div>
             ))}
-            <p className="text-xs text-slate-600">※ 日程は後から変更できます。今は設定しなくても構いません。</p>
+            <p className="text-xs text-slate-600">※ 日程に応じてステータス（受付→開催中→終了）が自動更新されます。</p>
           </div>
         )}
 
@@ -280,6 +301,20 @@ export default function TournamentNewPage() {
                 </div>
               ))}
             </dl>
+          </div>
+        )}
+
+        {/* 入力エラー要約（どの項目が未入力か明示） */}
+        {Object.keys(errors).length > 0 && (
+          <div className="mt-6 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+            <p className="flex items-center gap-2 font-semibold">
+              <AlertCircle className="h-4 w-4" /> 入力に不備があります
+            </p>
+            <ul className="mt-1.5 list-disc pl-6 text-xs">
+              {Object.entries(errors).map(([k, v]) => (
+                <li key={k}>{FIELD_LABELS[k] ?? k}：{(v as { message?: string })?.message ?? "入力してください"}</li>
+              ))}
+            </ul>
           </div>
         )}
 

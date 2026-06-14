@@ -10,6 +10,7 @@ const FORMAT_LABEL: Record<string, string> = {
 };
 
 const BANPICK_LABEL: Record<string, string> = {
+  none: "なし",
   team_veto: "チームVeto（交互）",
   organizer_pick: "主催者指定",
   blind_pick: "ブラインドピック",

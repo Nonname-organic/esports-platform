@@ -3,13 +3,14 @@
 import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { LayoutDashboard, BarChart3, Plus, Shield, Users, Link2, Trophy } from "lucide-react";
+import { LayoutDashboard, BarChart3, Plus, Shield, Users, Link2, Trophy, Search, Settings } from "lucide-react";
 import { useAuthStore } from "@/store/auth-store";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "ダッシュボード", icon: LayoutDashboard },
   { href: "/tournaments", label: "大会一覧", icon: Trophy },
+  { href: "/scout", label: "スカウト", icon: Search },
   { href: "/analytics", label: "統計分析", icon: BarChart3 },
 ];
 
@@ -117,6 +118,18 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             >
               <Link2 className="h-4 w-4 flex-shrink-0" />
               Discord連携
+            </Link>
+            <Link
+              href="/settings"
+              className={cn(
+                "flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                pathname === "/settings"
+                  ? "bg-brand-500/20 text-brand-400"
+                  : "text-slate-400 hover:bg-white/5 hover:text-white",
+              )}
+            >
+              <Settings className="h-4 w-4 flex-shrink-0" />
+              設定
             </Link>
           </div>
 

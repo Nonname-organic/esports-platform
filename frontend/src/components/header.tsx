@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Trophy, LayoutDashboard, BarChart3, LogOut, LogIn, Search } from "lucide-react";
+import { Trophy, LayoutDashboard, BarChart3, LogOut, LogIn } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth-store";
 import { NotificationBell } from "@/components/notification-bell";
@@ -48,13 +48,6 @@ export function Header() {
         </nav>
 
         <div className="flex items-center gap-2">
-          <Link
-            href="/scout"
-            className="rounded-lg p-2 text-slate-400 hover:bg-white/5 hover:text-white transition-colors"
-            aria-label="スカウト"
-          >
-            <Search className="h-5 w-5" />
-          </Link>
           <NotificationBell />
           {isAuthenticated && user ? (
             <div className="flex items-center gap-2">
