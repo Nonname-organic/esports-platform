@@ -126,7 +126,11 @@ export default function TournamentManagePage({ params }: { params: Promise<{ id:
 
   const generateBracket = useMutation({
     mutationFn: () => tournamentApi.generateBracket(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["tournament", id] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tournament", id] });
+      // 生成後はブラケット表示へ遷移して結果をすぐ確認できるようにする
+      router.push(`/tournaments/${id}/bracket`);
+    },
   });
 
   const deleteTournament = useMutation({

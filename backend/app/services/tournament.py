@@ -117,11 +117,22 @@ class TournamentService:
         if current_user.role != UserRole.ADMIN and tournament.organizer_id != current_user.id:
             raise ForbiddenError("ブラケット生成の権限がありません")
 
+        # 受付終了/チェックイン/開催中で生成可能。
+        # 日程ベースの自動ステータス更新により受付終了→開催中へ即遷移し得るため、
+        # 開催中も許可する（フロントの生成ボタン活性条件と一致させる）。
         if tournament.status not in (
             TournamentStatus.REGISTRATION_CLOSED,
             TournamentStatus.CHECK_IN,
+            TournamentStatus.ONGOING,
         ):
             raise BusinessRuleError("参加受付終了後にブラケットを生成してください")
+
+        # 冪等性: 既にブラケットが生成済みなら重複生成しない（二重クリック/再訪対策）。
+        existing = await self._repo.get_brackets_with_matches(tournament_id)
+        if existing:
+            raise BusinessRuleError(
+                "ブラケットは既に生成されています。再生成が必要な場合は既存のブラケットを削除してください"
+            )
 
         registrations = await self._repo.get_approved_registrations(tournament_id)
         if len(registrations) < tournament.min_teams:
