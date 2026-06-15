@@ -1,4 +1,5 @@
 import asyncio
+import os
 import uuid
 from typing import AsyncGenerator
 
@@ -15,7 +16,11 @@ from app.models.enums import UserRole
 from app.models.user import User
 from app.core.security import hash_password, create_access_token
 
-TEST_DB_URL = "postgresql+asyncpg://esports_user:password@localhost:5432/esports_test"
+# 既定はローカル。CI 等では TEST_DATABASE_URL で上書き可能（後方互換のため既定値は維持）。
+TEST_DB_URL = os.getenv(
+    "TEST_DATABASE_URL",
+    "postgresql+asyncpg://esports_user:password@localhost:5432/esports_test",
+)
 
 test_engine = create_async_engine(TEST_DB_URL, echo=False)
 TestSessionLocal = async_sessionmaker(test_engine, expire_on_commit=False)
@@ -106,3 +111,40 @@ async def organizer_user(db: AsyncSession) -> User:
 @pytest_asyncio.fixture
 def organizer_token(organizer_user: User) -> str:
     return create_access_token(str(organizer_user.id), {"role": UserRole.ORGANIZER.value})
+
+
+@pytest_asyncio.fixture
+async def player_user(db: AsyncSession) -> User:
+    user = User(
+        id=uuid.uuid4(), email="player@test.com", username="player",
+        hashed_password=hash_password("Player123"), role=UserRole.PLAYER, is_active=True,
+    )
+    db.add(user)
+    await db.flush()
+    return user
+
+
+@pytest_asyncio.fixture
+def player_token(player_user: User) -> str:
+    return create_access_token(str(player_user.id), {"role": UserRole.PLAYER.value})
+
+
+@pytest_asyncio.fixture
+async def second_player_user(db: AsyncSession) -> User:
+    user = User(
+        id=uuid.uuid4(), email="player2@test.com", username="player2",
+        hashed_password=hash_password("Player123"), role=UserRole.PLAYER, is_active=True,
+    )
+    db.add(user)
+    await db.flush()
+    return user
+
+
+@pytest_asyncio.fixture
+def second_player_token(second_player_user: User) -> str:
+    return create_access_token(str(second_player_user.id), {"role": UserRole.PLAYER.value})
+
+
+def auth_headers(token: str) -> dict:
+    """Bearer ヘッダ生成ヘルパ。"""
+    return {"Authorization": f"Bearer {token}"}

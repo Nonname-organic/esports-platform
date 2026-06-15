@@ -1,0 +1,261 @@
+name: QA
+
+# 品質保証パイプライン: lint / unit / integration / api / contract / security / coverage / e2e / load。
+# PR と main push で高速ゲート（backend tests + frontend + security + contract + coverage）を実行。
+# e2e / visual / load は環境変数（repo Variables）が設定された時のみ、または nightly / 手動で実行。
+#
+# 既存の docker / deploy 構成には手を加えない（このファイルは追加のみ）。
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      run_e2e:
+        description: "E2E/Visual を実行 (PLAYWRIGHT_BASE_URL 必須)"
+        type: boolean
+        default: false
+      load_profile:
+        description: "k6 プロファイル (smoke/load/stress/spike)"
+        type: string
+        default: "smoke"
+  schedule:
+    - cron: "0 18 * * *" # 毎日 03:00 JST: nightly load / e2e
+
+concurrency:
+  group: qa-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+  NODE_VERSION: "20"
+  # カバレッジ最低ライン。TARGET は TEST_STRATEGY 記載の 90%。
+  # スイート拡充に合わせ段階的に引き上げる（ラチェット）。
+  COVERAGE_MIN: "70"
+
+jobs:
+  # ── 1. Lint（バックエンド構文 + 任意のruff） ─────────────────────────────────
+  backend-lint:
+    name: backend-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Compile check (blocking)
+        working-directory: backend
+        run: python -m compileall -q app tests
+      - name: Ruff (advisory)
+        working-directory: backend
+        continue-on-error: true
+        run: |
+          pip install ruff
+          ruff check app tests --output-format=github
+
+  # ── 2. Backend tests: unit + integration + api + contract + coverage ──────────
+  backend-tests:
+    name: backend-tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: esports_user
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: esports_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U esports_user"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql+asyncpg://esports_user:password@localhost:5432/esports_test
+      # アプリ設定の必須項目（import 時に必要）
+      SECRET_KEY: "ci-test-secret-key-please-change-0123456789"
+      DB_PASSWORD: password
+      DB_USER: esports_user
+      DB_NAME: esports_test
+      DB_HOST: localhost
+      BOT_API_TOKEN: ci-bot-secret
+      USE_REDIS_QUEUE: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install deps
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Pytest + coverage (gate)
+        working-directory: backend
+        run: |
+          pytest -q \
+            --cov=app --cov-report=term-missing \
+            --cov-report=xml:coverage.xml --cov-report=html:htmlcov \
+            --junitxml=pytest-report.xml \
+            --cov-fail-under=${{ env.COVERAGE_MIN }}
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: |
+            backend/coverage.xml
+            backend/htmlcov
+            backend/pytest-report.xml
+          retention-days: 14
+
+  # ── 3. Security gate（OWASP系 marker） ────────────────────────────────────────
+  security:
+    name: security
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: esports_user
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: esports_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U esports_user"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql+asyncpg://esports_user:password@localhost:5432/esports_test
+      SECRET_KEY: "ci-test-secret-key-please-change-0123456789"
+      DB_PASSWORD: password
+      DB_USER: esports_user
+      DB_NAME: esports_test
+      DB_HOST: localhost
+      BOT_API_TOKEN: ci-bot-secret
+      USE_REDIS_QUEUE: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install deps
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Security + contract markers
+        working-directory: backend
+        run: pytest -q -m "security or contract"
+
+  # ── 4. Frontend: type-check / lint（advisory） + unit(jest) ───────────────────
+  frontend:
+    name: frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        working-directory: frontend
+        run: npm ci || npm install
+      - name: Type-check (advisory)
+        working-directory: frontend
+        continue-on-error: true
+        run: npm run type-check
+      - name: Lint (advisory)
+        working-directory: frontend
+        continue-on-error: true
+        run: npm run lint
+      - name: Unit (jest)
+        working-directory: frontend
+        run: npm test
+
+  # ── 5. E2E + Visual（要 PLAYWRIGHT_BASE_URL。dispatch/nightly） ────────────────
+  e2e:
+    name: e2e-visual
+    runs-on: ubuntu-latest
+    if: >-
+      vars.PLAYWRIGHT_BASE_URL != '' &&
+      (github.event_name == 'schedule' ||
+       (github.event_name == 'workflow_dispatch' && inputs.run_e2e))
+    env:
+      PLAYWRIGHT_BASE_URL: ${{ vars.PLAYWRIGHT_BASE_URL }}
+      GOLDEN_EMAIL: ${{ vars.GOLDEN_EMAIL }}
+      GOLDEN_PASSWORD: ${{ secrets.GOLDEN_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        working-directory: frontend
+        run: npm ci || npm install
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Run E2E (journey)
+        working-directory: frontend
+        run: npx playwright test journey
+      # Visual はベースライン未コミット時に失敗するため初期は advisory。
+      - name: Run Visual regression (advisory)
+        working-directory: frontend
+        continue-on-error: true
+        run: npx playwright test visual
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: frontend/playwright-report
+          retention-days: 14
+
+  # ── 6. Load（k6 smoke。要 LOAD_BASE_URL。dispatch/nightly） ───────────────────
+  load:
+    name: load-k6
+    runs-on: ubuntu-latest
+    if: >-
+      vars.LOAD_BASE_URL != '' &&
+      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run k6 (tournament reads)
+        uses: grafana/k6-action@v0.3.1
+        with:
+          filename: k6/tournament.js
+        env:
+          BASE_URL: ${{ vars.LOAD_BASE_URL }}
+          PROFILE: ${{ inputs.load_profile || 'smoke' }}
+
+  # ── 7. Quality Gate（必須ジョブ集約） ─────────────────────────────────────────
+  quality-gate:
+    name: quality-gate
+    runs-on: ubuntu-latest
+    needs: [backend-lint, backend-tests, security, frontend]
+    if: always()
+    steps:
+      - name: Evaluate gate
+        run: |
+          echo "## Quality Gate" >> "$GITHUB_STEP_SUMMARY"
+          fail=0
+          check() {
+            echo "- $1: $2" >> "$GITHUB_STEP_SUMMARY"
+            if [ "$2" != "success" ]; then fail=1; fi
+          }
+          check "backend-lint"  "${{ needs.backend-lint.result }}"
+          check "backend-tests" "${{ needs.backend-tests.result }}"
+          check "security"      "${{ needs.security.result }}"
+          check "frontend"      "${{ needs.frontend.result }}"
+          if [ "$fail" -ne 0 ]; then
+            echo "❌ Quality Gate FAILED" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "✅ Quality Gate PASSED" >> "$GITHUB_STEP_SUMMARY"

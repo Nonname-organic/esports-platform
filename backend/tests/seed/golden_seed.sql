@@ -1,0 +1,30 @@
+-- ============================================================================
+-- Golden Dataset (SQL)
+-- ----------------------------------------------------------------------------
+-- 権威ソースは tests/seed/golden_seed.py（型安全・冪等・決定論UUID）。
+-- 本 .sql は CI/他環境で psql から流し込むためのスナップショット。
+--
+-- 生成方法（golden_seed.py 実行後にダンプ）:
+--   python -m tests.seed.golden_seed
+--   pg_dump "$DATABASE_URL" --data-only --inserts \
+--     -t users -t players -t teams -t team_members \
+--     -t tournaments -t tournament_registrations -t matches \
+--     -t notifications -t scout_profiles -t recruitment_posts \
+--     -t discord_links -t riot_profiles \
+--     --on-conflict-do-nothing > tests/seed/golden_seed.generated.sql
+--
+-- 適用:
+--   psql "$TEST_DB_URL" -f tests/seed/golden_seed.generated.sql
+--
+-- クリーンアップ（テスト隔離用）:
+--   TRUNCATE riot_profiles, discord_links, recruitment_posts, scout_profiles,
+--            notifications, matches, tournament_registrations, tournaments,
+--            team_members, teams, players, users RESTART IDENTITY CASCADE;
+--
+-- 固定ペルソナ（パスワード共通: Passw0rd!）:
+--   admin@golden.test / organizer@golden.test / captain@golden.test /
+--   player@golden.test / retiree@golden.test
+-- ============================================================================
+
+-- 注: bcryptハッシュは環境ごとに異なるため、ユーザーのみ手動投入する場合は
+-- golden_seed.py（hash_password使用）経由を推奨。SQL直投入は上記generated.sqlを使う。
