@@ -49,6 +49,9 @@ class TeamService:
     async def list_teams(self, game=None, limit=20, cursor=None):
         return await self._repo.list_teams(game=game, limit=limit, cursor=cursor)
 
+    async def get_my_teams(self, user_id: uuid.UUID) -> list[Team]:
+        return await self._repo.list_my_teams(user_id)
+
     async def get_team(self, team_id: uuid.UUID) -> Team:
         team = await self._repo.get_by_id(team_id)
         if not team or not team.is_active:

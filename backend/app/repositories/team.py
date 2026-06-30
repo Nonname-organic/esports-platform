@@ -2,11 +2,12 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.enums import GameType, MemberRole
+from app.models.player import Player
 from app.models.team import Team, TeamMember
 from app.repositories.base import BaseRepository
 
@@ -33,6 +34,22 @@ class TeamRepository(BaseRepository[Team]):
         rows = list(result.scalars().all())
         has_next = len(rows) > limit
         return rows[:limit], has_next
+
+    async def list_my_teams(self, user_id: uuid.UUID) -> list[Team]:
+        """オーナーまたはメンバーとして所属しているチーム一覧"""
+        owned = select(Team.id).where(Team.owner_id == user_id, Team.is_active == True)
+        member_of = (
+            select(TeamMember.team_id)
+            .join(Player, Player.id == TeamMember.player_id)
+            .where(Player.user_id == user_id, TeamMember.left_at.is_(None))
+        )
+        q = (
+            select(Team)
+            .where(Team.is_active == True, or_(Team.id.in_(owned), Team.id.in_(member_of)))
+            .order_by(Team.created_at.desc())
+        )
+        result = await self._db.execute(q)
+        return list(result.scalars().unique().all())
 
     async def get_with_members(self, team_id: uuid.UUID) -> Optional[Team]:
         result = await self._db.execute(

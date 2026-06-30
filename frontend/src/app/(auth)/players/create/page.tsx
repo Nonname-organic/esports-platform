@@ -7,7 +7,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { User2, AlertCircle, Info, Gamepad2 } from "lucide-react";
+import { User2, AlertCircle, Gamepad2 } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import type { GameType } from "@/types/tournament";
@@ -20,19 +20,9 @@ const GAMES: { value: GameType; label: string; color: string }[] = [
   { value: "OVERWATCH", label: "Overwatch 2", color: "border-blue-500/50 text-blue-400 bg-blue-500/5" },
 ];
 
-const RANK_OPTIONS: Record<GameType, string[]> = {
-  VALORANT: ["アイアン", "ブロンズ", "シルバー", "ゴールド", "プラチナ", "ダイヤモンド", "アセンダント", "イモータル", "レディアント"],
-  LOL: ["アイアン", "ブロンズ", "シルバー", "ゴールド", "プラチナ", "エメラルド", "ダイヤモンド", "マスター", "グランドマスター", "チャレンジャー"],
-  APEX: ["ブロンズ", "シルバー", "ゴールド", "プラチナ", "ダイヤモンド", "マスター", "プレデター"],
-  CS2: ["シルバー", "ゴールドノバ", "MG", "MG2", "MGE", "DMG", "LEM", "SMFC", "GE"],
-  OVERWATCH: ["ブロンズ", "シルバー", "ゴールド", "プラチナ", "ダイヤモンド", "マスター", "グランドマスター", "チャンピオン"],
-};
-
 const schema = z.object({
   game: z.enum(["VALORANT", "LOL", "APEX", "CS2", "OVERWATCH"] as const),
   riot_id: z.string().min(1, "Riot IDを入力してください").max(111),
-  peak_rank: z.string().optional(),
-  current_rank: z.string().optional(),
   discord_id: z.string().max(100).optional(),
 });
 
@@ -56,9 +46,7 @@ export default function PlayerCreatePage() {
       apiClient.post("/api/v1/players", {
         game: values.game,
         riot_id: values.riot_id,
-        rank: values.current_rank,
         discord_id: values.discord_id || undefined,
-        bio: values.peak_rank ? `最高ランク: ${values.peak_rank}` : undefined,
       }),
     onSuccess: (res: any) => {
       qc.invalidateQueries({ queryKey: ["players"] });
@@ -67,15 +55,12 @@ export default function PlayerCreatePage() {
   });
 
   const {
-    register, handleSubmit, watch,
+    register, handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { game: "VALORANT" },
   });
-
-  const selectedGame = watch("game");
-  const ranks = RANK_OPTIONS[selectedGame] ?? [];
 
   const inputCls = (err?: boolean) => cn(
     "w-full rounded-xl border bg-white/5 px-4 py-3 text-sm text-white placeholder-slate-600 outline-none transition-colors",
@@ -159,22 +144,6 @@ export default function PlayerCreatePage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-400">現在ランク</label>
-              <select {...register("current_rank")} className={cn(inputCls(), "bg-slate-800")}>
-                <option value="">選択してください</option>
-                {ranks.map((r) => <option key={r} value={r}>{r}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-400">最高ランク</label>
-              <select {...register("peak_rank")} className={cn(inputCls(), "bg-slate-800")}>
-                <option value="">選択してください</option>
-                {ranks.map((r) => <option key={r} value={r}>{r}</option>)}
-              </select>
-            </div>
-          </div>
         </div>
 
         {/* Discord */}

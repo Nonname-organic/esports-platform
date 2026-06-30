@@ -36,6 +36,9 @@ export interface AddMemberInput {
 }
 
 export const teamApi = {
+  mine: (): Promise<ApiResponse<Team[]>> =>
+    apiClient.get("/api/v1/teams/mine"),
+
   list: (params?: { game?: string; limit?: number; cursor?: string }): Promise<ListResponse<Team>> => {
     const qs = new URLSearchParams();
     if (params?.game) qs.set("game", params.game);

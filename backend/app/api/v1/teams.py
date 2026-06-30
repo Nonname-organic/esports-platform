@@ -75,6 +75,27 @@ def _team_summary(team) -> TeamSummarySchema:
 
 
 # ── GET /teams ────────────────────────────────────────────────────────────────
+@router.get("/mine", response_model=Response[list[TeamSummarySchema]])
+async def list_my_teams(db: DBSession, cache: Cache, current_user: CurrentUser):
+    """ログインユーザーが所有またはメンバーとして参加しているチーム一覧"""
+    service = TeamService(db, cache)
+    teams = await service.get_my_teams(current_user.id)
+    return Response(data=[_team_summary(t) for t in teams], meta=None)
+
+
+@router.get("/{team_id}/stats", response_model=Response[dict])
+async def get_team_stats(team_id: uuid.UUID, db: DBSession, cache: Cache):
+    """チーム統計（暫定: ゼロ値を返す）"""
+    service = TeamService(db, cache)
+    await service.get_team(team_id)
+    return Response(data={
+        "wins": 0, "losses": 0, "win_rate": 0.0, "rating": 1000,
+        "peak_rating": 1000, "game_win_rate": 0.0,
+        "tournaments_played": 0, "tournaments_won": 0,
+        "win_rate_history": [],
+    }, meta=None)
+
+
 @router.get("", response_model=ListResponse[TeamSummarySchema])
 async def list_teams(
     db: DBSession,

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import {
-  LayoutDashboard, BarChart3, Plus, Shield, Users, Link2, Trophy, Search, Settings,
+  LayoutDashboard, BarChart3, Plus, Shield, Users, Trophy, Search, Settings,
   LogIn, ChevronsLeft, ChevronsRight,
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth-store";
@@ -19,9 +19,9 @@ const PUBLIC_NAV = [
 
 // ログインユーザー向け
 const ACCOUNT_NAV = [
+  { href: "/teams", label: "マイチーム", icon: Shield },
   { href: "/teams/create", label: "チームを作成", icon: Plus },
   { href: "/players/create", label: "プレイヤー登録", icon: Users },
-  { href: "/discord-link", label: "Discord連携", icon: Link2 },
   { href: "/settings", label: "設定", icon: Settings },
 ];
 

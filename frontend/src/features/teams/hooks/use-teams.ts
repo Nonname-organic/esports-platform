@@ -5,6 +5,7 @@ import { teamApi, type TeamCreateInput, type TeamUpdateInput, type AddMemberInpu
 
 export const teamKeys = {
   all: ["teams"] as const,
+  mine: () => [...teamKeys.all, "mine"] as const,
   list: (params?: object) => [...teamKeys.all, "list", params] as const,
   detail: (id: string) => [...teamKeys.all, "detail", id] as const,
   stats: (id: string) => [...teamKeys.all, "stats", id] as const,
@@ -13,6 +14,15 @@ export const teamKeys = {
     [...teamKeys.all, "matches", id, cursor] as const,
   analytics: (id: string) => [...teamKeys.all, "analytics", id] as const,
 };
+
+export function useMyTeams() {
+  return useQuery({
+    queryKey: teamKeys.mine(),
+    queryFn: () => teamApi.mine(),
+    select: (res) => res.data,
+    staleTime: 2 * 60 * 1000,
+  });
+}
 
 export function useTeamList(params?: { game?: string; limit?: number }) {
   return useQuery({
