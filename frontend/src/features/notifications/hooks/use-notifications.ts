@@ -18,13 +18,14 @@ export function useNotifications(params?: { unread?: boolean; search?: string; c
   });
 }
 
-export function useUnreadCount() {
+export function useUnreadCount(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: notificationKeys.unread(),
     queryFn: () => notificationApi.unreadCount(),
     select: (res) => res.data.count,
     staleTime: 30 * 1000,
     refetchInterval: 60 * 1000,
+    enabled: options?.enabled ?? true,
   });
 }
 

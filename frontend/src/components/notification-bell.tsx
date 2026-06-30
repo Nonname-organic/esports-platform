@@ -7,7 +7,7 @@ import { useAuthStore } from "@/store/auth-store";
 
 export function NotificationBell() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const { data: unreadCount } = useUnreadCount();
+  const { data: unreadCount } = useUnreadCount({ enabled: isAuthenticated });
 
   if (!isAuthenticated) return null;
 

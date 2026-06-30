@@ -54,7 +54,8 @@ function LoginForm() {
         avatar_url: meRes.avatar_url,
       });
 
-      const next = searchParams.get("next") ?? "/dashboard";
+      const nextParam = searchParams.get("next") ?? "";
+      const next = nextParam && nextParam !== "/login" && nextParam !== "/register" ? nextParam : "/dashboard";
       router.replace(next);
     } catch (err) {
       setError(err instanceof Error ? err.message : "ログインに失敗しました");

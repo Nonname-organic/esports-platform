@@ -35,7 +35,7 @@ function getRefreshToken(): string | null {
 }
 
 let isRefreshing = false;
-let refreshQueue: Array<(token: string) => void> = [];
+let refreshQueue: Array<(token: string | null) => void> = [];
 
 async function tryRefreshToken(): Promise<string | null> {
   const refreshToken = getRefreshToken();
@@ -88,6 +88,10 @@ async function request<T>(
       // 他のリフレッシュを待つ
       return new Promise((resolve, reject) => {
         refreshQueue.push((newToken) => {
+          if (!newToken) {
+            reject(new ApiError(401, "unauthorized", "セッションの有効期限が切れました"));
+            return;
+          }
           request<T>(path, { ...options, headers: { ...headers, Authorization: `Bearer ${newToken}` } }, false)
             .then(resolve)
             .catch(reject);
@@ -104,10 +108,15 @@ async function request<T>(
       refreshQueue = [];
       return request<T>(path, options, false);
     } else {
-      // リフレッシュ失敗 → ログアウト
+      // リフレッシュ失敗 → キュー済みリクエストを全て棄却してログアウト
+      const failQueue = refreshQueue;
+      refreshQueue = [];
+      failQueue.forEach((cb) => cb(null));
       localStorage.removeItem("access_token");
+      const loginPath = typeof window !== "undefined" ? window.location.pathname : "";
+      const safePath = loginPath === "/login" || loginPath === "/register" ? "/dashboard" : loginPath;
       if (typeof window !== "undefined") {
-        window.location.href = `/login?next=${encodeURIComponent(window.location.pathname)}`;
+        window.location.href = `/login?next=${encodeURIComponent(safePath)}`;
       }
     }
   }
