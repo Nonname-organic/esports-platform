@@ -10,18 +10,25 @@ import {
 import { useAuthStore } from "@/store/auth-store";
 import { cn } from "@/lib/utils";
 
-const NAV_ITEMS = [
-  { href: "/dashboard", label: "ダッシュボード", icon: LayoutDashboard },
+// 誰でも見える
+const PUBLIC_NAV = [
   { href: "/tournaments", label: "大会一覧", icon: Trophy },
   { href: "/scout", label: "スカウト", icon: Search },
   { href: "/analytics", label: "統計分析", icon: BarChart3 },
 ];
 
-const ACCOUNT_ITEMS = [
+// ログインユーザー向け
+const ACCOUNT_NAV = [
   { href: "/teams/create", label: "チームを作成", icon: Plus },
   { href: "/players/create", label: "プレイヤー登録", icon: Users },
   { href: "/discord-link", label: "Discord連携", icon: Link2 },
   { href: "/settings", label: "設定", icon: Settings },
+];
+
+// 大会開催者・Admin向け
+const ORGANIZER_NAV = [
+  { href: "/dashboard", label: "ダッシュボード", icon: LayoutDashboard },
+  { href: "/organizer/tournaments/create", label: "大会を作成", icon: Plus },
 ];
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
@@ -39,7 +46,6 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
     return next;
   });
 
-  // localStorage読み込み完了前はスピナー（チラつき防止）
   if (!_hasHydrated) {
     return (
       <div className="flex h-[calc(100vh-3.5rem)] items-center justify-center">
@@ -49,6 +55,8 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   }
 
   const authed = isAuthenticated && !!user;
+  const isOrganizer = authed && (user!.role === "organizer" || user!.role === "admin");
+  const isAdmin = authed && user!.role === "admin";
 
   const renderLink = ({ href, label, icon: Icon }: { href: string; label: string; icon: React.ElementType }) => (
     <Link
@@ -68,7 +76,6 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
 
   return (
     <div className="flex min-h-[calc(100vh-3.5rem)]">
-      {/* サイドバー（折りたたみ可） */}
       <aside
         className={cn(
           "hidden shrink-0 border-r border-white/10 bg-slate-900/50 transition-[width] duration-200 lg:block",
@@ -88,7 +95,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             )}
           </button>
 
-          {/* ユーザー / ログイン案内 */}
+          {/* ユーザー情報 / ログインボタン */}
           {authed ? (
             <div className={cn("mb-4 rounded-xl bg-white/5", collapsed ? "p-2" : "p-3")}>
               <div className={cn("flex items-center gap-2.5", collapsed && "justify-center")}>
@@ -115,37 +122,39 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
                   <LogIn className="h-4 w-4" />
                 </Link>
               ) : (
-                <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-center">
-                  <p className="mb-2 text-xs text-slate-400">ログインが必要です</p>
-                  <Link href={`/login?next=${encodeURIComponent(pathname)}`}
-                    className="flex items-center justify-center gap-1.5 rounded-lg bg-brand-500 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-600 transition-colors">
-                    <LogIn className="h-4 w-4" /> ログイン
-                  </Link>
-                </div>
+                <Link href={`/login?next=${encodeURIComponent(pathname)}`}
+                  className="flex items-center justify-center gap-1.5 rounded-lg border border-brand-500/40 bg-brand-500/10 px-3 py-2 text-sm font-semibold text-brand-400 hover:bg-brand-500/20 transition-colors">
+                  <LogIn className="h-4 w-4" /> ログイン / 新規登録
+                </Link>
               )}
             </div>
           )}
 
-          {/* ナビゲーション */}
-          <nav className="space-y-1">{NAV_ITEMS.map(renderLink)}</nav>
+          {/* 全体 */}
+          <nav className="space-y-1">{PUBLIC_NAV.map(renderLink)}</nav>
 
-          <div className="mt-4 space-y-1 border-t border-white/10 pt-4">
-            {!collapsed && (
-              <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-600">アカウント</p>
-            )}
-            {ACCOUNT_ITEMS.map(renderLink)}
-          </div>
+          {/* ログインユーザー向け */}
+          {authed && (
+            <div className="mt-4 space-y-1 border-t border-white/10 pt-4">
+              {!collapsed && (
+                <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-600">アカウント</p>
+              )}
+              {ACCOUNT_NAV.map(renderLink)}
+            </div>
+          )}
 
-          {authed && (user!.role === "organizer" || user!.role === "admin") && (
+          {/* 大会開催者・Admin向け */}
+          {isOrganizer && (
             <div className="mt-4 space-y-1 border-t border-white/10 pt-4">
               {!collapsed && (
                 <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-600">主催者</p>
               )}
-              {renderLink({ href: "/organizer/tournaments/create", label: "大会を作成", icon: Plus })}
+              {ORGANIZER_NAV.map(renderLink)}
             </div>
           )}
 
-          {authed && user!.role === "admin" && (
+          {/* Admin限定 */}
+          {isAdmin && (
             <div className="mt-4 space-y-1 border-t border-white/10 pt-4">
               {!collapsed && (
                 <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-red-800">Admin</p>
@@ -156,21 +165,9 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         </div>
       </aside>
 
-      {/* メインコンテンツ */}
+      {/* メインコンテンツ：常に表示 */}
       <div className="flex-1 min-w-0">
-        {authed ? children : (
-          <div className="flex h-[calc(100vh-3.5rem)] flex-col items-center justify-center px-4 text-center">
-            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-500/10">
-              <LogIn className="h-8 w-8 text-brand-400" />
-            </div>
-            <h2 className="text-lg font-bold text-white">ログインが必要です</h2>
-            <p className="mt-1 text-sm text-slate-400">この画面を表示するにはログインしてください。</p>
-            <Link href={`/login?next=${encodeURIComponent(pathname)}`}
-              className="mt-6 flex items-center gap-2 rounded-xl bg-brand-500 px-6 py-2.5 text-sm font-bold text-white hover:bg-brand-600 transition-colors">
-              <LogIn className="h-4 w-4" /> ログイン / 新規登録
-            </Link>
-          </div>
-        )}
+        {children}
       </div>
     </div>
   );

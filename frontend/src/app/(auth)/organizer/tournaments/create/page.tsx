@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { useRequireAuth } from "@/hooks/use-require-auth";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -780,8 +781,11 @@ function Step12Analytics({ register }: any) {
 
 // ── メインコンポーネント ────────────────────────────────────────────────────────
 export default function TournamentCreatePage() {
+  const { ready, authed } = useRequireAuth("organizer");
   const router = useRouter();
   const qc = useQueryClient();
+
+  if (!ready || !authed) return null;
   const [currentStep, setCurrentStep] = useState(0);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [draftId, setDraftId] = useState<string | null>(null);

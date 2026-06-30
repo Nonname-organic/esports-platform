@@ -1,12 +1,16 @@
 "use client";
 
 import { useState } from "react";
+import { useRequireAuth } from "@/hooks/use-require-auth";
 import { Check, Copy, Link2, Loader2, RefreshCw, Unlink } from "lucide-react";
 import { discordApi } from "@/features/discord/api/discord-api";
 import { useDiscordLink, useIssueLinkCode } from "@/features/discord/hooks/use-discord";
 
 export default function DiscordLinkPage() {
+  const { ready, authed } = useRequireAuth();
   const { data: link, isLoading, refetch } = useDiscordLink();
+
+  if (!ready || !authed) return null;
   const issue = useIssueLinkCode();
   const [code, setCode] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);

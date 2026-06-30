@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useRequireAuth } from "@/hooks/use-require-auth";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -32,7 +33,10 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 export default function TeamCreatePage() {
+  const { ready, authed } = useRequireAuth();
   const router = useRouter();
+
+  if (!ready || !authed) return null;
   const createTeam = useCreateTeam();
 
   const {

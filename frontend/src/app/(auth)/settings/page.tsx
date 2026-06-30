@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useRequireAuth } from "@/hooks/use-require-auth";
 import { AlertTriangle, Check, Loader2, Lock, Mail, Settings as SettingsIcon } from "lucide-react";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthStore } from "@/store/auth-store";
@@ -19,8 +20,11 @@ function Notice({ type, msg }: { type: "ok" | "err"; msg: string }) {
 }
 
 export default function SettingsPage() {
+  const { ready, authed } = useRequireAuth();
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
+
+  if (!ready || !authed) return null;
   const setUser = useAuthStore((s) => s.setUser);
   const logout = useAuthStore((s) => s.logout);
 
