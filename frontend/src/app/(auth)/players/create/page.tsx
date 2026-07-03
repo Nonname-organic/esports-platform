@@ -55,12 +55,14 @@ export default function PlayerCreatePage() {
   });
 
   const {
-    register, handleSubmit,
+    register, handleSubmit, watch,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { game: "VALORANT" },
   });
+
+  const selectedGame = watch("game");
 
   const inputCls = (err?: boolean) => cn(
     "w-full rounded-xl border bg-white/5 px-4 py-3 text-sm text-white placeholder-slate-600 outline-none transition-colors",
