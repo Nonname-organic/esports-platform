@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Plus, Shield, Users } from "lucide-react";
+import { Plus, Shield, Users, UserPlus } from "lucide-react";
 import { useRequireAuth } from "@/hooks/use-require-auth";
 import { useMyTeams } from "@/features/teams/hooks/use-teams";
 import { cn, getGameColor } from "@/lib/utils";
@@ -87,6 +87,12 @@ export default function MyTeamsPage() {
                   className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-400 hover:text-white hover:border-white/20 transition-colors"
                 >
                   公開ページ
+                </Link>
+                <Link
+                  href={`/scout/lfp/new`}
+                  className="flex items-center gap-1 rounded-lg border border-green-500/30 px-3 py-1.5 text-xs font-semibold text-green-400 hover:bg-green-500/10 transition-colors"
+                >
+                  <UserPlus className="h-3 w-3" /> 募集
                 </Link>
                 <Link
                   href={`/teams/${team.id}/members`}

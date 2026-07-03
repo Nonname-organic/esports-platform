@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Users, Shield, ClipboardList, Search, ArrowRight } from "lucide-react";
+import { Users, Shield, ClipboardList, Search, ArrowRight, UserPlus } from "lucide-react";
 
 const CARDS = [
   {
@@ -23,13 +23,22 @@ const CARDS = [
     border: "hover:border-purple-500/40",
   },
   {
-    href: "/scout/recruitment",
-    icon: ClipboardList,
-    title: "Recruitment Board",
-    desc: "チーム募集・選手募集の掲載と応募",
+    href: "/scout/lfp",
+    icon: UserPlus,
+    title: "チーム募集 (LFP)",
+    desc: "チームがメンバーを募集・選手がチームを探す",
     color: "text-green-400",
     bg: "bg-green-500/10",
     border: "hover:border-green-500/40",
+  },
+  {
+    href: "/scout/recruitment",
+    icon: ClipboardList,
+    title: "Recruitment Board",
+    desc: "チーム・選手の募集掲載と応募",
+    color: "text-orange-400",
+    bg: "bg-orange-500/10",
+    border: "hover:border-orange-500/40",
   },
 ];
 
@@ -44,7 +53,7 @@ export default function ScoutHomePage() {
         <p className="mt-2 text-slate-400">チームと選手のマッチング基盤</p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {CARDS.map((c) => (
           <Link
             key={c.href}
