@@ -1,0 +1,25 @@
+{
+  "$schema": "./risk_registry.schema.md",
+  "description": "Risk-Based Testing registry. Risk = BusinessImpact x FailureProbability x UsageFrequency (each 1-5, max 125). tier P0>=45 / P1 20-44 / P2 <20 — ただし重要保安機能は明示的にP0へ昇格。",
+  "formula": "risk = business_impact * failure_probability * usage_frequency",
+  "tiers": {
+    "P0": { "rule": "100% Unit / Integration / API / E2E 必須", "gate": "block PR on any P0 test fail or coverage<100% on critical path" },
+    "P1": { "rule": "Unit+API 必須, E2E 主要のみ", "gate": "coverage>=85%" },
+    "P2": { "rule": "smoke + visual", "gate": "advisory" }
+  },
+  "features": [
+    { "id": "auth",            "name": "認証 (login/register/JWT)", "tier": "P0", "business_impact": 5, "failure_probability": 3, "usage_frequency": 5, "risk": 75, "tests": ["AUTH-001..013", "SEC-001/002/005"], "owner": "backend" },
+    { "id": "tournament_create","name": "大会作成",                 "tier": "P0", "business_impact": 5, "failure_probability": 3, "usage_frequency": 4, "risk": 60, "tests": ["TOUR-001..015"], "owner": "backend" },
+    { "id": "registration",    "name": "参加申請/承認",             "tier": "P0", "business_impact": 5, "failure_probability": 3, "usage_frequency": 4, "risk": 60, "tests": ["TOUR-register", "E2E-001"], "owner": "backend" },
+    { "id": "match_result",    "name": "試合結果報告/確定",          "tier": "P0", "business_impact": 5, "failure_probability": 4, "usage_frequency": 4, "risk": 80, "tests": ["MATCH-001..", "WRK-*"], "owner": "backend" },
+    { "id": "bracket",         "name": "ブラケット生成/進行",        "tier": "P0", "business_impact": 5, "failure_probability": 4, "usage_frequency": 3, "risk": 60, "tests": ["BRKT-001/002/003"], "owner": "backend", "note": "回帰: ONGOING生成不可を修正 (c5b20a0)" },
+    { "id": "discord_auth",    "name": "Discord認証/連携",          "tier": "P0", "business_impact": 4, "failure_probability": 4, "usage_frequency": 3, "risk": 48, "tests": ["DISC-*", "BOT-001/002/004"], "owner": "platform" },
+    { "id": "riot_sync",       "name": "Riot同期",                  "tier": "P0", "business_impact": 4, "failure_probability": 4, "usage_frequency": 3, "risk": 48, "tests": ["RIOT-*", "FLAG-riot-*"], "owner": "platform" },
+    { "id": "analytics",       "name": "Analytics集計",             "tier": "P1", "business_impact": 3, "failure_probability": 3, "usage_frequency": 3, "risk": 27, "tests": ["ANLY-*"], "owner": "backend" },
+    { "id": "career",          "name": "Career/戦績",               "tier": "P1", "business_impact": 3, "failure_probability": 3, "usage_frequency": 3, "risk": 27, "tests": ["CAR-*"], "owner": "backend" },
+    { "id": "scout",           "name": "Scout探索/募集",            "tier": "P1", "business_impact": 3, "failure_probability": 3, "usage_frequency": 3, "risk": 27, "tests": ["SCOUT-001/002"], "owner": "backend" },
+    { "id": "notification",    "name": "通知",                      "tier": "P1", "business_impact": 3, "failure_probability": 3, "usage_frequency": 4, "risk": 36, "tests": ["NOTIF-002", "WRK-notification"], "owner": "backend" },
+    { "id": "public_pages",    "name": "公開ページ",                 "tier": "P2", "business_impact": 2, "failure_probability": 2, "usage_frequency": 4, "risk": 16, "tests": ["VIS-landing/login/register"], "owner": "frontend" },
+    { "id": "admin_aux",       "name": "管理補助",                   "tier": "P2", "business_impact": 2, "failure_probability": 2, "usage_frequency": 2, "risk": 8,  "tests": ["ADMIN-*"], "owner": "backend" }
+  ]
+}

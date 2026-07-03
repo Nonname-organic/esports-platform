@@ -9,7 +9,6 @@ import type { ApiResponse } from "@/types/tournament";
 import { PlayerHeader } from "./_components/player-header";
 import { PlayerTabs, type PlayerTabId } from "./_components/player-tabs";
 import { PlayerOverview } from "./_components/PlayerOverview";
-import { PlayerCompetitive } from "./_components/PlayerCompetitive";
 import { PlayerTournament } from "./_components/PlayerTournament";
 import { PlayerAgents } from "./_components/PlayerAgents";
 import { PlayerMaps } from "./_components/PlayerMaps";
@@ -21,7 +20,7 @@ interface Props {
   searchParams: Promise<{ tab?: string }>;
 }
 
-const VALID_TABS: PlayerTabId[] = ["overview", "competitive", "tournament", "agents", "maps", "matches", "history"];
+const VALID_TABS: PlayerTabId[] = ["overview", "tournament", "agents", "maps", "matches", "history"];
 
 function isValidTab(tab: string | undefined): tab is PlayerTabId {
   return VALID_TABS.includes(tab as PlayerTabId);
@@ -134,7 +133,6 @@ export default async function PlayerDetailPage({ params, searchParams }: Props) 
         }
       >
         {activeTab === "overview" && <PlayerOverview player={player} playerId={id} />}
-        {activeTab === "competitive" && <PlayerCompetitive playerId={id} playerUserId={player.user_id ?? undefined} />}
         {activeTab === "tournament" && <PlayerTournament playerId={id} />}
         {activeTab === "agents" && <PlayerAgents playerId={id} />}
         {activeTab === "maps" && <PlayerMaps playerId={id} />}

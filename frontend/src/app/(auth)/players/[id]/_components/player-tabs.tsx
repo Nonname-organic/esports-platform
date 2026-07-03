@@ -1,13 +1,12 @@
 import Link from "next/link";
-import { LayoutDashboard, Gamepad2, Trophy, Target, Map as MapIcon, Swords, History } from "lucide-react";
+import { LayoutDashboard, Trophy, Target, Map as MapIcon, Swords, History } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type PlayerTabId =
-  | "overview" | "competitive" | "tournament" | "agents" | "maps" | "matches" | "history";
+  | "overview" | "tournament" | "agents" | "maps" | "matches" | "history";
 
 const TABS: Array<{ id: PlayerTabId; label: string; icon: React.ElementType }> = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
-  { id: "competitive", label: "Competitive", icon: Gamepad2 },
   { id: "tournament", label: "Tournament", icon: Trophy },
   { id: "agents", label: "Agents", icon: Target },
   { id: "maps", label: "Maps", icon: MapIcon },

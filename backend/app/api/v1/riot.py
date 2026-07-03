@@ -47,14 +47,6 @@ async def sync_riot(
     return {"data": result}
 
 
-@router.get("/competitive/{player_id}")
-async def get_competitive(player_id: uuid.UUID, db: DBSession, cache: Cache):
-    """Competitive（Riot）分析データ。summary/agents/maps/matches/rank を集計して返す。"""
-    service = RiotService(db, cache)
-    data = await service.get_competitive_summary(player_id)
-    return {"data": data}
-
-
 @router.get("/profile/{player_id}")
 async def get_riot_profile(player_id: uuid.UUID, db: DBSession, cache: Cache):
     """Riotプロフィール + 取得済み試合データ"""
