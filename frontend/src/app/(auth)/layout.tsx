@@ -21,7 +21,7 @@ const PUBLIC_NAV = [
 const ACCOUNT_NAV = [
   { href: "/teams", label: "マイチーム", icon: Shield },
   { href: "/teams/create", label: "チームを作成", icon: Plus },
-  { href: "/players/create", label: "プレイヤー登録", icon: Users },
+  { href: "/players/create", label: "プレイヤー", icon: Users },
   { href: "/settings", label: "設定", icon: Settings },
 ];
 

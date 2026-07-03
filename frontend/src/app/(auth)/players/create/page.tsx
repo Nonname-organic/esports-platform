@@ -1,15 +1,15 @@
 "use client";
 
-import { useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useRequireAuth } from "@/hooks/use-require-auth";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { User2, AlertCircle, Gamepad2, Info } from "lucide-react";
+import { User2, AlertCircle, Gamepad2, Info, Trash2, ExternalLink, Loader2 } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
-import { cn } from "@/lib/utils";
+import { cn, getGameColor } from "@/lib/utils";
 import type { GameType } from "@/types/tournament";
 
 const GAMES: { value: GameType; label: string; color: string }[] = [
@@ -28,12 +28,11 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
-export default function PlayerCreatePage() {
+export default function PlayerPage() {
   const { ready, authed } = useRequireAuth();
   const router = useRouter();
-
-  if (!ready || !authed) return null;
   const qc = useQueryClient();
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const { data: myPlayer, isLoading: meLoading } = useQuery({
     queryKey: ["players", "me"],
@@ -48,9 +47,16 @@ export default function PlayerCreatePage() {
         riot_id: values.riot_id,
         discord_id: values.discord_id || undefined,
       }),
-    onSuccess: (res: any) => {
-      qc.invalidateQueries({ queryKey: ["players"] });
-      router.push(`/players/${res.data.id}`);
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["players", "me"] });
+    },
+  });
+
+  const unregister = useMutation({
+    mutationFn: (id: string) => apiClient.delete(`/api/v1/players/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["players", "me"] });
+      setConfirmDelete(false);
     },
   });
 
@@ -69,24 +75,110 @@ export default function PlayerCreatePage() {
     err ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-brand-500",
   );
 
-  // 登録済みなら自動でプロフィールへ（プロフィール詳細は(auth)シェル内なのでサイドバーは残る）
-  useEffect(() => {
-    if (myPlayer?.id) router.replace(`/players/${myPlayer.id}`);
-  }, [myPlayer, router]);
+  if (!ready || !authed) return null;
 
-  // 読み込み中 / 登録済み（遷移中）はスピナー
-  if (meLoading || myPlayer) {
+  if (meLoading) {
     return (
-      <div className="mx-auto flex max-w-lg flex-col items-center px-4 py-24 text-center">
+      <div className="flex h-[calc(100vh-3.5rem)] items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
-        <p className="mt-4 text-sm text-slate-400">{myPlayer ? "プロフィールへ移動中..." : "読み込み中..."}</p>
       </div>
     );
   }
 
+  // 登録済みの場合：プレイヤー情報を表示
+  if (myPlayer) {
+    return (
+      <div className="mx-auto max-w-lg px-4 py-10">
+        <div className="mb-6 flex items-center gap-3">
+          <div className="rounded-2xl bg-brand-500/10 p-3">
+            <User2 className="h-7 w-7 text-brand-400" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-black text-white">プレイヤー</h1>
+            <p className="text-sm text-slate-500">登録済みのプレイヤー情報</p>
+          </div>
+        </div>
+
+        {/* プレイヤーカード */}
+        <div className="rounded-2xl border border-white/10 bg-slate-900 p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <span className={cn("rounded-full border px-3 py-1 text-xs font-bold", getGameColor(myPlayer.game))}>
+              {myPlayer.game}
+            </span>
+            <a
+              href={`/players/${myPlayer.id}`}
+              className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors"
+            >
+              公開プロフィール <ExternalLink className="h-3 w-3" />
+            </a>
+          </div>
+
+          <div className="space-y-3">
+            <div>
+              <p className="text-xs text-slate-500 mb-1">Riot ID</p>
+              <p className="text-sm font-semibold text-white">{myPlayer.riot_id}</p>
+            </div>
+            {myPlayer.discord_id && (
+              <div>
+                <p className="text-xs text-slate-500 mb-1">Discord</p>
+                <p className="text-sm text-white">{myPlayer.discord_id}</p>
+              </div>
+            )}
+            <div>
+              <p className="text-xs text-slate-500 mb-1">登録日</p>
+              <p className="text-sm text-white">
+                {new Date(myPlayer.created_at).toLocaleDateString("ja-JP")}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* 登録解除 */}
+        <div className="mt-6 rounded-2xl border border-red-500/20 bg-red-500/5 p-5">
+          <h2 className="mb-2 flex items-center gap-2 text-sm font-bold text-red-400">
+            <Trash2 className="h-4 w-4" /> プレイヤー登録を解除
+          </h2>
+          <p className="mb-4 text-xs text-slate-500">
+            解除するとチームメンバーシップも失われます。再登録は可能です。
+          </p>
+          {!confirmDelete ? (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="rounded-lg border border-red-500/30 px-4 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
+            >
+              登録解除へ
+            </button>
+          ) : (
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => unregister.mutate(myPlayer.id)}
+                disabled={unregister.isPending}
+                className="flex items-center gap-2 rounded-lg bg-red-500 px-4 py-2 text-sm font-bold text-white hover:bg-red-600 disabled:opacity-40 transition-colors"
+              >
+                {unregister.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                解除する
+              </button>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="rounded-lg border border-white/10 px-4 py-2 text-sm text-slate-400 hover:text-white transition-colors"
+              >
+                キャンセル
+              </button>
+            </div>
+          )}
+          {unregister.isError && (
+            <p className="mt-2 text-xs text-red-400">
+              {unregister.error instanceof Error ? unregister.error.message : "解除に失敗しました"}
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // 未登録の場合：登録フォームを表示
   return (
     <div className="mx-auto max-w-lg px-4 py-10">
-      {/* ヘッダー */}
       <div className="mb-8 flex items-center gap-3">
         <div className="rounded-2xl bg-brand-500/10 p-3">
           <User2 className="h-7 w-7 text-brand-400" />
@@ -129,7 +221,6 @@ export default function PlayerCreatePage() {
         {/* Riot ID */}
         <div className="rounded-2xl border border-white/10 bg-slate-900 p-5 space-y-4">
           <h2 className="text-sm font-bold text-white">ゲーム情報</h2>
-
           <div>
             <label className="mb-2 block text-sm font-medium text-slate-400">
               Riot ID <span className="text-red-400">*</span>
@@ -145,7 +236,6 @@ export default function PlayerCreatePage() {
               Name#TAGの形式で入力（例: SEN Tenz#NA1）
             </p>
           </div>
-
         </div>
 
         {/* Discord */}
