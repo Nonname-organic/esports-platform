@@ -1,10 +1,9 @@
 "use client";
 
-import { TrendingUp, Trophy, Users, Shield } from "lucide-react";
+import { Trophy, Users, Shield } from "lucide-react";
 import Link from "next/link";
-import { usePlayerRatingHistory, usePlayerAchievements } from "@/features/career/hooks/use-career";
+import { usePlayerAchievements } from "@/features/career/hooks/use-career";
 import type { Player } from "@/types/player";
-import { RankChart } from "./shared/rank-chart";
 import { TournamentTable, type TournamentRow } from "./shared/tournament-table";
 import { EmptyState } from "./shared/empty-state";
 
@@ -14,13 +13,7 @@ interface Props {
 }
 
 export function PlayerHistory({ player, playerId }: Props) {
-  const { data: ratingHistory, isLoading: rhLoading } = usePlayerRatingHistory(playerId, player.game);
   const { data: achievements, isLoading: achLoading } = usePlayerAchievements(playerId);
-
-  const rankPoints = (ratingHistory ?? []).map((p) => ({
-    label: new Date(p.date).toLocaleDateString("ja-JP", { month: "short", day: "numeric" }),
-    value: p.rating,
-  }));
 
   const tournamentRows: TournamentRow[] = (achievements ?? []).map((a) => ({
     id: a.id,
@@ -32,20 +25,6 @@ export function PlayerHistory({ player, playerId }: Props) {
 
   return (
     <div className="space-y-8 pt-6">
-      {/* ランク履歴 */}
-      <section>
-        <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-white">
-          <TrendingUp className="h-4 w-4 text-brand-400" /> レーティング履歴
-        </h2>
-        <div className="rounded-xl border border-white/10 bg-slate-900 p-5">
-          {rhLoading ? (
-            <div className="h-64 animate-pulse rounded-lg bg-white/5" />
-          ) : (
-            <RankChart data={rankPoints} color="#3b82f6" />
-          )}
-        </div>
-      </section>
-
       {/* 大会履歴 */}
       <section>
         <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-white">

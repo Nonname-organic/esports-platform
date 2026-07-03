@@ -105,10 +105,9 @@ export function PlayerHeader({ player, stats }: PlayerHeaderProps) {
         )}
 
         {/* キャリアスタッツ */}
-        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
-          <StatCard label="Rating" value={(player.rating ?? 0).toLocaleString()} color="text-brand-400" />
-          <StatCard label="KDA" value={(stats.avg_kda ?? 0).toFixed(2)} />
+        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           <StatCard label="勝率" value={`${winRatePct}%`} color={(stats.win_rate ?? 0) >= 0.6 ? "text-green-400" : undefined} />
+          <StatCard label="KDA" value={(stats.avg_kda ?? 0).toFixed(2)} />
           <StatCard label="K/D/A" value={`${(stats.avg_kills ?? 0).toFixed(1)}/${(stats.avg_deaths ?? 0).toFixed(1)}/${(stats.avg_assists ?? 0).toFixed(1)}`} small />
           <StatCard label="HS率" value={`${hsRatePct}%`} />
           <StatCard label="試合数" value={(stats.total_matches ?? 0).toString()} />

@@ -1,6 +1,6 @@
 "use client";
 
-import { Trophy, Star, Target, TrendingUp, Crosshair, Award, AlertCircle } from "lucide-react";
+import { Trophy, Star, TrendingUp, Crosshair, Award, AlertCircle } from "lucide-react";
 import { usePlayerCareer } from "@/features/career/hooks/use-career";
 import { cn } from "@/lib/utils";
 
@@ -42,45 +42,27 @@ export function CareerTab({ playerId }: CareerTabProps) {
         <KpiCard icon={Star} color="text-purple-400" bg="bg-purple-500/10" label="MVP回数" value={career.mvp_count} />
       </div>
 
-      {/* 詳細スタッツ */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <section className="rounded-xl border border-white/10 bg-slate-900 p-5">
-          <h3 className="mb-4 flex items-center gap-2 text-sm font-bold text-white">
-            <Crosshair className="h-4 w-4 text-brand-400" />戦績サマリー
-          </h3>
-          <dl className="grid grid-cols-2 gap-3 text-sm">
-            {[
-              { label: "勝利", value: `${career.total_wins}`, color: "text-green-400" },
-              { label: "敗北", value: `${career.total_losses}`, color: "text-red-400" },
-              { label: "大会参加数", value: `${career.tournaments_played}`, color: "text-white" },
-              { label: "平均ACS", value: career.avg_acs.toFixed(1), color: "text-white" },
-              { label: "平均KDA", value: career.avg_kda.toFixed(2), color: career.avg_kda >= 1.5 ? "text-green-400" : "text-white" },
-              { label: "K/D/A", value: `${career.avg_kills.toFixed(1)}/${career.avg_deaths.toFixed(1)}/${career.avg_assists.toFixed(1)}`, color: "text-slate-300" },
-            ].map(({ label, value, color }) => (
-              <div key={label} className="flex items-center justify-between border-b border-white/5 pb-2">
-                <dt className="text-slate-500">{label}</dt>
-                <dd className={cn("font-bold", color)}>{value}</dd>
-              </div>
-            ))}
-          </dl>
-        </section>
-
-        <section className="rounded-xl border border-white/10 bg-slate-900 p-5">
-          <h3 className="mb-4 flex items-center gap-2 text-sm font-bold text-white">
-            <Target className="h-4 w-4 text-brand-400" />レーティング
-          </h3>
-          <div className="grid grid-cols-2 gap-4 text-center">
-            <div className="rounded-lg bg-white/3 py-4">
-              <p className="text-3xl font-black text-brand-400">{career.current_rating?.toLocaleString() ?? "—"}</p>
-              <p className="mt-1 text-xs text-slate-500">現在レート</p>
+      {/* 戦績サマリー */}
+      <section className="rounded-xl border border-white/10 bg-slate-900 p-5">
+        <h3 className="mb-4 flex items-center gap-2 text-sm font-bold text-white">
+          <Crosshair className="h-4 w-4 text-brand-400" />戦績サマリー
+        </h3>
+        <dl className="grid grid-cols-2 gap-3 text-sm lg:grid-cols-3">
+          {[
+            { label: "勝利", value: `${career.total_wins}`, color: "text-green-400" },
+            { label: "敗北", value: `${career.total_losses}`, color: "text-red-400" },
+            { label: "大会参加数", value: `${career.tournaments_played}`, color: "text-white" },
+            { label: "平均ACS", value: career.avg_acs.toFixed(1), color: "text-white" },
+            { label: "平均KDA", value: career.avg_kda.toFixed(2), color: career.avg_kda >= 1.5 ? "text-green-400" : "text-white" },
+            { label: "K/D/A", value: `${career.avg_kills.toFixed(1)}/${career.avg_deaths.toFixed(1)}/${career.avg_assists.toFixed(1)}`, color: "text-slate-300" },
+          ].map(({ label, value, color }) => (
+            <div key={label} className="flex items-center justify-between border-b border-white/5 pb-2">
+              <dt className="text-slate-500">{label}</dt>
+              <dd className={cn("font-bold", color)}>{value}</dd>
             </div>
-            <div className="rounded-lg bg-white/3 py-4">
-              <p className="text-3xl font-black text-yellow-400">{career.peak_rating?.toLocaleString() ?? "—"}</p>
-              <p className="mt-1 text-xs text-slate-500">最高レート</p>
-            </div>
-          </div>
-        </section>
-      </div>
+          ))}
+        </dl>
+      </section>
 
       {/* Agent使用率 */}
       {career.agent_usage.length > 0 && (

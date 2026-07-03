@@ -33,8 +33,6 @@ export function PlayerOverview({ player, playerId }: Props) {
           <Info label="ゲーム内名" value={player.in_game_name ?? DASH} />
           <Info label="所属チーム" value={player.team_name ?? "フリー"} href={player.team_id ? `/teams/${player.team_id}` : undefined} />
           <Info label="メインロール" value={player.role ?? DASH} />
-          <Info label="現在レート" value={fmtInt(career?.current_rating)} />
-          <Info label="最高レート" value={fmtInt(career?.peak_rating)} />
         </div>
         {(player as any).twitter_handle && (
           <a href={`https://twitter.com/${(player as any).twitter_handle}`} target="_blank" rel="noopener noreferrer"
