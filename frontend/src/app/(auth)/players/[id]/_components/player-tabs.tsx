@@ -1,17 +1,18 @@
 import Link from "next/link";
-import { LayoutDashboard, TrendingUp, Swords, Target, Trophy, Award, Gamepad2 } from "lucide-react";
+import { LayoutDashboard, Gamepad2, Trophy, Target, Map as MapIcon, Swords, History } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type PlayerTabId = "overview" | "career" | "achievements" | "trend" | "matches" | "agents" | "riot";
+export type PlayerTabId =
+  | "overview" | "competitive" | "tournament" | "agents" | "maps" | "matches" | "history";
 
 const TABS: Array<{ id: PlayerTabId; label: string; icon: React.ElementType }> = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
-  { id: "career", label: "Career", icon: Trophy },
-  { id: "achievements", label: "Achievements", icon: Award },
-  { id: "trend", label: "Trend", icon: TrendingUp },
-  { id: "matches", label: "Matches", icon: Swords },
+  { id: "competitive", label: "Competitive", icon: Gamepad2 },
+  { id: "tournament", label: "Tournament", icon: Trophy },
   { id: "agents", label: "Agents", icon: Target },
-  { id: "riot", label: "Riot", icon: Gamepad2 },
+  { id: "maps", label: "Maps", icon: MapIcon },
+  { id: "matches", label: "Matches", icon: Swords },
+  { id: "history", label: "History", icon: History },
 ];
 
 interface PlayerTabsProps {

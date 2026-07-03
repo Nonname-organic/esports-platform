@@ -13,6 +13,16 @@ export function useRiotProfile(playerId: string) {
   });
 }
 
+export function useCompetitive(playerId: string) {
+  return useQuery({
+    queryKey: ["riot", "competitive", playerId],
+    queryFn: () => riotApi.competitive(playerId),
+    select: (res) => res.data,
+    enabled: !!playerId,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 export function useLinkRiot() {
   const qc = useQueryClient();
   return useMutation({

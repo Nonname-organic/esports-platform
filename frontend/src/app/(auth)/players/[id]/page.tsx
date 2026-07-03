@@ -8,20 +8,20 @@ import type { Player, PlayerCareerStats } from "@/types/player";
 import type { ApiResponse } from "@/types/tournament";
 import { PlayerHeader } from "./_components/player-header";
 import { PlayerTabs, type PlayerTabId } from "./_components/player-tabs";
-import { OverviewTab } from "./_components/overview-tab";
-import { TrendTab } from "./_components/trend-tab";
-import { MatchHistoryTab } from "./_components/match-history-tab";
-import { AgentsTab } from "./_components/agents-tab";
-import { CareerTab } from "./_components/career-tab";
-import { AchievementsTab } from "./_components/achievements-tab";
-import { RiotTab } from "./_components/riot-tab";
+import { PlayerOverview } from "./_components/PlayerOverview";
+import { PlayerCompetitive } from "./_components/PlayerCompetitive";
+import { PlayerTournament } from "./_components/PlayerTournament";
+import { PlayerAgents } from "./_components/PlayerAgents";
+import { PlayerMaps } from "./_components/PlayerMaps";
+import { PlayerMatches } from "./_components/PlayerMatches";
+import { PlayerHistory } from "./_components/PlayerHistory";
 
 interface Props {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ tab?: string }>;
 }
 
-const VALID_TABS: PlayerTabId[] = ["overview", "career", "achievements", "trend", "matches", "agents", "riot"];
+const VALID_TABS: PlayerTabId[] = ["overview", "competitive", "tournament", "agents", "maps", "matches", "history"];
 
 function isValidTab(tab: string | undefined): tab is PlayerTabId {
   return VALID_TABS.includes(tab as PlayerTabId);
@@ -133,13 +133,13 @@ export default async function PlayerDetailPage({ params, searchParams }: Props) 
           </div>
         }
       >
-        {activeTab === "overview" && <OverviewTab player={player} stats={stats} />}
-        {activeTab === "career" && <CareerTab playerId={id} />}
-        {activeTab === "achievements" && <AchievementsTab playerId={id} />}
-        {activeTab === "trend" && <TrendTab playerId={id} />}
-        {activeTab === "matches" && <MatchHistoryTab playerId={id} />}
-        {activeTab === "agents" && <AgentsTab playerId={id} />}
-        {activeTab === "riot" && <RiotTab playerId={id} playerUserId={player.user_id ?? undefined} />}
+        {activeTab === "overview" && <PlayerOverview player={player} playerId={id} />}
+        {activeTab === "competitive" && <PlayerCompetitive playerId={id} playerUserId={player.user_id ?? undefined} />}
+        {activeTab === "tournament" && <PlayerTournament playerId={id} />}
+        {activeTab === "agents" && <PlayerAgents playerId={id} />}
+        {activeTab === "maps" && <PlayerMaps playerId={id} />}
+        {activeTab === "matches" && <PlayerMatches playerId={id} />}
+        {activeTab === "history" && <PlayerHistory player={player} playerId={id} />}
       </Suspense>
     </div>
   );

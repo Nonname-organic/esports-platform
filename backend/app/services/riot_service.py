@@ -236,6 +236,118 @@ class RiotService:
         except Exception:
             return None
 
+    # ── Competitive 集計（RiotMatch から算出。未取得メトリクスは None） ──────────
+    async def get_competitive_summary(self, player_id: uuid.UUID) -> dict:
+        """Riot（Competitive）データを集計。
+
+        RiotMatch に保存された agent/map/K/D/A/ACS/HS/won から算出する。
+        RR・Episode・Act・ADR・KAST・FK/Clutch 等は未保存のため None（空データ対応）。
+        """
+        profile = await self.get_profile(player_id)
+        rows = list((await self._db.execute(
+            select(RiotMatch)
+            .where(RiotMatch.player_id == player_id)
+            .order_by(RiotMatch.created_at.desc())
+        )).scalars().all())
+
+        def _agg(ms: list[RiotMatch]) -> dict:
+            n = len(ms)
+            if n == 0:
+                return {
+                    "matches": 0, "wins": 0, "losses": 0, "win_rate": 0.0,
+                    "avg_kills": 0.0, "avg_deaths": 0.0, "avg_assists": 0.0,
+                    "kd": 0.0, "kda": 0.0, "acs": 0.0, "hs_rate": None,
+                }
+            wins = sum(1 for m in ms if m.won is True)
+            losses = sum(1 for m in ms if m.won is False)
+            decided = wins + losses
+            k = sum(m.kills for m in ms)
+            d = sum(m.deaths for m in ms)
+            a = sum(m.assists for m in ms)
+            acs_vals = [m.acs for m in ms if m.acs is not None]
+            hs_vals = [m.hs_rate for m in ms if m.hs_rate is not None]
+            return {
+                "matches": n,
+                "wins": wins,
+                "losses": losses,
+                "win_rate": round(wins / decided, 4) if decided else 0.0,
+                "avg_kills": round(k / n, 1),
+                "avg_deaths": round(d / n, 1),
+                "avg_assists": round(a / n, 1),
+                "kd": round(k / d, 2) if d else float(k),
+                "kda": round((k + a) / d, 2) if d else float(k + a),
+                "acs": round(sum(acs_vals) / len(acs_vals), 1) if acs_vals else 0.0,
+                "hs_rate": round(sum(hs_vals) / len(hs_vals), 4) if hs_vals else None,
+            }
+
+        summary = _agg(rows)
+        recent20 = _agg(rows[:20])
+
+        # エージェント別集計
+        agents: dict[str, list[RiotMatch]] = {}
+        maps: dict[str, list[RiotMatch]] = {}
+        for m in rows:
+            if m.agent:
+                agents.setdefault(m.agent, []).append(m)
+            if m.map_name:
+                maps.setdefault(m.map_name, []).append(m)
+
+        total = len(rows) or 1
+        agent_stats = []
+        for name, ms in agents.items():
+            g = _agg(ms)
+            agent_stats.append({
+                "agent": name, "games": g["matches"], "wins": g["wins"],
+                "win_rate": g["win_rate"], "pick_rate": round(len(ms) / total, 4),
+                "acs": g["acs"], "kd": g["kd"], "kda": g["kda"], "hs_rate": g["hs_rate"],
+                "avg_kills": g["avg_kills"], "avg_deaths": g["avg_deaths"], "avg_assists": g["avg_assists"],
+            })
+        agent_stats.sort(key=lambda x: x["games"], reverse=True)
+
+        map_stats = []
+        for name, ms in maps.items():
+            g = _agg(ms)
+            map_stats.append({
+                "map": name, "games": g["matches"], "wins": g["wins"],
+                "win_rate": g["win_rate"], "acs": g["acs"], "kd": g["kd"], "kda": g["kda"],
+                "attack_win_rate": None, "defense_win_rate": None, "first_kill_rate": None,
+            })
+        map_stats.sort(key=lambda x: x["games"], reverse=True)
+
+        matches = [{
+            "match_id": m.riot_match_id,
+            "agent": m.agent,
+            "map_name": m.map_name,
+            "kills": m.kills, "deaths": m.deaths, "assists": m.assists,
+            "kd": round(m.kills / m.deaths, 2) if m.deaths else float(m.kills),
+            "kda": round((m.kills + m.assists) / m.deaths, 2) if m.deaths else float(m.kills + m.assists),
+            "acs": m.acs, "adr": None, "hs_rate": m.hs_rate, "mmr": None,
+            "won": m.won,
+            "played_at": m.played_at.isoformat() if m.played_at else (m.created_at.isoformat() if m.created_at else None),
+        } for m in rows[:20]]
+
+        return {
+            "linked": profile is not None,
+            "riot_id": profile.riot_id if profile else None,
+            "synced_at": profile.synced_at.isoformat() if profile and profile.synced_at else None,
+            "rank": {
+                "current_rank": profile.current_rank if profile else None,
+                "peak_rank": profile.peak_rank if profile else None,
+                "peak_rr": None, "current_rr": None, "episode": None, "act": None,
+            },
+            "summary": {
+                **summary,
+                "recent20_win_rate": recent20["win_rate"],
+                # 未保存メトリクス（拡張余地）
+                "adr": None, "kast": None, "fk_rate": None, "fd_rate": None,
+                "clutch_rate": None, "damage_per_round": None, "mvp_rate": None,
+            },
+            "agents": agent_stats,
+            "maps": map_stats,
+            "matches": matches,
+            "rank_history": [],  # RR/Episode 履歴は未保存（将来のRiot ranked連携で拡張）
+        }
+
     # ── 取得済みデータ（Analytics表示用） ──────────────────────────────────────
     async def get_riot_matches(self, player_id: uuid.UUID, limit: int = 20) -> list[dict]:
         rows = (await self._db.execute(
