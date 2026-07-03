@@ -7,7 +7,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { User2, AlertCircle, Gamepad2, Info, Trash2, ExternalLink, Loader2 } from "lucide-react";
+import { User2, AlertCircle, Gamepad2, Info, Trash2, ExternalLink, Loader2, UserSearch } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { cn, getGameColor } from "@/lib/utils";
 import type { GameType } from "@/types/tournament";
@@ -132,6 +132,23 @@ export default function PlayerPage() {
             </div>
           </div>
         </div>
+
+        {/* チームを探す (LFT) */}
+        <a
+          href="/scout/lft/me"
+          className="mt-4 flex items-center justify-between rounded-2xl border border-purple-500/20 bg-purple-500/5 p-5 hover:bg-purple-500/10 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl bg-purple-500/10 p-2.5">
+              <UserSearch className="h-5 w-5 text-purple-400" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-white">チームを探す (LFT)</p>
+              <p className="text-xs text-slate-500">プロフィールを使ってチーム募集をアピール</p>
+            </div>
+          </div>
+          <ExternalLink className="h-4 w-4 text-slate-500" />
+        </a>
 
         {/* 登録解除 */}
         <div className="mt-6 rounded-2xl border border-red-500/20 bg-red-500/5 p-5">
