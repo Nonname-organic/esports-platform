@@ -7,7 +7,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { User2, AlertCircle, Gamepad2 } from "lucide-react";
+import { User2, AlertCircle, Gamepad2, Info } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import type { GameType } from "@/types/tournament";
