@@ -166,6 +166,9 @@ class ScoutService:
         min_rating: Optional[float] = None,
         min_tournaments: Optional[int] = None,
         looking_only: bool = False,
+        min_age: Optional[int] = None,
+        max_age: Optional[int] = None,
+        fa_status: Optional[str] = None,  # "free" | "signed" | None(all)
         sort_by: str = "scout_rating",
         limit: int = 30,
         offset: int = 0,
@@ -196,8 +199,16 @@ class ScoutService:
             profile = await self._profiles.get_by_player(p.id)
             if looking_only and not (profile and profile.is_looking):
                 continue
+            if min_age is not None and (profile is None or profile.age is None or profile.age < min_age):
+                continue
+            if max_age is not None and (profile is None or profile.age is None or profile.age > max_age):
+                continue
 
             team_info = await self._current_team(p.id)
+            if fa_status == "free" and team_info[0] is not None:
+                continue
+            if fa_status == "signed" and team_info[0] is None:
+                continue
             cards.append({
                 "player_id": str(p.id),
                 "in_game_name": p.in_game_name,
@@ -273,6 +284,15 @@ class ScoutService:
         region: Optional[str] = None,
         recruiting_only: bool = False,
         min_avg_rating: Optional[float] = None,
+        recruiting_role: Optional[str] = None,
+        rank_requirement: Optional[str] = None,
+        activity_level: Optional[str] = None,
+        active_hours: Optional[str] = None,
+        team_min_age: Optional[int] = None,
+        team_max_age: Optional[int] = None,
+        premier_active: Optional[bool] = None,
+        has_tournaments: bool = False,
+        seeking_staff: Optional[str] = None,  # "coach"|"manager"|"reserve"
         limit: int = 30,
         offset: int = 0,
     ) -> list[dict]:
@@ -291,6 +311,9 @@ class ScoutService:
             except Exception:
                 career = {"win_rate": 0.0, "total_matches": 0, "championships": 0, "current_rating": None}
 
+            if has_tournaments and (career.get("championships", 0) == 0 and career.get("total_matches", 0) == 0):
+                continue
+
             roster_count = await self._db.scalar(
                 select(func.count(TeamMember.id)).where(
                     TeamMember.team_id == t.id, TeamMember.left_at.is_(None)
@@ -303,6 +326,34 @@ class ScoutService:
                 continue
             if min_avg_rating is not None and (career.get("current_rating") or 0) < min_avg_rating:
                 continue
+            if activity_level and (profile is None or profile.activity_level != activity_level):
+                continue
+            if active_hours and (profile is None or profile.active_hours != active_hours):
+                continue
+            if premier_active is not None and (profile is None or profile.premier_active != premier_active):
+                continue
+            if team_min_age is not None and profile and profile.team_min_age is not None and profile.team_min_age > team_min_age:
+                continue
+            if team_max_age is not None and profile and profile.team_max_age is not None and profile.team_max_age < team_max_age:
+                continue
+
+            # 募集ロール・ランク・スタッフはRecruitmentPostを確認
+            if recruiting_role or rank_requirement or seeking_staff:
+                from app.models.scout import RecruitmentPost as RP
+                post_q = select(RP).where(RP.team_id == t.id, RP.is_open == True)
+                posts = list((await self._db.execute(post_q)).scalars().all())
+                if recruiting_role:
+                    matched = any(p.required_roles and recruiting_role in p.required_roles for p in posts)
+                    if not matched:
+                        continue
+                if rank_requirement:
+                    matched = any(p.min_rank == rank_requirement for p in posts)
+                    if not matched:
+                        continue
+                if seeking_staff:
+                    matched = any(p.required_roles and seeking_staff in p.required_roles for p in posts)
+                    if not matched:
+                        continue
 
             cards.append({
                 "team_id": str(t.id),
@@ -317,6 +368,9 @@ class ScoutService:
                 "championships": career["championships"],
                 "roster_count": roster_count,
                 "is_recruiting": is_recruiting,
+                "activity_level": profile.activity_level if profile else None,
+                "active_hours": profile.active_hours if profile else None,
+                "premier_active": profile.premier_active if profile else False,
             })
 
         cards.sort(key=lambda c: c["avg_rating"] or 0, reverse=True)

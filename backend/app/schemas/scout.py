@@ -40,6 +40,9 @@ class ScoutTeamCard(BaseModel):
     championships: int
     roster_count: int
     is_recruiting: bool
+    activity_level: Optional[str] = None
+    active_hours: Optional[str] = None
+    premier_active: bool = False
 
 
 # ── Recruitment ───────────────────────────────────────────────────────────────

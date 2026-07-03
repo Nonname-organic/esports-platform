@@ -34,6 +34,9 @@ async def discover_players(
     min_rating: Optional[float] = Query(default=None),
     min_tournaments: Optional[int] = Query(default=None, ge=0),
     looking_only: bool = Query(default=False),
+    min_age: Optional[int] = Query(default=None, ge=0, le=100),
+    max_age: Optional[int] = Query(default=None, ge=0, le=100),
+    fa_status: Optional[str] = Query(default=None),
     sort_by: str = Query(default="scout_rating"),
     limit: int = Query(default=30, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
@@ -42,7 +45,8 @@ async def discover_players(
     cards = await service.search_players(
         game=game, role=role, rank=rank, region=region,
         min_win_rate=min_win_rate, min_rating=min_rating, min_tournaments=min_tournaments,
-        looking_only=looking_only, sort_by=sort_by, limit=limit, offset=offset,
+        looking_only=looking_only, min_age=min_age, max_age=max_age, fa_status=fa_status,
+        sort_by=sort_by, limit=limit, offset=offset,
     )
     return Response(data=[ScoutPlayerCard(**c) for c in cards], meta=None)
 
@@ -56,13 +60,26 @@ async def discover_teams(
     region: Optional[str] = Query(default=None),
     recruiting_only: bool = Query(default=False),
     min_avg_rating: Optional[float] = Query(default=None),
+    recruiting_role: Optional[str] = Query(default=None),
+    rank_requirement: Optional[str] = Query(default=None),
+    activity_level: Optional[str] = Query(default=None),
+    active_hours: Optional[str] = Query(default=None),
+    team_min_age: Optional[int] = Query(default=None),
+    team_max_age: Optional[int] = Query(default=None),
+    premier_active: Optional[bool] = Query(default=None),
+    has_tournaments: bool = Query(default=False),
+    seeking_staff: Optional[str] = Query(default=None),
     limit: int = Query(default=30, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ):
     service = ScoutService(db, cache)
     cards = await service.search_teams(
         game=game, region=region, recruiting_only=recruiting_only,
-        min_avg_rating=min_avg_rating, limit=limit, offset=offset,
+        min_avg_rating=min_avg_rating, recruiting_role=recruiting_role,
+        rank_requirement=rank_requirement, activity_level=activity_level,
+        active_hours=active_hours, team_min_age=team_min_age, team_max_age=team_max_age,
+        premier_active=premier_active, has_tournaments=has_tournaments,
+        seeking_staff=seeking_staff, limit=limit, offset=offset,
     )
     return Response(data=[ScoutTeamCard(**c) for c in cards], meta=None)
 

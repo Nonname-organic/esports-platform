@@ -32,6 +32,7 @@ class Team(UUIDMixin, TimestampMixin, Base):
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     country: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    region: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     twitter_handle: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     # Relationships

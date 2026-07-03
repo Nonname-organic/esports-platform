@@ -20,7 +20,7 @@ export function useScoutPlayers(params: PlayerSearchParams) {
   });
 }
 
-export function useScoutTeams(params: { game?: string; region?: string; recruiting_only?: boolean }) {
+export function useScoutTeams(params: import("../api/scout-api").TeamSearchParams) {
   return useQuery({
     queryKey: scoutKeys.teams(params),
     queryFn: () => scoutApi.searchTeams(params),

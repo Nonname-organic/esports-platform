@@ -35,6 +35,9 @@ export interface ScoutTeamCard {
   championships: number;
   roster_count: number;
   is_recruiting: boolean;
+  activity_level: string | null;
+  active_hours: string | null;
+  premier_active: boolean;
 }
 
 export interface RecruitmentPost {
@@ -72,7 +75,25 @@ export interface PlayerSearchParams {
   min_rating?: number;
   min_tournaments?: number;
   looking_only?: boolean;
+  min_age?: number;
+  max_age?: number;
+  fa_status?: string;
   sort_by?: string;
+}
+
+export interface TeamSearchParams {
+  game?: string;
+  region?: string;
+  recruiting_only?: boolean;
+  recruiting_role?: string;
+  rank_requirement?: string;
+  activity_level?: string;
+  active_hours?: string;
+  team_min_age?: number;
+  team_max_age?: number;
+  premier_active?: boolean;
+  has_tournaments?: boolean;
+  seeking_staff?: string;
 }
 
 export const scoutApi = {
@@ -84,10 +105,10 @@ export const scoutApi = {
     return apiClient.get(`/api/v1/scout/players?${qs.toString()}`);
   },
 
-  searchTeams: (params: { game?: string; region?: string; recruiting_only?: boolean }): Promise<ApiResponse<ScoutTeamCard[]>> => {
+  searchTeams: (params: TeamSearchParams): Promise<ApiResponse<ScoutTeamCard[]>> => {
     const qs = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined && v !== "" && v !== false) qs.set(k, String(v));
+      if (v !== undefined && v !== "" && v !== false && v !== null) qs.set(k, String(v));
     });
     return apiClient.get(`/api/v1/scout/teams?${qs.toString()}`);
   },
