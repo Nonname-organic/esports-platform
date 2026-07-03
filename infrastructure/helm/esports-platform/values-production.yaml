@@ -6,7 +6,7 @@
 
 image:
   organization: your-org   # replace with your GitHub org/username
-  tag: sha-64b6aa4
+  tag: sha-f58a061
 
 aws:
   accountId: "REPLACE_WITH_ACCOUNT_ID"
