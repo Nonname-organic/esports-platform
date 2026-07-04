@@ -25,6 +25,7 @@ from app.schemas.tournament import (
     TournamentCreate,
     TournamentUpdate,
 )
+from app.core.storage import resign_stored_url
 
 
 class TournamentService:
@@ -406,13 +407,13 @@ class TournamentService:
                             id=str(match.team1.id),
                             name=match.team1.name,
                             tag=match.team1.tag,
-                            logo_url=match.team1.logo_url,
+                            logo_url=resign_stored_url(match.team1.logo_url),
                         ) if match.team1 else None,
                         team2=BracketMatchTeam(
                             id=str(match.team2.id),
                             name=match.team2.name,
                             tag=match.team2.tag,
-                            logo_url=match.team2.logo_url,
+                            logo_url=resign_stored_url(match.team2.logo_url),
                         ) if match.team2 else None,
                         winner_id=str(match.winner_id) if match.winner_id else None,
                         status=match.status.value,

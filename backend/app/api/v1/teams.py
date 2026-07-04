@@ -17,6 +17,7 @@ from app.schemas.team import (
 from app.schemas.career import TeamCareerSchema, AchievementItem, RivalItem
 from app.services.team import TeamService
 from app.services.career_service import CareerAggregationService
+from app.core.storage import resign_stored_url
 
 router = APIRouter(prefix="/teams", tags=["チーム管理"])
 
@@ -49,13 +50,13 @@ def _team_detail(team) -> TeamDetailSchema:
         name=team.name,
         tag=team.tag,
         game=team.game.value,
-        logo_url=team.logo_url,
+        logo_url=resign_stored_url(team.logo_url),
         owner_id=team.owner_id,
         is_active=team.is_active,
         created_at=team.created_at,
         description=team.description,
         country=team.country,
-        banner_url=team.banner_url,
+        banner_url=resign_stored_url(team.banner_url),
         twitter_handle=team.twitter_handle,
         updated_at=team.updated_at,
     )
@@ -67,7 +68,7 @@ def _team_summary(team) -> TeamSummarySchema:
         name=team.name,
         tag=team.tag,
         game=team.game.value,
-        logo_url=team.logo_url,
+        logo_url=resign_stored_url(team.logo_url),
         owner_id=team.owner_id,
         is_active=team.is_active,
         created_at=team.created_at,

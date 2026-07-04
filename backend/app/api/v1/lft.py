@@ -13,6 +13,7 @@ from app.models.player import Player
 from app.models.player_lft import PlayerLFT
 from app.models.user import User
 from app.schemas.common import Response, ListResponse, Meta
+from app.core.storage import resign_stored_url
 
 router = APIRouter(prefix="/lft", tags=["LFT 選手募集"])
 
@@ -86,7 +87,7 @@ def _to_schema(r: PlayerLFT, player: Player, user: Optional[User] = None) -> LFT
         player_id=str(r.player_id),
         user_id=str(r.user_id),
         in_game_name=player.in_game_name,
-        avatar_url=user.avatar_url if user else None,
+        avatar_url=resign_stored_url(user.avatar_url) if user else None,
         status=r.status,
         roles=r.roles or [],
         current_rank=r.current_rank,

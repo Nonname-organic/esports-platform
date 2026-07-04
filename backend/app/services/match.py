@@ -18,6 +18,7 @@ from app.schemas.match import (
     MatchResultCreate,
     ScoreUpdate,
 )
+from app.core.storage import resign_stored_url
 
 
 class MatchService:
@@ -308,13 +309,13 @@ class MatchService:
                 id=str(match.team1.id),
                 name=match.team1.name,
                 tag=match.team1.tag,
-                logo_url=match.team1.logo_url,
+                logo_url=resign_stored_url(match.team1.logo_url),
             ) if match.team1 else None,
             team2=MatchTeam(
                 id=str(match.team2.id),
                 name=match.team2.name,
                 tag=match.team2.tag,
-                logo_url=match.team2.logo_url,
+                logo_url=resign_stored_url(match.team2.logo_url),
             ) if match.team2 else None,
             winner_id=str(match.winner_id) if match.winner_id else None,
             scheduled_at=match.scheduled_at,

@@ -16,6 +16,7 @@ from app.models.team import Team, TeamMember
 from app.models.user import User
 from app.repositories.team import TeamMemberRepository, TeamRepository
 from app.schemas.team import AddMemberRequest, TeamCreate, TeamUpdate
+from app.core.storage import resign_stored_url
 
 
 class TeamService:
@@ -126,7 +127,7 @@ class TeamService:
                 "user_id": player.user_id if player else None,
                 "in_game_name": player.in_game_name if player else None,
                 "username": user.username if user else None,
-                "avatar_url": user.avatar_url if user else None,
+                "avatar_url": resign_stored_url(user.avatar_url) if user else None,
                 "role": m.role.value,
                 "jersey_number": m.jersey_number,
                 "joined_at": m.joined_at,
@@ -173,7 +174,7 @@ class TeamService:
             "user_id": target_user.id,
             "in_game_name": player.in_game_name,
             "username": target_user.username,
-            "avatar_url": target_user.avatar_url,
+            "avatar_url": resign_stored_url(target_user.avatar_url),
             "role": member.role.value,
             "jersey_number": member.jersey_number,
             "joined_at": member.joined_at,

@@ -25,6 +25,7 @@ from app.models.team import TeamMember
 from app.models.user import User
 from app.repositories.player import PlayerRepository
 from app.schemas.player import PlayerCreate, PlayerSchema, PlayerUpdate, RiotIdInput
+from app.core.storage import resign_stored_url
 
 
 class PlayerService:
@@ -56,7 +57,7 @@ class PlayerService:
             created_at=player.created_at,
             updated_at=player.updated_at,
             username=user.username if user else None,
-            avatar_url=user.avatar_url if user else None,
+            avatar_url=resign_stored_url(user.avatar_url) if user else None,
         )
 
     async def get_player(self, player_id: uuid.UUID) -> PlayerSchema:

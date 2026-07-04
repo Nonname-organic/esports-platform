@@ -6,6 +6,7 @@ generate_presigned_url はローカル計算（ネットワーク不要）なの
 """
 
 from typing import Optional
+from urllib.parse import unquote, urlparse
 
 import boto3
 
@@ -32,6 +33,29 @@ def sign_url(key: str, expires: int = PRESIGN_MAX_EXPIRES) -> str:
         Params={"Bucket": settings.S3_BUCKET_NAME, "Key": key},
         ExpiresIn=expires,
     )
+
+
+def resign_stored_url(url: Optional[str]) -> Optional[str]:
+    """DB に保存済みの S3 署名付きURLから key を逆算し、フレッシュな署名付きURLを返す。
+
+    - 空 / 自バケット以外（外部URL・Discord CDN等）はそのまま返す
+    - virtual-hosted 形式（bucket.s3.../key）と path 形式（s3.../bucket/key）の両対応
+    - 解析失敗時は元の url にフォールバック
+    """
+    if not url:
+        return url
+    bucket = settings.S3_BUCKET_NAME
+    if not bucket or bucket not in url:
+        return url
+    try:
+        path = unquote(urlparse(url).path).lstrip("/")
+        if path.startswith(f"{bucket}/"):
+            path = path[len(bucket) + 1:]
+        if not path:
+            return url
+        return sign_url(path)
+    except Exception:
+        return url
 
 
 def sign_attachments(attachments: Optional[list]) -> list:

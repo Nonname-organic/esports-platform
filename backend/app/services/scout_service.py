@@ -24,6 +24,7 @@ from app.repositories.scout import (
     ScoutProfileRepository, RecruitmentRepository, ApplicationRepository,
 )
 from app.services.career_service import CareerAggregationService
+from app.core.storage import resign_stored_url
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -360,7 +361,7 @@ class ScoutService:
                 "name": t.name,
                 "tag": t.tag,
                 "game": t.game.value,
-                "logo_url": t.logo_url,
+                "logo_url": resign_stored_url(t.logo_url),
                 "region": t.region,
                 "avg_rating": career.get("current_rating"),
                 "win_rate": career["win_rate"],

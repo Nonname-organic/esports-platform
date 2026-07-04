@@ -6,6 +6,7 @@ from app.core.exceptions import NotFoundError
 from app.core.redis import CacheKeys, CacheTTL, RedisCache
 from app.repositories.tournament import RankingRepository, TournamentRepository
 from app.schemas.analytics import RankingEntry
+from app.core.storage import resign_stored_url
 
 
 class RankingService:
@@ -33,7 +34,7 @@ class RankingService:
                 team_id=str(r.team_id),
                 team_name=r.team.name if r.team else "",
                 team_tag=r.team.tag if r.team else "",
-                team_logo_url=r.team.logo_url if r.team else None,
+                team_logo_url=resign_stored_url(r.team.logo_url) if r.team else None,
                 points=r.points,
                 wins=r.wins,
                 losses=r.losses,

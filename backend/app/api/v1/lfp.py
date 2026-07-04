@@ -11,6 +11,7 @@ from app.core.dependencies import CurrentUser, DBSession
 from app.models.team import Team, TeamMember
 from app.models.team_recruitment import TeamRecruitment
 from app.schemas.common import Response, ListResponse, Meta
+from app.core.storage import resign_stored_url
 from sqlalchemy import select, func
 
 router = APIRouter(prefix="/lfp", tags=["LFP チーム募集"])
@@ -87,7 +88,7 @@ def _to_schema(r: TeamRecruitment, team: Team) -> LFPSchema:
         team_id=str(r.team_id),
         team_name=team.name,
         team_tag=team.tag,
-        team_logo_url=team.logo_url,
+        team_logo_url=resign_stored_url(team.logo_url),
         owner_id=str(r.owner_id),
         title=r.title,
         status=r.status,

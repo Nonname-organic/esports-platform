@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 from app.core.dependencies import Cache, CurrentUser, DBSession, OrganizerUser
 from app.core.exceptions import BusinessRuleError, NotFoundError
-from app.core.storage import sign_attachments
+from app.core.storage import sign_attachments, resign_stored_url
 from app.models.enums import GameType, RegistrationStatus, TournamentStatus
 from app.schemas.common import ListResponse, Meta, Response
 from app.schemas.tournament import (
@@ -36,7 +36,7 @@ def _build_detail(tournament, count: int) -> TournamentDetail:
         registered_teams=count,
         start_at=tournament.start_at,
         prize_pool=tournament.prize_pool,
-        banner_url=tournament.banner_url,
+        banner_url=resign_stored_url(tournament.banner_url),
         description=tournament.description,
         rules=tournament.rules,
         attachments=sign_attachments(tournament.attachments),
@@ -91,7 +91,7 @@ async def list_tournaments(
             start_at=t.start_at,
             end_at=t.end_at,
             prize_pool=t.prize_pool,
-            banner_url=t.banner_url,
+            banner_url=resign_stored_url(t.banner_url),
         ))
 
     next_cursor = str(tournaments[-1].id) if has_next and tournaments else None
@@ -172,7 +172,7 @@ async def list_registrations(
             team_id=str(r.team_id),
             team_name=r.team.name if r.team else "Unknown",
             team_tag=r.team.tag if r.team else "???",
-            team_logo_url=r.team.logo_url if r.team else None,
+            team_logo_url=resign_stored_url(r.team.logo_url) if r.team else None,
             status=r.status.value,
             notes=r.notes,
             registered_at=r.registered_at,
@@ -200,7 +200,7 @@ async def update_registration(
             team_id=str(reg.team_id),
             team_name=reg.team.name if reg.team else "Unknown",
             team_tag=reg.team.tag if reg.team else "???",
-            team_logo_url=reg.team.logo_url if reg.team else None,
+            team_logo_url=resign_stored_url(reg.team.logo_url) if reg.team else None,
             status=reg.status.value,
             notes=reg.notes,
             registered_at=reg.registered_at,
