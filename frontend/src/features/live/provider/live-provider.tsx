@@ -29,9 +29,10 @@ function jitter(v: number, amp: number): number {
   return Math.max(0, Math.round(v + (Math.random() - 0.5) * amp));
 }
 function mockLive(prev: LiveStats | null): LiveStats {
-  const base = prev ?? { ongoing_tournaments: 44, ongoing_matches: 118, online_participants: 3800, updated_at: "" };
+  const base = prev ?? { ongoing_tournaments: 44, registration_open_tournaments: 63, ongoing_matches: 118, online_participants: 3800, updated_at: "" };
   return {
     ongoing_tournaments: jitter(base.ongoing_tournaments || 44, 4),
+    registration_open_tournaments: jitter(base.registration_open_tournaments || 63, 5),
     ongoing_matches: jitter(base.ongoing_matches || 118, 12),
     online_participants: jitter(base.online_participants || 3800, 140),
     updated_at: new Date().toISOString(),

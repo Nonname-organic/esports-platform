@@ -4,6 +4,7 @@ import type { ApiResponse } from "@/types/tournament";
 /** Live Status Bar 用のライブ値。 */
 export interface LiveStats {
   ongoing_tournaments: number;
+  registration_open_tournaments?: number; // 追加フィールド（後方互換のため任意）
   ongoing_matches: number;
   online_participants: number;
   updated_at: string;

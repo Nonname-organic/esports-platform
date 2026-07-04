@@ -42,6 +42,9 @@ class StatsService:
         ongoing_tournaments = await self._db.scalar(
             select(func.count()).select_from(Tournament).where(Tournament.status == TournamentStatus.ONGOING)
         )
+        registration_open_tournaments = await self._db.scalar(
+            select(func.count()).select_from(Tournament).where(Tournament.status == TournamentStatus.REGISTRATION_OPEN)
+        )
         ongoing_matches = await self._db.scalar(
             select(func.count()).select_from(Match).where(Match.status == MatchStatus.ONGOING)
         )
@@ -53,6 +56,7 @@ class StatsService:
         return {
             "live": {
                 "ongoing_tournaments": int(ongoing_tournaments or 0),
+                "registration_open_tournaments": int(registration_open_tournaments or 0),
                 "ongoing_matches": int(ongoing_matches or 0),
                 "online_participants": await self._estimate_online(),
                 "updated_at": datetime.now(timezone.utc).isoformat(),

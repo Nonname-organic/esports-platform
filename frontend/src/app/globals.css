@@ -11,6 +11,16 @@
     box-sizing: border-box;
   }
 
+  /* Hero の Explore アンカー等をなめらかにスクロール（reduced-motion では無効化） */
+  html {
+    scroll-behavior: smooth;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+
   body {
     @apply bg-slate-950 text-white;
   }
@@ -71,8 +81,49 @@
   }
   .animate-live-enter { animation: live-enter 0.4s ease-out; }
 
+  /* Hero: シネマティック背景の緩やかなオーロラ流れ（GPU: transform/opacity のみ） */
+  @keyframes aurora-drift {
+    0% { transform: translate3d(-6%, -3%, 0) scale(1.05); opacity: 0.55; }
+    50% { transform: translate3d(5%, 4%, 0) scale(1.15); opacity: 0.8; }
+    100% { transform: translate3d(-6%, -3%, 0) scale(1.05); opacity: 0.55; }
+  }
+  .animate-aurora { animation: aurora-drift 18s ease-in-out infinite; }
+  .animate-aurora-slow { animation: aurora-drift 26s ease-in-out infinite reverse; }
+
+  /* CTA / バッジのゆっくりしたグロー明滅 */
+  @keyframes glow-pulse {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+  }
+  .animate-glow-pulse { animation: glow-pulse 3s ease-in-out infinite; }
+
+  /* スクロール誘導マウスのホイール */
+  @keyframes scroll-wheel {
+    0% { transform: translateY(0); opacity: 0; }
+    30% { opacity: 1; }
+    60% { transform: translateY(7px); opacity: 0; }
+    100% { transform: translateY(0); opacity: 0; }
+  }
+  .animate-scroll-wheel { animation: scroll-wheel 1.8s ease-in-out infinite; }
+
+  /* スクロール誘導全体の上下フロート */
+  @keyframes soft-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(5px); }
+  }
+  .animate-soft-float { animation: soft-float 2.6s ease-in-out infinite; }
+
+  /* 統計カード等: 値更新時の淡いパルスリング */
+  @keyframes card-pulse {
+    0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.35); }
+    100% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
+  }
+  .card-pulse { animation: card-pulse 0.9s ease-out; }
+
   @media (prefers-reduced-motion: reduce) {
-    .animate-live-blink, .animate-live-ping, .count-flash, .animate-live-enter {
+    .animate-live-blink, .animate-live-ping, .count-flash, .animate-live-enter,
+    .animate-aurora, .animate-aurora-slow, .animate-glow-pulse,
+    .animate-scroll-wheel, .animate-soft-float, .card-pulse {
       animation: none !important;
     }
   }
