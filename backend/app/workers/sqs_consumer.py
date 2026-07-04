@@ -234,16 +234,20 @@ async def tournament_status_loop() -> None:
 async def outbox_relay_loop() -> None:
     """domain_events(未dispatch) を拾って Dispatcher へ fan-out（P0-4 Transactional Outbox）。
 
-    現在 consumer は未登録（純監査イベントは dispatch 済み扱い）。P1 で Notification/Report
-    consumer を register する。
+    P1-2: NotificationConsumer を register（承認/却下 → 通知）。P1-3 で ReportConsumer を追加。
+    純監査イベント（dispatch=False）は emit 時点で dispatched 済みのため本ループに載らない。
     """
     import os
     import socket
 
     from app.events.dispatcher import InProcessDispatcher
     from app.events.relay import OutboxRelay
+    from app.notifications.consumer import NotificationConsumer
 
-    dispatcher = InProcessDispatcher(consumers=[])  # P1-2/P1-3 で consumer 登録
+    cache = RedisCache(await get_redis())
+    dispatcher = InProcessDispatcher(consumers=[
+        NotificationConsumer(cache),   # P1-2: Notification Event Matrix に従い配信
+    ])
     worker_id = f"{socket.gethostname()}:{os.getpid()}"[:64]
     relay = OutboxRelay(dispatcher, worker_id)
 
