@@ -7,6 +7,7 @@ from sqlalchemy import select
 
 from app.core.dependencies import Cache, CurrentUser, DBSession, OrganizerUser
 from app.core.exceptions import BusinessRuleError, NotFoundError
+from app.core.storage import sign_attachments
 from app.models.enums import GameType, RegistrationStatus, TournamentStatus
 from app.schemas.common import ListResponse, Meta, Response
 from app.schemas.tournament import (
@@ -38,7 +39,7 @@ def _build_detail(tournament, count: int) -> TournamentDetail:
         banner_url=tournament.banner_url,
         description=tournament.description,
         rules=tournament.rules,
-        attachments=tournament.attachments or [],
+        attachments=sign_attachments(tournament.attachments),
         organizer_id=str(tournament.organizer_id),
         registration_start_at=tournament.registration_start_at,
         registration_end_at=tournament.registration_end_at,
