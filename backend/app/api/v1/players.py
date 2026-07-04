@@ -9,8 +9,21 @@ from app.schemas.player import GAME_ROLES, PlayerCreate, PlayerSchema, PlayerUpd
 from app.schemas.career import PlayerCareerSchema, AchievementItem, RatingPoint
 from app.services.player import PlayerService
 from app.services.career_service import CareerAggregationService
+from app.services.activity_service import ActivityService
 
 router = APIRouter(prefix="/players", tags=["プレイヤー管理"])
+
+
+# ── Activity Feed（公開活動 / ADR-0011） ─────────────────────────────────────
+@router.get("/{player_id}/activity", response_model=Response[list[dict]])
+async def get_player_activity(
+    player_id: uuid.UUID, db: DBSession,
+    limit: int = Query(default=30, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+):
+    """プレイヤーに関する公開活動タイムライン（visibility=public のみ）。"""
+    items = await ActivityService(db).player_activity(player_id, limit=limit, offset=offset)
+    return Response(data=items, meta=None)
 
 
 # ── Career / Achievements / Ratings ─────────────────────────────────────────

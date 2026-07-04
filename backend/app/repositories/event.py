@@ -78,17 +78,38 @@ class EventRepository(BaseRepository[DomainEvent]):
         await self._db.flush()
         return event.dispatch_attempts >= MAX_DISPATCH_ATTEMPTS
 
-    # ── 読み取り（監査/活動ビュー・P2でUI化） ──────────────────────────
-    async def list_by_entity(
-        self, entity_type: str, entity_id: uuid.UUID,
-        *, visibility: Optional[str] = None, limit: int = 50, offset: int = 0,
+    # ── 読み取り: 監査（internal限定 / ADR-0011） ─────────────────────────
+    async def list_audit(
+        self, *, entity_type: Optional[str] = None, entity_id: Optional[uuid.UUID] = None,
+        actor_id: Optional[uuid.UUID] = None, event_type: Optional[str] = None,
+        limit: int = 50, offset: int = 0,
     ) -> list[DomainEvent]:
-        q = select(DomainEvent).where(
-            DomainEvent.entity_type == entity_type,
-            DomainEvent.entity_id == entity_id,
-        )
-        if visibility:
-            q = q.where(DomainEvent.visibility == visibility)
+        """監査ビュー。**visibility='internal' に限定**（公開イベントは含めない）。"""
+        q = select(DomainEvent).where(DomainEvent.visibility == "internal")
+        if entity_type:
+            q = q.where(DomainEvent.entity_type == entity_type)
+        if entity_id:
+            q = q.where(DomainEvent.entity_id == entity_id)
+        if actor_id:
+            q = q.where(DomainEvent.actor_id == actor_id)
+        if event_type:
+            q = q.where(DomainEvent.type == event_type)
+        q = q.order_by(DomainEvent.created_at.desc()).limit(limit).offset(offset)
+        return list((await self._db.execute(q)).scalars().all())
+
+    # ── 読み取り: 活動（public限定・漏洩防止を1箇所で保証 / ADR-0011） ────
+    async def list_activity(
+        self, *, entity_type: Optional[str] = None, entity_id: Optional[uuid.UUID] = None,
+        actor_id: Optional[uuid.UUID] = None, limit: int = 30, offset: int = 0,
+    ) -> list[DomainEvent]:
+        """公開タイムライン。**visibility='public' に限定**（internal 監査は絶対に含めない）。"""
+        q = select(DomainEvent).where(DomainEvent.visibility == "public")
+        if entity_type:
+            q = q.where(DomainEvent.entity_type == entity_type)
+        if entity_id:
+            q = q.where(DomainEvent.entity_id == entity_id)
+        if actor_id:
+            q = q.where(DomainEvent.actor_id == actor_id)
         q = q.order_by(DomainEvent.created_at.desc()).limit(limit).offset(offset)
         return list((await self._db.execute(q)).scalars().all())
 

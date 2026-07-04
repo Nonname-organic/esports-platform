@@ -6,6 +6,7 @@ import { usePlayerAchievements } from "@/features/career/hooks/use-career";
 import type { Player } from "@/types/player";
 import { TournamentTable, type TournamentRow } from "./shared/tournament-table";
 import { EmptyState } from "./shared/empty-state";
+import { PlayerActivity } from "./PlayerActivity";
 
 interface Props {
   player: Player;
@@ -25,6 +26,9 @@ export function PlayerHistory({ player, playerId }: Props) {
 
   return (
     <div className="space-y-8 pt-6">
+      {/* 最近の活動（公開イベント / Activity Feed） */}
+      <PlayerActivity playerId={playerId} />
+
       {/* 大会履歴 */}
       <section>
         <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-white">

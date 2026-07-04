@@ -190,6 +190,11 @@ class TeamService:
             "username": target_user.username,
             "role": member.role.value,
         })
+        # 公開活動: プレイヤー視点の「チーム加入」（Activity Feed / ADR-0011）
+        await EventService(self._db).emit(EventEnvelope.build(
+            type=Ev.PLAYER_TEAM_JOINED, entity_type="player", entity_id=player.id,
+            producer="team", metadata={"team_id": str(team_id), "team_name": team.name},
+        ))
         return {
             "id": member.id,
             "player_id": player.id,

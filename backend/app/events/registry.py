@@ -46,6 +46,9 @@ class Ev:
     TEAM_MEMBER_ROLE_CHANGED= "team.member.role_changed"
     TEAM_OWNER_CHANGED      = "team.owner.changed"
 
+    # Player（公開活動 / Activity Feed）
+    PLAYER_TEAM_JOINED      = "player.team.joined"
+
     # Tournament（監査 + 一部 dispatch）
     TOURNAMENT_CREATED          = "tournament.created"
     TOURNAMENT_UPDATED          = "tournament.updated"
@@ -77,6 +80,9 @@ REGISTRY: dict[str, EventSpec] = {
     Ev.TEAM_MEMBER_REMOVED: _AUDIT,
     Ev.TEAM_MEMBER_ROLE_CHANGED: _AUDIT,
     Ev.TEAM_OWNER_CHANGED: _AUDIT,
+
+    # Player（公開活動 / Activity Feed・consumer不要のため dispatch=False）
+    Ev.PLAYER_TEAM_JOINED: EventSpec(visibility=Visibility.PUBLIC, dispatch=False),
 
     # Tournament（純監査）
     Ev.TOURNAMENT_CREATED: _AUDIT,
