@@ -4,19 +4,25 @@ import Link from "next/link";
 import { Trophy, LogOut, LogIn } from "lucide-react";
 import { useAuthStore } from "@/store/auth-store";
 import { NotificationBell } from "@/components/notification-bell";
+import { GlobalSearch } from "@/components/global-search";
 
 export function Header() {
   const { user, isAuthenticated, logout } = useAuthStore();
 
   return (
     <header className="sticky top-0 z-50 border-b border-white/10 bg-slate-950/80 backdrop-blur-md">
-      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4">
-        <Link href="/" className="flex items-center gap-2 font-bold text-white">
+      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-3 px-4">
+        <Link href="/" className="flex flex-shrink-0 items-center gap-2 font-bold text-white">
           <Trophy className="h-5 w-5 text-brand-500" />
           <span className="hidden sm:block">EsportsPlatform</span>
         </Link>
 
-        <div className="flex items-center gap-2">
+        {/* グローバル検索 */}
+        <div className="flex flex-1 justify-center">
+          <GlobalSearch />
+        </div>
+
+        <div className="flex flex-shrink-0 items-center gap-2">
           <NotificationBell />
           {isAuthenticated && user ? (
             <div className="flex items-center gap-2">
