@@ -39,7 +39,7 @@ function mockLive(prev: LiveStats | null): LiveStats {
   };
 }
 function mockTotals(): PlatformTotals {
-  return { tournaments: 1248, teams: 512, players: 3200, matches: 8900 };
+  return { tournaments: 1248, teams: 512, players: 3200, matches: 8900, champions: 214, mvps: 1680 };
 }
 function isDead(o: StatsOverview): boolean {
   const l = o.live;

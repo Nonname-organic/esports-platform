@@ -10,12 +10,25 @@ export interface LiveStats {
   updated_at: string;
 }
 
-/** Statistics Card 用のプラットフォーム累計。 */
+/** Statistics Card / Social Proof 用のプラットフォーム累計。 */
 export interface PlatformTotals {
   tournaments: number;
   teams: number;
   players: number;
   matches: number;
+  champions?: number; // 追加フィールド（後方互換のため任意）
+  mvps?: number;
+}
+
+/** Winner Highlight 用の直近優勝チーム。 */
+export interface RecentChampion {
+  tournament_id: string;
+  tournament_name: string;
+  game: string;
+  champion_team_id: string | null;
+  champion_team_name: string | null;
+  mvp_name: string | null;
+  ended_at: string | null;
 }
 
 export interface StatsOverview {
@@ -37,4 +50,6 @@ export const liveApi = {
     apiClient.get(`/api/v1/stats/overview`),
   feed: (limit = 20): Promise<ApiResponse<LiveActivityItem[]>> =>
     apiClient.get(`/api/v1/activity/feed?limit=${limit}`),
+  champions: (limit = 3): Promise<ApiResponse<RecentChampion[]>> =>
+    apiClient.get(`/api/v1/stats/champions?limit=${limit}`),
 };

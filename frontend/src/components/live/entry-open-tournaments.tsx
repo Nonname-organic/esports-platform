@@ -8,45 +8,50 @@ import type { ListResponse, TournamentSummary } from "@/types/tournament";
 import { LiveBadge } from "./live-dot";
 import { TournamentLiveCard } from "./tournament-live-card";
 
-/** 「開催中(LIVE)」の大会プレビュー。 */
-export function LiveTournamentPreview({ initial }: { initial: TournamentSummary[] }) {
-  // 60秒ごとに再取得。タブ非表示中は自動停止（refetchIntervalInBackground: false）。
+/** 「エントリー受付中」の大会（受付会場の主役）。締切が近い順。 */
+export function EntryOpenTournaments() {
   const { data } = useQuery({
-    queryKey: ["live", "ongoing-tournaments"],
+    queryKey: ["live", "entry-open"], // Hero の FeaturedEntry とキャッシュ共有
     queryFn: async () => {
       const res = await apiClient.get<ListResponse<TournamentSummary>>(
-        "/api/v1/tournaments?status=ongoing&limit=3",
+        "/api/v1/tournaments?status=registration_open&limit=12",
       );
       return res.data;
     },
-    initialData: initial,
     refetchInterval: 60000,
     refetchIntervalInBackground: false,
     staleTime: 30000,
   });
 
-  const tournaments = (data ?? []).slice(0, 3);
-  if (tournaments.length === 0) return null;
+  const list = (data ?? [])
+    .slice()
+    .sort((a, b) => {
+      const ta = a.registration_end_at ? new Date(a.registration_end_at).getTime() : Infinity;
+      const tb = b.registration_end_at ? new Date(b.registration_end_at).getTime() : Infinity;
+      return ta - tb;
+    })
+    .slice(0, 3);
+
+  if (list.length === 0) return null;
 
   return (
     <section>
       <div className="mb-4 flex items-center justify-between">
         <h2 className="flex items-center gap-2 text-lg font-bold text-white">
-          <span className="text-red-400">開催中</span>の大会
-          <LiveBadge />
+          <span className="text-green-400">エントリー受付中</span>
+          <LiveBadge label="OPEN" />
         </h2>
         <Link
-          href="/tournaments?status=ongoing"
-          className="flex items-center gap-1 text-sm text-brand-400 hover:text-brand-300 transition-colors"
+          href="/tournaments?status=registration_open"
+          className="flex items-center gap-1 text-sm text-green-400 hover:text-green-300 transition-colors"
         >
           すべて見る
           <ChevronRight className="h-3.5 w-3.5" />
         </Link>
       </div>
-
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {tournaments.map((t) => (
-          <TournamentLiveCard key={t.id} t={t} mode="live" />
+        {list.map((t) => (
+          <TournamentLiveCard key={t.id} t={t} mode="entry" />
         ))}
       </div>
     </section>

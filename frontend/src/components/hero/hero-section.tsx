@@ -7,6 +7,7 @@ import { useRelativeSeconds } from "@/features/live/hooks/use-relative-seconds";
 import { AnimatedNumber } from "@/components/live/animated-number";
 import { LiveDot } from "@/components/live/live-dot";
 import { HeroBackgroundVideo } from "./hero-background-video";
+import { FeaturedEntry } from "./featured-entry";
 
 export function HeroSection() {
   const { live, lastUpdated } = useLive();
@@ -64,6 +65,9 @@ export function HeroSection() {
             大会へ参加する
           </Link>
         </div>
+
+        {/* 受付中の目玉大会（締切が最も近い） */}
+        <FeaturedEntry />
       </div>
 
       {/* スクロール誘導 */}
