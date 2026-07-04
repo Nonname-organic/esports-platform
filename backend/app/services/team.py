@@ -17,6 +17,7 @@ from app.models.user import User
 from app.repositories.team import TeamMemberRepository, TeamRepository
 from app.schemas.team import AddMemberRequest, TeamCreate, TeamUpdate
 from app.core.storage import resign_stored_url
+from app.events import Ev, EventEnvelope, EventService
 
 
 class TeamService:
@@ -24,6 +25,13 @@ class TeamService:
         self._db = db
         self._repo = TeamRepository(db)
         self._member_repo = TeamMemberRepository(db)
+
+    async def _emit(self, event_type: str, entity_id, *, before=None, after=None, metadata=None) -> None:
+        """ドメインイベントを同一Txで記録（ADR-0008）。actor/trace はコンテキストが自動補完。"""
+        await EventService(self._db).emit(EventEnvelope.build(
+            type=event_type, entity_type="team", entity_id=entity_id,
+            producer="team", before=before, after=after, metadata=metadata,
+        ))
 
     # ── 権限チェック ──────────────────────────────────────────────────────────
 
@@ -88,6 +96,10 @@ class TeamService:
                 joined_at=datetime.now(timezone.utc),
             )
 
+        await self._emit(Ev.TEAM_CREATED, team.id, after={
+            "name": team.name, "tag": team.tag,
+            "game": team.game.value if hasattr(team.game, "value") else str(team.game),
+        })
         return team
 
     async def update_team(self, team_id: uuid.UUID, data: TeamUpdate, current_user: User) -> Team:
@@ -101,7 +113,12 @@ class TeamService:
         if "tag" in updates:
             updates["tag"] = updates["tag"].upper()
 
-        return await self._repo.update(team, **updates)
+        before = {k: getattr(team, k, None) for k in updates if isinstance(getattr(team, k, None), (str, int, float, bool, type(None)))}
+        team = await self._repo.update(team, **updates)
+        after = {k: getattr(team, k, None) for k in before}
+        await self._emit(Ev.TEAM_UPDATED, team.id, before=before, after=after,
+                         metadata={"fields": list(updates.keys())})
+        return team
 
     async def delete_team(self, team_id: uuid.UUID, current_user: User) -> None:
         team = await self.get_team(team_id)
@@ -168,6 +185,11 @@ class TeamService:
             joined_at=datetime.now(timezone.utc),
         )
 
+        await self._emit(Ev.TEAM_MEMBER_ADDED, team_id, after={
+            "player_id": str(player.id),
+            "username": target_user.username,
+            "role": member.role.value,
+        })
         return {
             "id": member.id,
             "player_id": player.id,
@@ -208,3 +230,4 @@ class TeamService:
             raise ForbiddenError("チームオーナーは脱退できません。先に所有権を移転してください")
 
         await self._member_repo.soft_delete(member)
+        await self._emit(Ev.TEAM_MEMBER_REMOVED, team_id, after={"player_id": str(player_id)})

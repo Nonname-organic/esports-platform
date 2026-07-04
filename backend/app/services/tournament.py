@@ -26,6 +26,20 @@ from app.schemas.tournament import (
     TournamentUpdate,
 )
 from app.core.storage import resign_stored_url
+from app.events import Ev, EventEnvelope, EventService
+
+
+def _is_scalar(v) -> bool:
+    return isinstance(v, (str, int, float, bool)) or v is None or hasattr(v, "value")
+
+
+def _scalar(v):
+    """イベント payload 用にスカラー化（Enum は .value、Decimal/日時は str）。"""
+    if v is None or isinstance(v, (str, int, float, bool)):
+        return v
+    if hasattr(v, "value"):  # Enum
+        return v.value
+    return str(v)
 
 
 class TournamentService:
@@ -34,6 +48,13 @@ class TournamentService:
         self._ranking_repo = RankingRepository(db)
         self._cache = cache
         self._db = db
+
+    async def _emit(self, event_type: str, entity_id, *, before=None, after=None, metadata=None) -> None:
+        """ドメインイベントを同一Txで記録（ADR-0008）。actor/trace はコンテキストが自動補完。"""
+        await EventService(self._db).emit(EventEnvelope.build(
+            type=event_type, entity_type="tournament", entity_id=entity_id,
+            producer="tournament", before=before, after=after, metadata=metadata,
+        ))
 
     async def create(self, data: TournamentCreate, organizer: User) -> Tournament:
         import re
@@ -55,6 +76,11 @@ class TournamentService:
             slug=slug,
             organizer_id=organizer.id,
         )
+        await self._emit(Ev.TOURNAMENT_CREATED, tournament.id, after={
+            "name": tournament.name,
+            "game": tournament.game.value if hasattr(tournament.game, "value") else str(tournament.game),
+            "format": tournament.format.value if hasattr(tournament.format, "value") else str(tournament.format),
+        })
         await self._cache.delete_pattern("cache:tournament:list:*")
         return tournament
 
@@ -80,7 +106,13 @@ class TournamentService:
             raise ForbiddenError("この大会を編集する権限がありません")
 
         update_data = data.model_dump(exclude_none=True)
+        # 変更対象フィールドのスカラー値のみ before に記録（差分・PII非対象 / ADR-0008）
+        keys = [k for k in update_data if _is_scalar(getattr(tournament, k, None))]
+        before = {k: _scalar(getattr(tournament, k, None)) for k in keys}
         tournament = await self._repo.update(tournament, **update_data)
+        after = {k: _scalar(getattr(tournament, k, None)) for k in keys}
+        await self._emit(Ev.TOURNAMENT_UPDATED, tournament.id, before=before, after=after,
+                         metadata={"fields": list(update_data.keys())})
 
         await self._cache.delete(
             CacheKeys.TOURNAMENT_DETAIL.replace("{id}", str(tournament_id))
@@ -142,11 +174,17 @@ class TournamentService:
             )
 
         if tournament.format == TournamentFormat.SINGLE_ELIMINATION:
-            return await self._generate_single_elimination(tournament, registrations)
+            result = await self._generate_single_elimination(tournament, registrations)
         elif tournament.format == TournamentFormat.ROUND_ROBIN:
-            return await self._generate_round_robin(tournament, registrations)
+            result = await self._generate_round_robin(tournament, registrations)
         else:
             raise BusinessRuleError(f"{tournament.format} のブラケット自動生成は未対応です")
+
+        await self._emit(Ev.TOURNAMENT_BRACKET_GENERATED, tournament.id, after={
+            "format": _scalar(tournament.format),
+            "teams": len(registrations),
+        })
+        return result
 
     async def _generate_single_elimination(
         self, tournament: Tournament, registrations: list
@@ -342,9 +380,21 @@ class TournamentService:
 
         # 主催者は任意のステータスへ手動変更できる。
         # 手動変更後は status_locked=True にし、日程による自動更新の対象外とする。
+        old_status = tournament.status
         tournament = await self._repo.update(
             tournament, status=new_status, status_locked=True
         )
+
+        # 遷移先に応じて1イベントを発火（ADR-0008: 1操作=1イベント）
+        if new_status == TournamentStatus.COMPLETED:
+            event_type = Ev.TOURNAMENT_COMPLETED            # public + dispatch（P1-3でReport）
+        elif old_status == TournamentStatus.DRAFT and new_status == TournamentStatus.REGISTRATION_OPEN:
+            event_type = Ev.TOURNAMENT_PUBLISHED
+        else:
+            event_type = Ev.TOURNAMENT_STATUS_CHANGED
+        await self._emit(event_type, tournament.id,
+                         before={"status": old_status.value}, after={"status": new_status.value})
+
         await self._cache.delete(CacheKeys.TOURNAMENT_DETAIL.replace("{id}", str(tournament_id)))
         return tournament
 
@@ -371,7 +421,16 @@ class TournamentService:
         reg = await self._repo.get_registration_by_id(registration_id)
         if not reg or reg.tournament_id != tournament_id:
             raise NotFoundError("登録", str(registration_id))
-        return await self._repo.update_registration_status(reg, status)
+        reg = await self._repo.update_registration_status(reg, status)
+
+        # 承認/却下のみイベント化（dispatch=True → P1-2 で通知 consumer）
+        if status == RegistrationStatus.APPROVED:
+            await self._emit(Ev.TOURNAMENT_REGISTRATION_APPROVED, tournament_id,
+                             after={"registration_id": str(registration_id), "team_id": str(reg.team_id)})
+        elif status == RegistrationStatus.REJECTED:
+            await self._emit(Ev.TOURNAMENT_REGISTRATION_REJECTED, tournament_id,
+                             after={"registration_id": str(registration_id), "team_id": str(reg.team_id)})
+        return reg
 
     async def get_bracket(self, tournament_id: uuid.UUID) -> BracketResponse:
         cache_key = CacheKeys.BRACKET.replace("{tournament_id}", str(tournament_id))
