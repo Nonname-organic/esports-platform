@@ -1,6 +1,5 @@
 import re
 import time
-import uuid
 from typing import Callable
 
 import structlog
@@ -10,9 +9,18 @@ from starlette.requests import Request
 from starlette.responses import Response
 from starlette.types import ASGIApp
 
+from app.core.context import set_request_context
 from app.core.metrics import http_request_duration_seconds, http_requests_total
 
 logger = structlog.get_logger()
+
+
+def _client_ip(request: Request) -> str | None:
+    """CloudFront→nginx 経由のため X-Forwarded-For 先頭を採用。無ければ peer。"""
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.client.host if request.client else None
 
 # Normalise dynamic path segments so Prometheus label cardinality stays bounded.
 # /api/v1/tournaments/3fa85f64-5717-...  →  /api/v1/tournaments/{id}
@@ -43,11 +51,17 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        request_id = str(uuid.uuid4())
+        # 受信 trace（クライアント/エッジ由来）があれば継承、無ければ生成。
+        incoming = request.headers.get("x-request-id") or request.headers.get("x-trace-id")
+        request_id = set_request_context(
+            trace_id=incoming,
+            client_ip=_client_ip(request),
+        )
 
         structlog.contextvars.clear_contextvars()
         structlog.contextvars.bind_contextvars(
             request_id=request_id,
+            trace_id=request_id,
             method=request.method,
             path=request.url.path,
         )

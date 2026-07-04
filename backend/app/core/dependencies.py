@@ -58,6 +58,9 @@ async def get_current_user(
     user = result.scalar_one_or_none()
     if user is None:
         raise UnauthorizedError("ユーザーが存在しないか無効化されています")
+    # イベント/監査が actor を引数無しで取得できるよう、リクエストコンテキストへ載せる。
+    from app.core.context import set_actor
+    set_actor(str(user.id))
     return user
 
 
