@@ -18,3 +18,4 @@
 | [0007](0007-outbox-retry-and-terminal-failure.md) | Outbox 再試行上限(10) と Terminal Failure 方針 | Accepted |
 | [0008](0008-event-emission-policy.md) | Event Emission Policy（発火場所/命名/タイミング/payload の共通ルール） | Accepted |
 | [0009](0009-report-generation-pipeline.md) | Report Generation Pipeline（Event経由のみ・Aggregator集計/Generator組み立ての分離） | Accepted |
+| [0010](0010-notification-preference-architecture.md) | Notification Preference Architecture（PreferenceServiceをSSOT・JSONB隠蔽） | Accepted |
