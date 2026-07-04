@@ -22,6 +22,8 @@ def _title(e: DomainEvent) -> str:
         return f"「{m.get('team_name', 'チーム')}」に加入しました"
     if e.type == Ev.TOURNAMENT_COMPLETED:
         return f"「{m.get('tournament_name', '大会')}」が終了しました"
+    if e.type == Ev.TEAM_ACHIEVEMENT_UPDATED:
+        return f"「{m.get('tournament_name', '大会')}」で実績を更新しました"
     return e.type
 
 
@@ -34,6 +36,11 @@ class ActivityService:
         events = await self._repo.list_activity(
             entity_type="player", entity_id=player_id, limit=limit, offset=offset,
         )
+        return [self._to_item(e) for e in events]
+
+    async def global_activity(self, *, limit: int = 20, offset: int = 0) -> list[dict]:
+        """プラットフォーム全体の公開活動タイムライン（Live Activity / 新しい順）。"""
+        events = await self._repo.list_activity(limit=limit, offset=offset)
         return [self._to_item(e) for e in events]
 
     @staticmethod

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Trophy, Zap, Users, ChevronRight } from "lucide-react";
 import { serverFetch } from "@/lib/api-client";
-import { TournamentCard } from "@/features/tournaments/components/tournament-card";
+import { LandingLive } from "@/components/live/landing-live";
 import type { ListResponse, TournamentSummary } from "@/types/tournament";
 
 // ISR: 5分ごとに再生成
@@ -59,6 +59,9 @@ export default async function HomePage() {
           </Link>
         </div>
       </section>
+
+      {/* ライブ体験（ステータスバー → 統計カード → 開催中プレビュー → 右下フィード） */}
+      <LandingLive initialFeatured={featured} />
 
       {/* 特徴 */}
       <section className="mb-20">
@@ -123,26 +126,6 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* 開催中の大会 */}
-      {featured.length > 0 && (
-        <section>
-          <div className="mb-6 flex items-center justify-between">
-            <h2 className="text-xl font-bold text-white">開催中の大会</h2>
-            <Link
-              href="/tournaments?status=ongoing"
-              className="flex items-center gap-1 text-sm text-brand-400 hover:text-brand-300"
-            >
-              すべて見る
-              <ChevronRight className="h-3.5 w-3.5" />
-            </Link>
-          </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {featured.map((t) => (
-              <TournamentCard key={t.id} tournament={t} />
-            ))}
-          </div>
-        </section>
-      )}
     </div>
   );
 }

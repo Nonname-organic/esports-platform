@@ -1,8 +1,8 @@
 from fastapi import APIRouter
 
 from app.api.v1 import (
-    admin, analytics, auth, bot, discord, lfp, lft, matches, notifications, players,
-    rankings, riot, scout, search, tags, teams, tournaments, upload,
+    activity, admin, analytics, auth, bot, discord, lfp, lft, matches, notifications, players,
+    rankings, riot, scout, search, stats, tags, teams, tournaments, upload,
 )
 
 api_router = APIRouter(prefix="/api/v1")
@@ -25,3 +25,5 @@ api_router.include_router(notifications.router)
 api_router.include_router(discord.router)
 api_router.include_router(riot.router)
 api_router.include_router(bot.router)
+api_router.include_router(stats.router)
+api_router.include_router(activity.router)

@@ -42,3 +42,38 @@
     border-radius: 2px;
   }
 }
+
+/* ── Live Experience（ライブ感）用モーション ─────────────────────────────── */
+@layer utilities {
+  /* LIVEドット: ゆっくり点滅 + 外側の波紋 */
+  @keyframes live-blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  @keyframes live-ping {
+    0% { transform: scale(1); opacity: 0.55; }
+    75%, 100% { transform: scale(2.4); opacity: 0; }
+  }
+  .animate-live-blink { animation: live-blink 1.8s ease-in-out infinite; }
+  .animate-live-ping { animation: live-ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite; }
+
+  /* 数値更新時の軽いScale + Glow（派手すぎない） */
+  @keyframes count-flash {
+    0% { transform: scale(1.12); filter: drop-shadow(0 0 8px rgba(34, 197, 94, 0.7)); }
+    100% { transform: scale(1); filter: none; }
+  }
+  .count-flash { animation: count-flash 0.6s ease-out; }
+
+  /* Live Activity の項目挿入（Fade + Slide up） */
+  @keyframes live-enter {
+    0% { opacity: 0; transform: translateY(6px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  .animate-live-enter { animation: live-enter 0.4s ease-out; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-live-blink, .animate-live-ping, .count-flash, .animate-live-enter {
+      animation: none !important;
+    }
+  }
+}
