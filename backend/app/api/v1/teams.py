@@ -2,10 +2,12 @@ import uuid
 from typing import Optional
 
 from fastapi import APIRouter, Query
+from pydantic import BaseModel, Field
 
 from app.core.dependencies import Cache, CurrentUser, DBSession
 from app.models.enums import GameType
 from app.schemas.common import ListResponse, Meta, Response
+from app.services.sponsor_service import SponsorService
 from app.schemas.team import (
     AddMemberRequest,
     TeamCreate,
@@ -82,6 +84,60 @@ async def list_my_teams(db: DBSession, cache: Cache, current_user: CurrentUser):
     service = TeamService(db, cache)
     teams = await service.get_my_teams(current_user.id)
     return Response(data=[_team_summary(t) for t in teams], meta=None)
+
+
+# ── スポンサー（機能⑦） ──────────────────────────────────────────────────────
+class SponsorInput(BaseModel):
+    name: str = Field(..., max_length=100)
+    logo_url: Optional[str] = None
+    url: Optional[str] = None
+    sponsor_type: Optional[str] = Field(None, max_length=30)
+    display_order: int = 0
+    contract_start: Optional[str] = None
+    contract_end: Optional[str] = None
+
+
+class SponsorUpdate(BaseModel):
+    name: Optional[str] = Field(None, max_length=100)
+    logo_url: Optional[str] = None
+    url: Optional[str] = None
+    sponsor_type: Optional[str] = Field(None, max_length=30)
+    display_order: Optional[int] = None
+    contract_start: Optional[str] = None
+    contract_end: Optional[str] = None
+
+
+class ReorderRequest(BaseModel):
+    ordered_ids: list[uuid.UUID]
+
+
+@router.get("/{team_id}/sponsors", response_model=Response[list[dict]])
+async def list_sponsors(team_id: uuid.UUID, db: DBSession, cache: Cache):
+    """スポンサー一覧（公開）。"""
+    return Response(data=await SponsorService(db, cache).list(team_id), meta=None)
+
+
+@router.post("/{team_id}/sponsors", response_model=Response[dict], status_code=201)
+async def create_sponsor(team_id: uuid.UUID, data: SponsorInput, db: DBSession, cache: Cache, current_user: CurrentUser):
+    item = await SponsorService(db, cache).create(team_id, current_user, data.model_dump())
+    return Response(data=item, meta=None)
+
+
+@router.patch("/{team_id}/sponsors/reorder", response_model=Response[list[dict]])
+async def reorder_sponsors(team_id: uuid.UUID, data: ReorderRequest, db: DBSession, cache: Cache, current_user: CurrentUser):
+    items = await SponsorService(db, cache).reorder(team_id, current_user, data.ordered_ids)
+    return Response(data=items, meta=None)
+
+
+@router.patch("/{team_id}/sponsors/{sponsor_id}", response_model=Response[dict])
+async def update_sponsor(team_id: uuid.UUID, sponsor_id: uuid.UUID, data: SponsorUpdate, db: DBSession, cache: Cache, current_user: CurrentUser):
+    item = await SponsorService(db, cache).update(team_id, sponsor_id, current_user, data.model_dump(exclude_unset=True))
+    return Response(data=item, meta=None)
+
+
+@router.delete("/{team_id}/sponsors/{sponsor_id}", status_code=204)
+async def delete_sponsor(team_id: uuid.UUID, sponsor_id: uuid.UUID, db: DBSession, cache: Cache, current_user: CurrentUser):
+    await SponsorService(db, cache).delete(team_id, sponsor_id, current_user)
 
 
 @router.get("/{team_id}/audit", response_model=Response[list[dict]])

@@ -1,6 +1,7 @@
 import { Trophy, TrendingUp, Zap, Award } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { TeamStats, Team } from "@/types/team";
+import { TeamSponsors } from "./team-sponsors";
 
 interface OverviewTabProps {
   team: Team;
@@ -119,6 +120,9 @@ export function OverviewTab({ team, stats }: OverviewTabProps) {
           </dl>
         </section>
       )}
+
+      {/* スポンサー */}
+      <TeamSponsors teamId={String(team.id)} />
     </div>
   );
 }
