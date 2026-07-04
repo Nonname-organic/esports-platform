@@ -398,6 +398,24 @@ class TournamentService:
         await self._cache.delete(CacheKeys.TOURNAMENT_DETAIL.replace("{id}", str(tournament_id)))
         return tournament
 
+    async def get_report(self, tournament_id: uuid.UUID):
+        """生成済み大会レポートを取得（無ければ None）。"""
+        from app.repositories.tournament_report import TournamentReportRepository
+        return await TournamentReportRepository(self._db).get_by_tournament(tournament_id)
+
+    async def request_report_generation(self, tournament_id: uuid.UUID, current_user: User) -> None:
+        """レポート生成を要求（同期生成せず tournament.completed を emit / ADR-0009）。"""
+        tournament = await self._repo.get_by_id(tournament_id)
+        if not tournament:
+            raise NotFoundError("大会", str(tournament_id))
+        if current_user.role != UserRole.ADMIN and tournament.organizer_id != current_user.id:
+            raise ForbiddenError("レポート生成の権限がありません")
+        if tournament.status != TournamentStatus.COMPLETED:
+            raise BusinessRuleError("完了した大会のみレポートを生成できます")
+        # 同期生成せず、同じイベントで非同期生成（Worker の ReportConsumer が拾う）
+        await self._emit(Ev.TOURNAMENT_COMPLETED, tournament.id,
+                         after={"status": tournament.status.value}, metadata={"regenerate": True})
+
     async def list_registrations(self, tournament_id: uuid.UUID, current_user: User) -> list:
         tournament = await self._repo.get_by_id(tournament_id)
         if not tournament:

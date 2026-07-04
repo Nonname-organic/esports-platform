@@ -44,6 +44,7 @@ from app.models.analytics import (
 )
 from app.models.audit_log import AuditLog
 from app.models.domain_event import DomainEvent
+from app.models.tournament_report import TournamentReport
 from app.models.scout import ScoutProfile, RecruitmentPost, RecruitmentApplication
 from app.models.discord import DiscordServer, DiscordChannel, DiscordLink
 from app.models.bot_ops import CommandMetric, BotErrorLog, MatchDispute, MatchEvidence
@@ -64,6 +65,7 @@ __all__ = [
     "RiotMatch",
     "AuditLog",
     "DomainEvent",
+    "TournamentReport",
     "Base",
     "TimestampMixin",
     "UUIDMixin",

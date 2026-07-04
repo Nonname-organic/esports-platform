@@ -243,10 +243,12 @@ async def outbox_relay_loop() -> None:
     from app.events.dispatcher import InProcessDispatcher
     from app.events.relay import OutboxRelay
     from app.notifications.consumer import NotificationConsumer
+    from app.reports.consumer import ReportConsumer
 
     cache = RedisCache(await get_redis())
     dispatcher = InProcessDispatcher(consumers=[
         NotificationConsumer(cache),   # P1-2: Notification Event Matrix に従い配信
+        ReportConsumer(),              # P1-3: tournament.completed → レポート生成
     ])
     worker_id = f"{socket.gethostname()}:{os.getpid()}"[:64]
     relay = OutboxRelay(dispatcher, worker_id)

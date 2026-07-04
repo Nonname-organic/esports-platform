@@ -159,6 +159,33 @@ async def delete_tournament(
     await service.delete(tournament_id, current_user)
 
 
+# ── 大会終了レポート（ADR-0009: Event経由で非同期生成・APIは読むだけ） ────────
+@router.get("/{tournament_id}/report")
+async def get_tournament_report(tournament_id: uuid.UUID, db: DBSession, cache: Cache):
+    """生成済みの大会終了レポートを返す（未生成は404）。"""
+    service = TournamentService(db, cache)
+    report = await service.get_report(tournament_id)
+    if not report:
+        raise NotFoundError("レポート", str(tournament_id))
+    return {"data": {
+        "tournament_id": str(report.tournament_id),
+        "data": report.data,
+        "markdown": report.markdown,
+        "version": report.version,
+        "generated_at": report.generated_at.isoformat(),
+    }, "meta": None}
+
+
+@router.post("/{tournament_id}/report/generate", status_code=202)
+async def generate_tournament_report(
+    tournament_id: uuid.UUID, db: DBSession, cache: Cache, current_user: OrganizerUser,
+):
+    """レポート生成を要求（同期生成しない・Workerが非同期生成）。"""
+    service = TournamentService(db, cache)
+    await service.request_report_generation(tournament_id, current_user)
+    return {"data": {"status": "queued"}, "meta": None}
+
+
 @router.get("/{tournament_id}/registrations", response_model=Response[list[RegistrationInfo]])
 async def list_registrations(
     tournament_id: uuid.UUID, db: DBSession, cache: Cache, current_user: OrganizerUser,
