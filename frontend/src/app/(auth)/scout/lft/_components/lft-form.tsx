@@ -15,9 +15,9 @@ export const ACTIVITY_TIMES = ["平日昼", "平日夜", "土日昼", "土日夜
 
 export const VALORANT_AGENTS: { role: string; agents: string[] }[] = [
   { role: "Duelist",    agents: ["Jett", "Raze", "Reyna", "Phoenix", "Yoru", "Neon", "Iso", "Waylay"] },
-  { role: "Initiator",  agents: ["Sova", "Breach", "Skye", "KAY/O", "Fade", "Gekko"] },
+  { role: "Initiator",  agents: ["Sova", "Breach", "Skye", "KAY/O", "Fade", "Gekko", "Tejo"] },
   { role: "Controller", agents: ["Brimstone", "Viper", "Omen", "Astra", "Harbor", "Clove"] },
-  { role: "Sentinel",   agents: ["Sage", "Cypher", "Killjoy", "Chamber", "Deadlock", "Vyse"] },
+  { role: "Sentinel",   agents: ["Sage", "Cypher", "Killjoy", "Chamber", "Deadlock", "Vyse", "Veto"] },
 ];
 
 const schema = z.object({
