@@ -231,6 +231,34 @@ async def tournament_status_loop() -> None:
         await asyncio.sleep(60)
 
 
+async def outbox_relay_loop() -> None:
+    """domain_events(未dispatch) を拾って Dispatcher へ fan-out（P0-4 Transactional Outbox）。
+
+    現在 consumer は未登録（純監査イベントは dispatch 済み扱い）。P1 で Notification/Report
+    consumer を register する。
+    """
+    import os
+    import socket
+
+    from app.events.dispatcher import InProcessDispatcher
+    from app.events.relay import OutboxRelay
+
+    dispatcher = InProcessDispatcher(consumers=[])  # P1-2/P1-3 で consumer 登録
+    worker_id = f"{socket.gethostname()}:{os.getpid()}"[:64]
+    relay = OutboxRelay(dispatcher, worker_id)
+
+    await asyncio.sleep(10)
+    while True:
+        try:
+            async with AsyncSessionLocal() as db:
+                n = await relay.run_once(db, limit=100)
+                if n:
+                    logger.info(f"outbox relay dispatched {n} event(s)")
+        except Exception as e:
+            logger.error(f"outbox relay loop error: {e}")
+        await asyncio.sleep(2)
+
+
 async def main() -> None:
     consumer = SQSConsumer()
 
@@ -241,8 +269,13 @@ async def main() -> None:
     signal.signal(signal.SIGTERM, handle_signal)
     signal.signal(signal.SIGINT, handle_signal)
 
-    # キュー消費 / Riot定期同期 / 大会ステータス自動更新 を並行実行
-    await asyncio.gather(consumer.run(), riot_auto_sync_loop(), tournament_status_loop())
+    # キュー消費 / Riot定期同期 / 大会ステータス自動更新 / Outbox Relay を並行実行
+    await asyncio.gather(
+        consumer.run(),
+        riot_auto_sync_loop(),
+        tournament_status_loop(),
+        outbox_relay_loop(),
+    )
 
 
 if __name__ == "__main__":

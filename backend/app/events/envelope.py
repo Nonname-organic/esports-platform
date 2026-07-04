@@ -115,3 +115,27 @@ class EventEnvelope(BaseModel):
             correlation_id=get_correlation_id(),
             idempotency_key=idempotency_key,
         )
+
+    @classmethod
+    def from_orm_row(cls, r: Any) -> "EventEnvelope":
+        """DomainEvent 行から Envelope を復元（OutboxRelay が consumer へ渡す用）。"""
+        return cls(
+            event_id=str(r.id),
+            event_version=r.event_version,
+            type=r.type,
+            occurred_at=r.occurred_at,
+            actor_id=str(r.actor_id) if r.actor_id else None,
+            actor_type=ActorType(r.actor_type),
+            actor_ip=str(r.actor_ip) if r.actor_ip else None,
+            producer=r.producer,
+            service=r.service,
+            entity_type=r.entity_type,
+            entity_id=str(r.entity_id),
+            before=r.before,
+            after=r.after,
+            metadata=r.event_metadata,
+            trace_id=r.trace_id,
+            correlation_id=r.correlation_id,
+            idempotency_key=r.idempotency_key,
+            visibility=Visibility(r.visibility),
+        )

@@ -92,6 +92,7 @@ services:
     environment:
       - REDIS_HOST=redis
       - DB_HOST=postgres
+      - SERVICE_NAME=worker  # EventEnvelope.service を worker として記録（P0-2/P0-4）
     depends_on:
       postgres:
         condition: service_healthy
