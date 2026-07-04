@@ -61,6 +61,15 @@ class TeamService:
     async def get_my_teams(self, user_id: uuid.UUID) -> list[Team]:
         return await self._repo.list_my_teams(user_id)
 
+    async def get_audit(self, team_id: uuid.UUID, current_user: User, *, limit: int = 50, offset: int = 0) -> list[dict]:
+        """チーム監査ログ（owner/captain/Admin のみ / ADR-0012）。"""
+        team = await self.get_team(team_id)
+        await self._require_owner_or_captain(team, current_user)
+        from app.services.audit_service import AuditService
+        return await AuditService(self._db).list(
+            entity_type="team", entity_id=team_id, limit=limit, offset=offset,
+        )
+
     async def get_team(self, team_id: uuid.UUID) -> Team:
         team = await self._repo.get_by_id(team_id)
         if not team or not team.is_active:

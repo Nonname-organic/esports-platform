@@ -1,14 +1,31 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 from app.core.dependencies import AdminUser, DBSession, Cache
 from app.schemas.common import Response
+from app.services.audit_service import AuditService
 from sqlalchemy import select, func, text
 from app.models.user import User
 from app.models.tournament import Tournament
 from app.models.match import Match
 import datetime
+from typing import Optional
 
 router = APIRouter(prefix="/admin", tags=["管理"])
+
+
+@router.get("/audit", response_model=Response[list[dict]])
+async def get_audit_log(
+    db: DBSession, current_user: AdminUser,
+    entity_type: Optional[str] = Query(default=None),
+    action: Optional[str] = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+):
+    """全体監査ログ（Admin限定 / ADR-0012）。"""
+    items = await AuditService(db).list(
+        entity_type=entity_type, action=action, limit=limit, offset=offset,
+    )
+    return Response(data=items, meta=None)
 
 
 @router.get("/dashboard")

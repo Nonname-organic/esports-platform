@@ -84,6 +84,18 @@ async def list_my_teams(db: DBSession, cache: Cache, current_user: CurrentUser):
     return Response(data=[_team_summary(t) for t in teams], meta=None)
 
 
+@router.get("/{team_id}/audit", response_model=Response[list[dict]])
+async def get_team_audit(
+    team_id: uuid.UUID, db: DBSession, cache: Cache, current_user: CurrentUser,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+):
+    """チーム監査ログ（owner/captain/Admin のみ / ADR-0012）。"""
+    service = TeamService(db, cache)
+    items = await service.get_audit(team_id, current_user, limit=limit, offset=offset)
+    return Response(data=items, meta=None)
+
+
 @router.get("/{team_id}/stats", response_model=Response[dict])
 async def get_team_stats(team_id: uuid.UUID, db: DBSession, cache: Cache):
     """チーム統計（暫定: ゼロ値を返す）"""

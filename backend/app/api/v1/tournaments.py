@@ -159,6 +159,18 @@ async def delete_tournament(
     await service.delete(tournament_id, current_user)
 
 
+# ── 大会監査ログ（ADR-0012: organizer/Admin のみ・internal限定） ──────────────
+@router.get("/{tournament_id}/audit", response_model=Response[list[dict]])
+async def get_tournament_audit(
+    tournament_id: uuid.UUID, db: DBSession, cache: Cache, current_user: OrganizerUser,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+):
+    service = TournamentService(db, cache)
+    items = await service.get_audit(tournament_id, current_user, limit=limit, offset=offset)
+    return Response(data=items, meta=None)
+
+
 # ── 大会終了レポート（ADR-0009: Event経由で非同期生成・APIは読むだけ） ────────
 @router.get("/{tournament_id}/report")
 async def get_tournament_report(tournament_id: uuid.UUID, db: DBSession, cache: Cache):

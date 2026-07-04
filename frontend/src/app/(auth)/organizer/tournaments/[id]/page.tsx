@@ -6,11 +6,13 @@ import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Trophy, ChevronRight, ChevronDown, CheckCircle2, XCircle, Clock, Users,
-  Settings, Trash2, Zap, BarChart2, AlertCircle, Shield,
+  Settings, Trash2, Zap, BarChart2, AlertCircle, Shield, History,
   RefreshCw, ExternalLink, FileText, Loader2,
 } from "lucide-react";
 import { tournamentApi, type RegistrationInfo } from "@/features/tournaments/api/tournament-api";
 import { useTeamMembers } from "@/features/teams/hooks/use-teams";
+import { useTournamentAudit } from "@/features/audit/hooks/use-audit";
+import { AuditLogTable } from "@/components/audit-log-table";
 import { cn, formatDate, getGameColor, getStatusLabel } from "@/lib/utils";
 import type { TournamentStatus } from "@/types/tournament";
 
@@ -175,7 +177,7 @@ export default function TournamentManagePage({ params }: { params: Promise<{ id:
   const { id } = use(params);
   const router = useRouter();
   const qc = useQueryClient();
-  const [activeTab, setActiveTab] = useState<"overview" | "registrations" | "bracket" | "settings">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "registrations" | "bracket" | "audit" | "settings">("overview");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const { data: tournamentRes, isLoading, refetch } = useQuery({
@@ -190,6 +192,8 @@ export default function TournamentManagePage({ params }: { params: Promise<{ id:
     select: (res) => res.data,
     enabled: activeTab === "registrations",
   });
+
+  const { data: auditItems, isLoading: auditLoading } = useTournamentAudit(id, activeTab === "audit");
 
   const changeStatus = useMutation({
     mutationFn: (status: TournamentStatus) => tournamentApi.changeStatus(id, status),
@@ -355,6 +359,7 @@ export default function TournamentManagePage({ params }: { params: Promise<{ id:
           { id: "overview", label: "概要", icon: BarChart2 },
           { id: "registrations", label: `参加申請${pendingCount > 0 ? ` (${pendingCount})` : ""}`, icon: Users },
           { id: "bracket", label: "ブラケット", icon: Shield },
+          { id: "audit", label: "監査ログ", icon: History },
           { id: "settings", label: "設定", icon: Settings },
         ].map(({ id: tabId, label, icon: Icon }) => (
           <button
@@ -479,6 +484,14 @@ export default function TournamentManagePage({ params }: { params: Promise<{ id:
               </p>
             )}
           </div>
+        </div>
+      )}
+
+      {/* 監査ログタブ */}
+      {activeTab === "audit" && (
+        <div className="space-y-3">
+          <p className="text-xs text-slate-500">この大会に対する操作履歴（主催者・Admin のみ閲覧可）</p>
+          <AuditLogTable items={auditItems} isLoading={auditLoading} />
         </div>
       )}
 

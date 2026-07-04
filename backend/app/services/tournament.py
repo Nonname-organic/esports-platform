@@ -398,6 +398,18 @@ class TournamentService:
         await self._cache.delete(CacheKeys.TOURNAMENT_DETAIL.replace("{id}", str(tournament_id)))
         return tournament
 
+    async def get_audit(self, tournament_id: uuid.UUID, current_user: User, *, limit: int = 50, offset: int = 0) -> list[dict]:
+        """大会監査ログ（organizer/Admin のみ / ADR-0012）。"""
+        tournament = await self._repo.get_by_id(tournament_id)
+        if not tournament:
+            raise NotFoundError("大会", str(tournament_id))
+        if current_user.role != UserRole.ADMIN and tournament.organizer_id != current_user.id:
+            raise ForbiddenError("監査ログを閲覧する権限がありません")
+        from app.services.audit_service import AuditService
+        return await AuditService(self._db).list(
+            entity_type="tournament", entity_id=tournament_id, limit=limit, offset=offset,
+        )
+
     async def get_report(self, tournament_id: uuid.UUID):
         """生成済み大会レポートを取得（無ければ None）。"""
         from app.repositories.tournament_report import TournamentReportRepository

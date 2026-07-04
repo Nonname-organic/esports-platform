@@ -2,14 +2,28 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Shield, RefreshCw, AlertCircle } from "lucide-react";
+import { Shield, RefreshCw, AlertCircle, History } from "lucide-react";
 import { useAuthStore } from "@/store/auth-store";
 import { useAdminDashboard } from "@/features/admin/hooks/use-admin";
+import { useAdminAudit } from "@/features/audit/hooks/use-audit";
+import { AuditLogTable } from "@/components/audit-log-table";
 import { OverviewCards } from "./_components/overview-cards";
 import { OperationsPanel } from "./_components/operations-panel";
 import { TrendSection } from "./_components/trend-section";
 import { ActivityFeed } from "./_components/activity-feed";
 import { NotificationPanel } from "./_components/notification-panel";
+
+function AdminAuditSection() {
+  const { data: items, isLoading } = useAdminAudit();
+  return (
+    <section className="rounded-2xl border border-white/10 bg-slate-900 p-5">
+      <h2 className="mb-4 flex items-center gap-2 text-sm font-bold text-white">
+        <History className="h-4 w-4 text-brand-400" /> 監査ログ（全体）
+      </h2>
+      <AuditLogTable items={items} isLoading={isLoading} />
+    </section>
+  );
+}
 
 function PageSkeleton() {
   return (
@@ -109,6 +123,9 @@ export default function AdminDashboardPage() {
             <ActivityFeed activities={data.recent_activities} />
             <NotificationPanel />
           </div>
+
+          {/* 監査ログ（全体・Admin限定 / ADR-0012） */}
+          <AdminAuditSection />
 
           {/* フッター */}
           <div className="border-t border-white/5 pt-4 text-center text-xs text-slate-700">

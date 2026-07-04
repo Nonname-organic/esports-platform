@@ -5,8 +5,10 @@ import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Users, UserPlus, Trash2, ChevronRight, AlertCircle, Shield, Loader2 } from "lucide-react";
+import { Users, UserPlus, Trash2, ChevronRight, AlertCircle, Shield, Loader2, History } from "lucide-react";
 import { useTeam, useTeamMembers, useAddMember, useRemoveMember } from "@/features/teams/hooks/use-teams";
+import { useTeamAudit } from "@/features/audit/hooks/use-audit";
+import { AuditLogTable } from "@/components/audit-log-table";
 import { useAuthStore } from "@/store/auth-store";
 import { cn } from "@/lib/utils";
 import type { TeamMember } from "@/types/team";
@@ -214,7 +216,22 @@ export default function TeamMembersPage({ params }: { params: Promise<{ id: stri
           ))
         )}
       </div>
+
+      {/* 監査ログ（owner/captain/Admin のみ / ADR-0012） */}
+      {isOwnerOrCaptain && <TeamAuditSection teamId={id} />}
     </div>
+  );
+}
+
+function TeamAuditSection({ teamId }: { teamId: string }) {
+  const { data: items, isLoading } = useTeamAudit(teamId);
+  return (
+    <section className="mt-8">
+      <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-white">
+        <History className="h-4 w-4 text-brand-400" /> 監査ログ
+      </h2>
+      <AuditLogTable items={items} isLoading={isLoading} />
+    </section>
   );
 }
 
