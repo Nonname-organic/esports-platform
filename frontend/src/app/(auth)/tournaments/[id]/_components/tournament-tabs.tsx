@@ -1,14 +1,15 @@
 import Link from "next/link";
-import { LayoutDashboard, Swords, Trophy, ListOrdered, BarChart2 } from "lucide-react";
+import { LayoutDashboard, Swords, Trophy, ListOrdered, BarChart2, ScrollText } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type TabId = "overview" | "matches" | "bracket" | "standings" | "analytics";
+export type TabId = "overview" | "matches" | "bracket" | "standings" | "rules" | "analytics";
 
 const TABS: Array<{ id: TabId; label: string; icon: React.ElementType }> = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "matches", label: "Matches", icon: Swords },
   { id: "bracket", label: "Bracket", icon: Trophy },
   { id: "standings", label: "Standings", icon: ListOrdered },
+  { id: "rules", label: "Rules", icon: ScrollText },
   { id: "analytics", label: "Analytics", icon: BarChart2 },
 ];
 

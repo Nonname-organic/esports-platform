@@ -86,6 +86,8 @@ class Tournament(UUIDMixin, TimestampMixin, Base):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # 添付ファイル: [{"name": "規約.pdf", "url": "...", "key": "...", "size": 12345, "content_type": "application/pdf"}]
     attachments: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True, default=list)
+    # ルール（Section構造Markdown）: {"sections": [{"id": "general", "title": "...", "body_md": "...", "order": 0}]}
+    rules_doc: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     require_check_in: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     # 主催者が手動でステータスを変更したら True。以降は日程による自動更新の対象外。

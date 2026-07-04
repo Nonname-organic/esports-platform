@@ -12,6 +12,7 @@ import { OverviewTab } from "./_components/overview-tab";
 import { MatchesTab } from "./_components/matches-tab";
 import { BracketTab } from "./_components/bracket-tab";
 import { StandingsTab } from "./_components/standings-tab";
+import { RulesTab } from "./_components/rules-tab";
 import { AnalyticsTab } from "./_components/analytics-tab";
 
 interface Props {
@@ -19,7 +20,7 @@ interface Props {
   searchParams: Promise<{ tab?: string }>;
 }
 
-const VALID_TABS: TabId[] = ["overview", "matches", "bracket", "standings", "analytics"];
+const VALID_TABS: TabId[] = ["overview", "matches", "bracket", "standings", "rules", "analytics"];
 
 function isValidTab(tab: string | undefined): tab is TabId {
   return VALID_TABS.includes(tab as TabId);
@@ -120,6 +121,7 @@ export default async function TournamentDetailPage({ params, searchParams }: Pro
           <BracketTab tournamentId={id} initialBracket={initialBracket} />
         )}
         {activeTab === "standings" && <StandingsTab tournamentId={id} />}
+        {activeTab === "rules" && <RulesTab tournamentId={id} />}
         {activeTab === "analytics" && <AnalyticsTab tournament={tournament} />}
       </Suspense>
     </div>

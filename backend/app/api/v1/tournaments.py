@@ -10,6 +10,7 @@ from app.core.exceptions import BusinessRuleError, NotFoundError
 from app.core.storage import sign_attachments, resign_stored_url
 from app.models.enums import GameType, RegistrationStatus, TournamentStatus
 from app.schemas.common import ListResponse, Meta, Response
+from app.schemas.rules import ApplyTemplateRequest, RulesDocRequest
 from app.schemas.tournament import (
     BracketResponse,
     RegistrationInfo,
@@ -157,6 +158,41 @@ async def delete_tournament(
 ):
     service = TournamentService(db, cache)
     await service.delete(tournament_id, current_user)
+
+
+# ── 大会ルール（機能⑧: Section構造Markdown + テンプレート） ──────────────────
+@router.get("/rules/templates", response_model=Response[list[dict]])
+async def list_rules_templates():
+    """ルールテンプレート一覧（VALORANT標準など）。"""
+    from app.schemas.rules import list_templates
+    return Response(data=list_templates(), meta=None)
+
+
+@router.get("/{tournament_id}/rules", response_model=Response[dict])
+async def get_tournament_rules(tournament_id: uuid.UUID, db: DBSession, cache: Cache):
+    """ルール（Section構造）。未設定なら全固定Sectionの空雛形（公開）。"""
+    service = TournamentService(db, cache)
+    return Response(data=await service.get_rules(tournament_id), meta=None)
+
+
+@router.put("/{tournament_id}/rules", response_model=Response[dict])
+async def update_tournament_rules(
+    tournament_id: uuid.UUID, data: RulesDocRequest,
+    db: DBSession, cache: Cache, current_user: OrganizerUser,
+):
+    """ルールを差し替え保存（organizer/Admin のみ）。"""
+    service = TournamentService(db, cache)
+    return Response(data=await service.update_rules(tournament_id, data.model_dump(), current_user), meta=None)
+
+
+@router.post("/{tournament_id}/rules/apply-template", response_model=Response[dict])
+async def apply_tournament_rules_template(
+    tournament_id: uuid.UUID, data: ApplyTemplateRequest,
+    db: DBSession, cache: Cache, current_user: OrganizerUser,
+):
+    """テンプレートを適用（organizer/Admin のみ）。"""
+    service = TournamentService(db, cache)
+    return Response(data=await service.apply_rules_template(tournament_id, data.template_id, current_user), meta=None)
 
 
 # ── 大会監査ログ（ADR-0012: organizer/Admin のみ・internal限定） ──────────────

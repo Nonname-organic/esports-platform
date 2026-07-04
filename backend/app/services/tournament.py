@@ -410,6 +410,36 @@ class TournamentService:
             entity_type="tournament", entity_id=tournament_id, limit=limit, offset=offset,
         )
 
+    async def get_rules(self, tournament_id: uuid.UUID) -> dict:
+        """ルール（Section構造）を取得。未設定なら全固定Sectionの空雛形を返す。"""
+        from app.schemas.rules import empty_doc
+        tournament = await self._repo.get_by_id(tournament_id)
+        if not tournament:
+            raise NotFoundError("大会", str(tournament_id))
+        return tournament.rules_doc or empty_doc()
+
+    async def update_rules(self, tournament_id: uuid.UUID, doc: dict, current_user: User) -> dict:
+        """ルールを差し替え（organizer/Admin のみ）。固定id以外のSectionは無視。"""
+        from app.schemas.rules import SECTION_IDS
+        tournament = await self._repo.get_by_id(tournament_id)
+        if not tournament:
+            raise NotFoundError("大会", str(tournament_id))
+        if current_user.role != UserRole.ADMIN and tournament.organizer_id != current_user.id:
+            raise ForbiddenError("ルールを編集する権限がありません")
+        sections = [s for s in (doc.get("sections") or []) if s.get("id") in SECTION_IDS]
+        clean = {"sections": sections}
+        await self._repo.update(tournament, rules_doc=clean)
+        await self._cache.delete(CacheKeys.TOURNAMENT_DETAIL.replace("{id}", str(tournament_id)))
+        return clean
+
+    async def apply_rules_template(self, tournament_id: uuid.UUID, template_id: str, current_user: User) -> dict:
+        """テンプレート（VALORANT標準等）を適用（organizer/Admin のみ）。"""
+        from app.schemas.rules import get_template_doc
+        doc = get_template_doc(template_id)
+        if doc is None:
+            raise NotFoundError("テンプレート", template_id)
+        return await self.update_rules(tournament_id, doc, current_user)
+
     async def get_report(self, tournament_id: uuid.UUID):
         """生成済み大会レポートを取得（無ければ None）。"""
         from app.repositories.tournament_report import TournamentReportRepository
