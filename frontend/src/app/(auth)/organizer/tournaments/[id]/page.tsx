@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Trophy, ChevronRight, ChevronDown, CheckCircle2, XCircle, Clock, Users,
-  Settings, Trash2, Zap, BarChart2, AlertCircle, Shield, PlayCircle,
+  Settings, Trash2, Zap, BarChart2, AlertCircle, Shield,
   RefreshCw, ExternalLink, FileText, Loader2,
 } from "lucide-react";
 import { tournamentApi, type RegistrationInfo } from "@/features/tournaments/api/tournament-api";
@@ -273,24 +273,15 @@ export default function TournamentManagePage({ params }: { params: Promise<{ id:
         </div>
       </div>
 
-      {/* ステータスフロー */}
+      {/* ステータス（手動変更） */}
       <div className="mb-6 rounded-2xl border border-white/10 bg-slate-900 p-5">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-sm font-bold text-white">ステータス（自動）</h2>
-          {tournament.status === "draft" ? (
-            <button
-              onClick={() => changeStatus.mutate("registration_open")}
-              disabled={changeStatus.isPending}
-              className="flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2 text-sm font-bold text-white hover:bg-brand-600 disabled:opacity-40 transition-colors"
-            >
-              <PlayCircle className="h-4 w-4" />
-              {changeStatus.isPending ? "公開中..." : "公開する"}
-            </button>
-          ) : tournament.status !== "completed" && tournament.status !== "cancelled" ? (
-            <span className="text-xs text-slate-500">⏱ 日程に応じて自動更新されます</span>
-          ) : null}
+          <h2 className="text-sm font-bold text-white">ステータス</h2>
+          <span className="text-xs text-slate-500">クリックで変更できます</span>
         </div>
-        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+
+        {/* 現在のフロー表示 */}
+        <div className="mb-4 flex items-center gap-2 overflow-x-auto pb-1">
           {STATUS_FLOW.map((s, i) => {
             const isDone = i < currentStepIdx;
             const isActive = i === currentStepIdx;
@@ -311,6 +302,37 @@ export default function TournamentManagePage({ params }: { params: Promise<{ id:
             );
           })}
         </div>
+
+        {/* 手動変更ボタン */}
+        <div className="flex flex-wrap gap-2 border-t border-white/10 pt-4">
+          {STATUS_FLOW.map((s) => {
+            const isCurrent = tournament.status === s.status;
+            return (
+              <button
+                key={s.status}
+                onClick={() => { if (!isCurrent) changeStatus.mutate(s.status); }}
+                disabled={changeStatus.isPending || isCurrent}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors",
+                  isCurrent
+                    ? "cursor-default border-brand-500/50 bg-brand-500/10 text-brand-400"
+                    : "border-white/10 text-slate-400 hover:border-brand-500/40 hover:text-white disabled:opacity-40",
+                )}
+              >
+                <s.icon className="h-3.5 w-3.5" />
+                {isCurrent ? `${s.label}（現在）` : s.label}
+              </button>
+            );
+          })}
+        </div>
+        {changeStatus.isError && (
+          <p className="mt-2 text-xs text-red-400">
+            {changeStatus.error instanceof Error ? changeStatus.error.message : "変更に失敗しました"}
+          </p>
+        )}
+        <p className="mt-3 text-xs text-slate-600">
+          ※ 手動で変更すると、日程による自動更新は行われなくなります。
+        </p>
       </div>
 
       {/* 統計カード */}

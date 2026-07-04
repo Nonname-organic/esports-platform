@@ -212,7 +212,10 @@ async def tournament_status_loop() -> None:
             now = datetime.now(timezone.utc)
             async with AsyncSessionLocal() as db:
                 rows = (
-                    await db.execute(select(Tournament).where(Tournament.status.in_(managed)))
+                    await db.execute(select(Tournament).where(
+                        Tournament.status.in_(managed),
+                        Tournament.status_locked == False,  # 手動変更済みは自動更新しない
+                    ))
                 ).scalars().all()
                 changed = 0
                 for t in rows:

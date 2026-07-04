@@ -340,22 +340,11 @@ class TournamentService:
         if current_user.role != UserRole.ADMIN and tournament.organizer_id != current_user.id:
             raise ForbiddenError("ステータス変更の権限がありません")
 
-        # 有効なステータス遷移チェック
-        valid_transitions = {
-            TournamentStatus.DRAFT: [TournamentStatus.REGISTRATION_OPEN, TournamentStatus.CANCELLED],
-            TournamentStatus.REGISTRATION_OPEN: [TournamentStatus.REGISTRATION_CLOSED, TournamentStatus.CANCELLED],
-            TournamentStatus.REGISTRATION_CLOSED: [TournamentStatus.CHECK_IN, TournamentStatus.ONGOING, TournamentStatus.CANCELLED],
-            TournamentStatus.CHECK_IN: [TournamentStatus.ONGOING, TournamentStatus.CANCELLED],
-            TournamentStatus.ONGOING: [TournamentStatus.COMPLETED, TournamentStatus.CANCELLED],
-            TournamentStatus.COMPLETED: [],
-            TournamentStatus.CANCELLED: [],
-        }
-        if new_status not in valid_transitions.get(tournament.status, []):
-            raise BusinessRuleError(
-                f"{tournament.status.value} から {new_status.value} への変更はできません"
-            )
-
-        tournament = await self._repo.update(tournament, status=new_status)
+        # 主催者は任意のステータスへ手動変更できる。
+        # 手動変更後は status_locked=True にし、日程による自動更新の対象外とする。
+        tournament = await self._repo.update(
+            tournament, status=new_status, status_locked=True
+        )
         await self._cache.delete(CacheKeys.TOURNAMENT_DETAIL.replace("{id}", str(tournament_id)))
         return tournament
 

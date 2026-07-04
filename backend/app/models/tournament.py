@@ -88,6 +88,8 @@ class Tournament(UUIDMixin, TimestampMixin, Base):
     attachments: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True, default=list)
     is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     require_check_in: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # 主催者が手動でステータスを変更したら True。以降は日程による自動更新の対象外。
+    status_locked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     # Relationships
     organizer: Mapped["User"] = relationship("User", back_populates="organized_tournaments")
