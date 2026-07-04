@@ -22,3 +22,4 @@
 | [0011](0011-activity-feed.md) | Activity Feed（public イベントのみ・list_activity で漏洩防止・分離seam） | Accepted |
 | [0012](0012-audit-log-viewing.md) | Audit Log Viewing（list_audit限定・Admin/owner/organizer 権限境界・DTO契約） | Accepted |
 | [0013](0013-search-provider-registry.md) | Search Provider Registry（Provider委譲・SearchServiceは束ねるだけ・共通DTO） | Accepted |
+| [0014](0014-tagging-model.md) | Tagging Model（正規化 tags + ポリモーフィック taggables・横断/検索/整合性） | Accepted |
