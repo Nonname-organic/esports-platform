@@ -16,3 +16,4 @@
 | [0005](0005-provider-registry-pattern.md) | Search / Notification / Report を Provider・Generator・Registry で拡張 | Accepted |
 | [0006](0006-legacy-audit-logs-table.md) | 既存 legacy `audit_logs` は dormant 残置・監査の正は domain_events | Accepted |
 | [0007](0007-outbox-retry-and-terminal-failure.md) | Outbox 再試行上限(10) と Terminal Failure 方針 | Accepted |
+| [0008](0008-event-emission-policy.md) | Event Emission Policy（発火場所/命名/タイミング/payload の共通ルール） | Accepted |
