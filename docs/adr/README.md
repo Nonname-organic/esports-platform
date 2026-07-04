@@ -17,3 +17,4 @@
 | [0006](0006-legacy-audit-logs-table.md) | 既存 legacy `audit_logs` は dormant 残置・監査の正は domain_events | Accepted |
 | [0007](0007-outbox-retry-and-terminal-failure.md) | Outbox 再試行上限(10) と Terminal Failure 方針 | Accepted |
 | [0008](0008-event-emission-policy.md) | Event Emission Policy（発火場所/命名/タイミング/payload の共通ルール） | Accepted |
+| [0009](0009-report-generation-pipeline.md) | Report Generation Pipeline（Event経由のみ・Aggregator集計/Generator組み立ての分離） | Accepted |
