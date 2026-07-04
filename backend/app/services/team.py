@@ -134,6 +134,9 @@ class TeamService:
         if not self._is_owner(team, current_user):
             raise ForbiddenError("チームの削除はオーナーのみ実行できます")
         await self._repo.update(team, is_active=False)
+        # タグの孤児掃除（ADR-0014）
+        from app.services.tag_service import TagService
+        await TagService(self._db).clear_entity("team", team_id)
 
     # ── メンバー管理 ──────────────────────────────────────────────────────────
 

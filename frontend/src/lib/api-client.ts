@@ -179,6 +179,13 @@ export const apiClient = {
       ...init,
     }),
 
+  put: <T>(path: string, body?: unknown, init?: RequestInit) =>
+    request<T>(path, {
+      method: "PUT",
+      body: body != null ? JSON.stringify(body) : undefined,
+      ...init,
+    }),
+
   patch: <T>(path: string, body?: unknown, init?: RequestInit) =>
     request<T>(path, {
       method: "PATCH",

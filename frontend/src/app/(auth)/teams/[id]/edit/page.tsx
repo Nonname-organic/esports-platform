@@ -6,8 +6,9 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Settings, AlertCircle, Loader2 } from "lucide-react";
+import { Settings, AlertCircle, Loader2, Tag as TagIcon } from "lucide-react";
 import { useTeam, useUpdateTeam, useDeleteTeam } from "@/features/teams/hooks/use-teams";
+import { TagEditor } from "@/components/tag-editor";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth-store";
 
@@ -162,6 +163,15 @@ export default function TeamEditPage({ params }: { params: Promise<{ id: string 
           <button type="button" onClick={() => router.back()} className="rounded-xl border border-white/10 px-5 py-3 text-sm text-slate-400 hover:text-white transition-colors">
             キャンセル
           </button>
+        </div>
+
+        {/* タグ（差し替えで即保存・フォーム送信とは独立） */}
+        <div className="rounded-xl border border-white/10 bg-slate-900 p-5">
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-white">
+            <TagIcon className="h-4 w-4 text-brand-400" /> タグ
+          </h2>
+          <p className="mb-3 text-xs text-slate-500">Beginner / Premier / Online など（検索・分類に使われます）</p>
+          <TagEditor entityType="team" entityId={id} />
         </div>
 
         {/* 危険な操作 */}

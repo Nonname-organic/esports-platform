@@ -1,6 +1,7 @@
 import { Shield, Globe, Twitter, Twitch } from "lucide-react";
 import { cn, getGameColor } from "@/lib/utils";
 import type { Team, TeamStats } from "@/types/team";
+import { TeamTags } from "./team-tags";
 
 const ROLE_BADGE: Record<string, string> = {
   player: "bg-brand-500/10 text-brand-400",
@@ -62,6 +63,7 @@ export function TeamHeader({ team, stats }: TeamHeaderProps) {
             {team.description && (
               <p className="mt-1 line-clamp-2 text-sm text-slate-400">{team.description}</p>
             )}
+            <TeamTags teamId={String(team.id)} />
           </div>
 
           {/* ソーシャルリンク */}

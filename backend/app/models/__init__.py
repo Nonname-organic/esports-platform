@@ -46,6 +46,7 @@ from app.models.audit_log import AuditLog
 from app.models.domain_event import DomainEvent
 from app.models.tournament_report import TournamentReport
 from app.models.notification_preference import NotificationPreference
+from app.models.tag import Tag, Taggable
 from app.models.scout import ScoutProfile, RecruitmentPost, RecruitmentApplication
 from app.models.discord import DiscordServer, DiscordChannel, DiscordLink
 from app.models.bot_ops import CommandMetric, BotErrorLog, MatchDispute, MatchEvidence
@@ -68,6 +69,8 @@ __all__ = [
     "DomainEvent",
     "TournamentReport",
     "NotificationPreference",
+    "Tag",
+    "Taggable",
     "Base",
     "TimestampMixin",
     "UUIDMixin",
