@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { tournamentApi } from "@/features/tournaments/api/tournament-api";
 import { ImageUpload } from "@/components/image-upload";
+import { AttachmentUpload } from "@/components/attachment-upload";
 import { cn } from "@/lib/utils";
 import {
   DEFAULT_FORM_VALUES, FORM_STEPS, SUPPORTED_GAMES,
@@ -25,6 +26,13 @@ const schema = z.object({
   name: z.string().min(2, "2文字以上入力してください").max(200),
   subtitle: z.string().max(200).optional(),
   description: z.string().max(5000).optional(),
+  attachments: z.array(z.object({
+    name: z.string(),
+    url: z.string(),
+    key: z.string(),
+    size: z.number().optional(),
+    content_type: z.string().optional(),
+  })).optional(),
   thumbnail_url: z.string().optional(),
   banner_url: z.string().optional(),
   game: z.string().min(1),
@@ -176,6 +184,13 @@ function Step1Basic({ control, register, errors, watch }: any) {
         <div>
           <Label>大会説明</Label>
           <textarea {...register("description")} rows={4} className={inputCls()} placeholder="大会の概要、ルール、参加条件などを記載してください..." />
+        </div>
+        <div>
+          <Label>添付ファイル</Label>
+          <p className="mb-2 text-xs text-slate-500">規約・レギュレーション・会場図など（任意）</p>
+          <Controller name="attachments" control={control} render={({ field }) => (
+            <AttachmentUpload value={field.value ?? []} onChange={field.onChange} />
+          )} />
         </div>
       </SectionCard>
 
@@ -835,6 +850,7 @@ export default function TournamentCreatePage() {
         format: values.format,
         max_teams: values.max_teams,
         description: values.description,
+        attachments: values.attachments,
         prize_pool: values.prize_pool,
         registration_start_at: toIso(values.registration_start_at),
         registration_end_at: toIso(values.registration_end_at),

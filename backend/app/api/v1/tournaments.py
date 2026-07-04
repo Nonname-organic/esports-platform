@@ -38,6 +38,7 @@ def _build_detail(tournament, count: int) -> TournamentDetail:
         banner_url=tournament.banner_url,
         description=tournament.description,
         rules=tournament.rules,
+        attachments=tournament.attachments or [],
         organizer_id=str(tournament.organizer_id),
         registration_start_at=tournament.registration_start_at,
         registration_end_at=tournament.registration_end_at,

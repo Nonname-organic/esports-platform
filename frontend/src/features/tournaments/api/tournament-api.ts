@@ -5,6 +5,7 @@ import type {
   ListResponse,
   TournamentDetail,
   TournamentSummary,
+  TournamentAttachment,
   GameType,
   TournamentStatus,
 } from "@/types/tournament";
@@ -67,8 +68,15 @@ export const tournamentApi = {
     require_check_in?: boolean;
     is_public?: boolean;
     rules?: Record<string, unknown>;
+    attachments?: TournamentAttachment[];
   }): Promise<ApiResponse<TournamentDetail>> =>
     apiClient.post("/api/v1/tournaments", data),
+
+  uploadFile: (file: File): Promise<{ url: string; key: string; name: string; size: number; content_type: string }> => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return apiClient.upload("/api/v1/upload/file?purpose=tournament_attachment", fd);
+  },
 
   update: (
     id: string,
@@ -83,6 +91,7 @@ export const tournamentApi = {
       start_at: string;
       end_at: string;
       is_public: boolean;
+      attachments: TournamentAttachment[];
     }>,
   ): Promise<ApiResponse<TournamentDetail>> =>
     apiClient.patch(`/api/v1/tournaments/${id}`, data),

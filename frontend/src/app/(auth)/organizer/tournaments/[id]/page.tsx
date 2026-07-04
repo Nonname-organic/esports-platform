@@ -5,11 +5,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  Trophy, ChevronRight, CheckCircle2, XCircle, Clock, Users,
+  Trophy, ChevronRight, ChevronDown, CheckCircle2, XCircle, Clock, Users,
   Settings, Trash2, Zap, BarChart2, AlertCircle, Shield, PlayCircle,
-  RefreshCw, ExternalLink, Calendar,
+  RefreshCw, ExternalLink, FileText, Loader2,
 } from "lucide-react";
 import { tournamentApi, type RegistrationInfo } from "@/features/tournaments/api/tournament-api";
+import { useTeamMembers } from "@/features/teams/hooks/use-teams";
 import { cn, formatDate, getGameColor, getStatusLabel } from "@/lib/utils";
 import type { TournamentStatus } from "@/types/tournament";
 
@@ -25,6 +26,57 @@ const STATUS_FLOW: { status: TournamentStatus; label: string; icon: React.Elemen
 // ステータスは日程に応じてバックエンドが自動更新する（手動遷移は廃止）。
 // 運営の手動操作は draft → 公開（registration_open）のみ。
 
+// ── メンバー役割ラベル ───────────────────────────────────────────────────────
+const MEMBER_ROLE_LABEL: Record<string, string> = {
+  captain: "キャプテン", player: "プレイヤー", substitute: "補欠",
+  coach: "コーチ", analyst: "アナリスト", manager: "マネージャー",
+};
+
+// ── ロスター展開 ─────────────────────────────────────────────────────────────
+function RegistrationRoster({ teamId }: { teamId: string }) {
+  const { data: members, isLoading } = useTeamMembers(teamId);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 px-4 py-4 text-xs text-slate-500">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" /> メンバーを読み込み中...
+      </div>
+    );
+  }
+  if (!members || members.length === 0) {
+    return <p className="px-4 py-4 text-xs text-slate-500">登録メンバーがいません</p>;
+  }
+  return (
+    <div className="divide-y divide-white/5 border-t border-white/8">
+      {members.map((m) => (
+        <div key={m.id} className="flex items-center gap-3 px-4 py-2.5">
+          <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-slate-800 text-xs font-bold text-slate-400">
+            {m.avatar_url ? <img src={m.avatar_url} alt="" className="h-full w-full object-cover" /> : (m.in_game_name ?? m.username ?? "?").charAt(0)}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium text-white">
+              {m.in_game_name ?? m.username ?? "Unknown"}
+              {m.jersey_number != null && <span className="ml-1.5 text-xs text-slate-500">#{m.jersey_number}</span>}
+            </p>
+            {m.username && m.in_game_name && m.username !== m.in_game_name && (
+              <p className="truncate text-xs text-slate-500">@{m.username}</p>
+            )}
+          </div>
+          <span className="rounded-md bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-slate-400">
+            {MEMBER_ROLE_LABEL[m.role] ?? m.role}
+          </span>
+          {m.player_id && (
+            <Link href={`/players/${m.player_id}`} target="_blank"
+              className="rounded-md p-1 text-slate-500 hover:text-white transition-colors" title="プロフィール">
+              <ExternalLink className="h-3.5 w-3.5" />
+            </Link>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── 登録カード ─────────────────────────────────────────────────────────────────
 function RegistrationRow({
   reg, onApprove, onReject, isPending,
@@ -34,6 +86,8 @@ function RegistrationRow({
   onReject: (id: string) => void;
   isPending: boolean;
 }) {
+  const [expanded, setExpanded] = useState(false);
+
   const statusColor = {
     pending: "text-yellow-400 bg-yellow-400/10",
     approved: "text-green-400 bg-green-400/10",
@@ -51,41 +105,65 @@ function RegistrationRow({
   }[reg.status];
 
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-white/8 bg-slate-900/50 px-4 py-3">
-      <div className="h-9 w-9 flex-shrink-0 overflow-hidden rounded-lg border border-white/10 bg-slate-800 flex items-center justify-center">
-        {reg.team_logo_url ? (
-          <img src={reg.team_logo_url} alt="" className="h-full w-full object-contain" />
-        ) : (
-          <span className="text-xs font-bold text-slate-500">{reg.team_tag.slice(0, 2)}</span>
+    <div className="overflow-hidden rounded-xl border border-white/8 bg-slate-900/50">
+      <div className="flex items-center gap-3 px-4 py-3">
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="flex flex-shrink-0 items-center justify-center rounded-md p-1 text-slate-500 hover:bg-white/5 hover:text-white transition-colors"
+          title={expanded ? "閉じる" : "メンバーを表示"}
+        >
+          <ChevronDown className={cn("h-4 w-4 transition-transform", expanded && "rotate-180")} />
+        </button>
+        <div className="h-9 w-9 flex-shrink-0 overflow-hidden rounded-lg border border-white/10 bg-slate-800 flex items-center justify-center">
+          {reg.team_logo_url ? (
+            <img src={reg.team_logo_url} alt="" className="h-full w-full object-contain" />
+          ) : (
+            <span className="text-xs font-bold text-slate-500">{reg.team_tag.slice(0, 2)}</span>
+          )}
+        </div>
+        <button onClick={() => setExpanded((v) => !v)} className="flex-1 min-w-0 text-left">
+          <p className="font-semibold text-white">{reg.team_name}</p>
+          <p className="text-xs text-slate-500">
+            [{reg.team_tag}] · {new Date(reg.registered_at).toLocaleDateString("ja-JP")}
+          </p>
+        </button>
+        <Link href={`/teams/${reg.team_id}`} target="_blank"
+          className="hidden flex-shrink-0 items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-slate-400 hover:text-white transition-colors sm:flex">
+          <ExternalLink className="h-3.5 w-3.5" /> チーム
+        </Link>
+        <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-semibold", statusColor)}>
+          {statusLabel}
+        </span>
+        {reg.status === "pending" && (
+          <div className="flex gap-1.5">
+            <button
+              onClick={() => onApprove(reg.id)}
+              disabled={isPending}
+              className="rounded-lg bg-green-500/10 p-1.5 text-green-400 hover:bg-green-500/20 transition-colors disabled:opacity-50"
+              title="承認"
+            >
+              <CheckCircle2 className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => onReject(reg.id)}
+              disabled={isPending}
+              className="rounded-lg bg-red-500/10 p-1.5 text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-50"
+              title="却下"
+            >
+              <XCircle className="h-4 w-4" />
+            </button>
+          </div>
         )}
       </div>
-      <div className="flex-1 min-w-0">
-        <p className="font-semibold text-white">{reg.team_name}</p>
-        <p className="text-xs text-slate-500">
-          [{reg.team_tag}] · {new Date(reg.registered_at).toLocaleDateString("ja-JP")}
-        </p>
-      </div>
-      <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-semibold", statusColor)}>
-        {statusLabel}
-      </span>
-      {reg.status === "pending" && (
-        <div className="flex gap-1.5">
-          <button
-            onClick={() => onApprove(reg.id)}
-            disabled={isPending}
-            className="rounded-lg bg-green-500/10 p-1.5 text-green-400 hover:bg-green-500/20 transition-colors disabled:opacity-50"
-            title="承認"
-          >
-            <CheckCircle2 className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => onReject(reg.id)}
-            disabled={isPending}
-            className="rounded-lg bg-red-500/10 p-1.5 text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-50"
-            title="却下"
-          >
-            <XCircle className="h-4 w-4" />
-          </button>
+
+      {/* 申請メンバー（ロスター）: 主催者が中身を確認 */}
+      {expanded && <RegistrationRoster teamId={reg.team_id} />}
+
+      {/* 申請メモ */}
+      {expanded && reg.notes && (
+        <div className="border-t border-white/8 px-4 py-3">
+          <p className="mb-1 text-xs font-semibold text-slate-500">申請メモ</p>
+          <p className="text-sm text-slate-300 whitespace-pre-wrap">{reg.notes}</p>
         </div>
       )}
     </div>
@@ -296,6 +374,22 @@ export default function TournamentManagePage({ params }: { params: Promise<{ id:
             <div className="rounded-xl border border-white/10 bg-slate-900 p-5">
               <h3 className="mb-3 text-sm font-bold text-white">説明</h3>
               <p className="text-sm text-slate-300 whitespace-pre-wrap">{tournament.description}</p>
+            </div>
+          )}
+          {tournament.attachments && tournament.attachments.length > 0 && (
+            <div className="rounded-xl border border-white/10 bg-slate-900 p-5">
+              <h3 className="mb-3 text-sm font-bold text-white">添付ファイル</h3>
+              <ul className="space-y-2">
+                {tournament.attachments.map((f) => (
+                  <li key={f.key}>
+                    <a href={f.url} target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-2.5 rounded-lg border border-white/10 bg-white/3 px-3 py-2.5 text-sm text-slate-300 hover:border-brand-500/40 hover:text-white transition-colors">
+                      <FileText className="h-4 w-4 flex-shrink-0 text-brand-400" />
+                      <span className="truncate">{f.name}</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
         </div>

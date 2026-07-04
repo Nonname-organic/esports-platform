@@ -1,4 +1,4 @@
-import { Calendar, Users, Shield, Info } from "lucide-react";
+import { Calendar, Users, Shield, Info, FileText } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import type { TournamentDetail } from "@/types/tournament";
 
@@ -58,6 +58,27 @@ export function OverviewTab({ tournament }: OverviewTabProps) {
             <p className="text-sm leading-relaxed whitespace-pre-wrap text-slate-300">
               {tournament.description}
             </p>
+          </section>
+        )}
+
+        {/* 添付ファイル */}
+        {tournament.attachments && tournament.attachments.length > 0 && (
+          <section className="rounded-xl border border-white/10 bg-slate-900 p-5">
+            <h2 className="mb-3 flex items-center gap-2 font-bold text-white">
+              <FileText className="h-4 w-4 text-brand-400" />
+              添付ファイル
+            </h2>
+            <ul className="space-y-2">
+              {tournament.attachments.map((f) => (
+                <li key={f.key}>
+                  <a href={f.url} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-2.5 rounded-lg border border-white/10 bg-white/3 px-3 py-2.5 text-sm text-slate-300 hover:border-brand-500/40 hover:text-white transition-colors">
+                    <FileText className="h-4 w-4 flex-shrink-0 text-brand-400" />
+                    <span className="truncate">{f.name}</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
           </section>
         )}
 

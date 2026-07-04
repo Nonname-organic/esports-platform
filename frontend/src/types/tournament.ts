@@ -25,9 +25,18 @@ export interface TournamentSummary {
   banner_url: string | null;
 }
 
+export interface TournamentAttachment {
+  name: string;
+  url: string;
+  key: string;
+  size?: number;
+  content_type?: string;
+}
+
 export interface TournamentDetail extends TournamentSummary {
   description: string | null;
   rules: Record<string, unknown> | null;
+  attachments: TournamentAttachment[] | null;
   organizer_id: string;
   registration_start_at: string | null;
   registration_end_at: string | null;

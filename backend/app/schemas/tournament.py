@@ -22,6 +22,7 @@ class TournamentCreate(BaseModel):
     prize_currency: str = Field(default="JPY", max_length=3)
     discord_webhook_url: str | None = None
     description: str | None = None
+    attachments: list[dict] | None = None
     is_public: bool = True
     require_check_in: bool = False
 
@@ -56,6 +57,7 @@ class TournamentUpdate(BaseModel):
     prize_pool: Decimal | None = None
     discord_webhook_url: str | None = None
     description: str | None = None
+    attachments: list[dict] | None = None
     is_public: bool | None = None
 
 
@@ -80,6 +82,7 @@ class TournamentSummary(BaseModel):
 class TournamentDetail(TournamentSummary):
     description: str | None
     rules: dict | None
+    attachments: list[dict] | None = None
     organizer_id: str
     registration_start_at: datetime | None
     registration_end_at: datetime | None

@@ -126,7 +126,7 @@ export default function DashboardPage() {
           <p className="mt-0.5 text-sm text-slate-500">{user?.username} の大会管理</p>
         </div>
         <button
-          onClick={() => router.push("/organizer/tournaments/new")}
+          onClick={() => router.push("/organizer/tournaments/create")}
           className="flex items-center gap-2 rounded-xl bg-brand-500 px-5 py-2.5 text-sm font-bold text-white hover:bg-brand-600 transition-colors"
         >
           <Plus className="h-4 w-4" />大会を作成
@@ -186,7 +186,7 @@ export default function DashboardPage() {
           </h3>
           <p className="mt-2 text-sm text-slate-400">最初の大会を作成してコミュニティを盛り上げましょう</p>
           {!search && filter === "all" && (
-            <button onClick={() => router.push("/organizer/tournaments/new")}
+            <button onClick={() => router.push("/organizer/tournaments/create")}
               className="mt-5 flex items-center gap-2 rounded-xl bg-brand-500 px-6 py-3 text-sm font-bold text-white hover:bg-brand-600 transition-colors">
               <Plus className="h-4 w-4" />大会を作成
             </button>

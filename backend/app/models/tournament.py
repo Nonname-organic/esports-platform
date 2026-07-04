@@ -84,6 +84,8 @@ class Tournament(UUIDMixin, TimestampMixin, Base):
     discord_channel_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     banner_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # 添付ファイル: [{"name": "規約.pdf", "url": "...", "key": "...", "size": 12345, "content_type": "application/pdf"}]
+    attachments: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True, default=list)
     is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     require_check_in: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
