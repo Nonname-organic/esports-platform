@@ -36,3 +36,13 @@ class ReportConsumer:
                 "tournament_report_generated",
                 tournament_id=str(tournament_id), version=report.version, event_id=envelope.event_id,
             )
+
+            # ── 将来の接合点: Team Achievement Card 更新 ────────────────────────
+            # AchievementAggregator は read-only 集約（Redis `team:achievement:{id}`）。
+            # 大会終了で順位が確定したので、参加各チームについて:
+            #   1) AchievementAggregator(db, cache).invalidate_team(team_id)  # キャッシュ失効
+            #   2) EventService.emit(team.achievement.updated) を発火
+            #        visibility=public / dispatch=false（Activity Feed 用シグナル）
+            #        metadata={"tournament_id", "tournament_name", "placement"} を格納
+            # 現時点では新Consumerは不要。ここは発火ポイントの予約のみ（Growth Policy: 今は最小）。
+            # TODO(achievement): 上記2ステップを実装し、Activity Feed へ実績更新を載せる。

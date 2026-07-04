@@ -46,6 +46,9 @@ class Ev:
     TEAM_MEMBER_ROLE_CHANGED= "team.member.role_changed"
     TEAM_OWNER_CHANGED      = "team.owner.changed"
 
+    # Team（公開実績 / Activity Feed・読み取り集約の更新シグナル）
+    TEAM_ACHIEVEMENT_UPDATED= "team.achievement.updated"
+
     # Player（公開活動 / Activity Feed）
     PLAYER_TEAM_JOINED      = "player.team.joined"
 
@@ -80,6 +83,11 @@ REGISTRY: dict[str, EventSpec] = {
     Ev.TEAM_MEMBER_REMOVED: _AUDIT,
     Ev.TEAM_MEMBER_ROLE_CHANGED: _AUDIT,
     Ev.TEAM_OWNER_CHANGED: _AUDIT,
+
+    # Team（公開実績カードの更新シグナル。Activity Feed へ載せられるよう PUBLIC。
+    #        読み取り集約であり副作用consumerは不要のため dispatch=False。
+    #        payload metadata に大会名・順位を格納できる想定（将来接合点は ReportConsumer 参照））
+    Ev.TEAM_ACHIEVEMENT_UPDATED: EventSpec(visibility=Visibility.PUBLIC, dispatch=False),
 
     # Player（公開活動 / Activity Feed・consumer不要のため dispatch=False）
     Ev.PLAYER_TEAM_JOINED: EventSpec(visibility=Visibility.PUBLIC, dispatch=False),

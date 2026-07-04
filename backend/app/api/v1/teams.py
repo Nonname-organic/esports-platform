@@ -17,8 +17,10 @@ from app.schemas.team import (
     TeamUpdate,
 )
 from app.schemas.career import TeamCareerSchema, AchievementItem, RivalItem
+from app.schemas.achievement import AchievementCardDTO
 from app.services.team import TeamService
 from app.services.career_service import CareerAggregationService
+from app.achievements.aggregator import AchievementAggregator
 from app.core.storage import resign_stored_url
 
 router = APIRouter(prefix="/teams", tags=["チーム管理"])
@@ -44,6 +46,17 @@ async def get_team_rivals(team_id: uuid.UUID, db: DBSession, cache: Cache):
     service = CareerAggregationService(db, cache)
     career = await service.get_team_career(team_id)
     return Response(data=[RivalItem(**r) for r in career["rivals"]], meta=None)
+
+
+# ── Achievement Card（読み取り専用の集約DTO・公開） ─────────────────────────
+# 注: 既存 GET /{id}/achievements は team_achievements 由来の一覧を返す別契約のため、
+#     破壊的変更を避けて additive な /achievement-card を新設（設計差分に記載）。
+@router.get("/{team_id}/achievement-card", response_model=Response[AchievementCardDTO])
+async def get_team_achievement_card(team_id: uuid.UUID, db: DBSession, cache: Cache):
+    """公開チームページ用の実績カード。既存データから集約（保存しない）。"""
+    aggregator = AchievementAggregator(db, cache)
+    card = await aggregator.get_team_card(team_id)
+    return Response(data=AchievementCardDTO(**card), meta=None)
 
 
 def _team_detail(team) -> TeamDetailSchema:
