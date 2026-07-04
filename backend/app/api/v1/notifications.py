@@ -2,13 +2,37 @@ import uuid
 from typing import Optional
 
 from fastapi import APIRouter, Query
+from pydantic import BaseModel
 
 from app.core.dependencies import Cache, CurrentUser, DBSession
 from app.schemas.common import ListResponse, Meta, Response
 from app.schemas.notification import NotificationSchema, UnreadCountSchema
 from app.services.notification_service import NotificationService
+from app.notifications.preferences import PreferenceService
 
 router = APIRouter(prefix="/notifications", tags=["通知"])
+
+
+# ── 通知設定（機能③ / ADR-0010: JSONBはPreferenceServiceに隠蔽・DTOで受け渡し） ──
+class NotificationPrefsUpdate(BaseModel):
+    channels: Optional[dict[str, bool]] = None
+    categories: Optional[dict[str, bool]] = None
+
+
+@router.get("/preferences", response_model=Response[dict])
+async def get_notification_preferences(db: DBSession, current_user: CurrentUser):
+    dto = await PreferenceService(db).get_preferences(current_user.id)
+    return Response(data=dto.to_dict(), meta=None)
+
+
+@router.patch("/preferences", response_model=Response[dict])
+async def update_notification_preferences(
+    data: NotificationPrefsUpdate, db: DBSession, current_user: CurrentUser,
+):
+    dto = await PreferenceService(db).update_preferences(
+        current_user.id, channels=data.channels, categories=data.categories,
+    )
+    return Response(data=dto.to_dict(), meta=None)
 
 
 @router.get("", response_model=ListResponse[NotificationSchema])

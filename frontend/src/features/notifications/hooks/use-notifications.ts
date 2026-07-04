@@ -18,6 +18,26 @@ export function useNotifications(params?: { unread?: boolean; search?: string; c
   });
 }
 
+export function useNotificationPrefs() {
+  return useQuery({
+    queryKey: [...notificationKeys.all, "prefs"],
+    queryFn: () => notificationApi.getPreferences(),
+    select: (res) => res.data,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useUpdateNotificationPrefs() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Partial<import("../api/notification-api").NotificationPrefs>) =>
+      notificationApi.updatePreferences(data),
+    onSuccess: (res) => {
+      qc.setQueryData([...notificationKeys.all, "prefs"], res);
+    },
+  });
+}
+
 export function useUnreadCount(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: notificationKeys.unread(),

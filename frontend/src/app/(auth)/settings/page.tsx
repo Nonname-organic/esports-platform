@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRequireAuth } from "@/hooks/use-require-auth";
-import { AlertTriangle, Check, Link2, Loader2, Lock, Mail, RefreshCw, Settings as SettingsIcon, Unlink } from "lucide-react";
+import { AlertTriangle, Bell, Check, ChevronRight, Link2, Loader2, Lock, Mail, RefreshCw, Settings as SettingsIcon, Unlink } from "lucide-react";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthStore } from "@/store/auth-store";
 import { discordApi } from "@/features/discord/api/discord-api";
@@ -205,6 +206,17 @@ export default function SettingsPage() {
           <p className="text-sm text-slate-500">{user?.username} ({user?.email ?? "—"})</p>
         </div>
       </div>
+
+      {/* 通知設定への導線 */}
+      <Link href="/settings/notifications"
+        className="mb-5 flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-900 p-5 hover:border-white/20 transition-colors">
+        <div className="rounded-lg bg-brand-500/10 p-2"><Bell className="h-5 w-5 text-brand-400" /></div>
+        <div className="flex-1">
+          <p className="text-sm font-bold text-white">通知設定</p>
+          <p className="text-xs text-slate-500">チャネル・種別ごとの通知ON/OFF</p>
+        </div>
+        <ChevronRight className="h-4 w-4 text-slate-600" />
+      </Link>
 
       {/* Discord 連携 */}
       <DiscordSection />

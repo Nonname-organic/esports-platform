@@ -34,4 +34,15 @@ export const notificationApi = {
 
   delete: (id: string): Promise<void> =>
     apiClient.delete(`/api/v1/notifications/${id}`),
+
+  getPreferences: (): Promise<ApiResponse<NotificationPrefs>> =>
+    apiClient.get("/api/v1/notifications/preferences"),
+
+  updatePreferences: (data: Partial<NotificationPrefs>): Promise<ApiResponse<NotificationPrefs>> =>
+    apiClient.patch("/api/v1/notifications/preferences", data),
 };
+
+export interface NotificationPrefs {
+  channels: Record<string, boolean>;
+  categories: Record<string, boolean>;
+}

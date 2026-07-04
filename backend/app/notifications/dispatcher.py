@@ -1,6 +1,7 @@
 """NotificationDispatcher — 受信者×チャネルへ Message を配信する。
 
-Preference（③・ユーザーごとON/OFF）は本 Dispatcher の判定点。現フェーズは全ON のスタブ。
+配信判定（③・ユーザーごとON/OFF）は **PreferenceService（唯一のSSOT / ADR-0010）** に委ねる。
+Dispatcher は JSONB 構造を知らず、`is_enabled(user, category, channel)` の真偽だけを見る。
 1チャネル/1受信者の失敗は隔離してログに残し、他を止めない（Matrix 準拠）。
 """
 
@@ -12,25 +13,14 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.notifications.channels import ChannelRegistry, Message
+from app.notifications.preferences import PreferenceService
 
 logger = structlog.get_logger()
 
 
-class PreferenceResolver:
-    """通知設定の判定。③ 実装までは常に有効（全ON）を返すスタブ。
-
-    ③ 実装時: notification_preferences(JSONB) を category/channel で参照するだけで
-    Matrix と整合する（precedence: global channel OFF > per-entity mute > category OFF > default ON）。
-    """
-
-    async def is_enabled(self, user_id: uuid.UUID, category: str, channel: str) -> bool:
-        return True
-
-
 class NotificationDispatcher:
-    def __init__(self, channels: ChannelRegistry, prefs: PreferenceResolver | None = None):
+    def __init__(self, channels: ChannelRegistry):
         self._channels = channels
-        self._prefs = prefs or PreferenceResolver()
 
     async def dispatch(
         self,
@@ -42,6 +32,7 @@ class NotificationDispatcher:
         message: Message,
     ) -> int:
         """配信し、実際に送れた (受信者×チャネル) 件数を返す。"""
+        prefs = PreferenceService(db)   # 判定は PreferenceService（SSOT）に集約
         sent = 0
         for user_id in recipients:
             for ch_name in channels:
@@ -49,7 +40,7 @@ class NotificationDispatcher:
                 if provider is None:
                     continue
                 try:
-                    if not await self._prefs.is_enabled(user_id, category, ch_name):
+                    if not await prefs.is_enabled(user_id, category, ch_name):
                         continue
                     ok = await provider.send(db, user_id, message)
                     if ok:
