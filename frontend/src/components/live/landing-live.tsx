@@ -3,21 +3,13 @@
 import type { TournamentSummary } from "@/types/tournament";
 import { LiveProvider } from "@/features/live/provider/live-provider";
 import { HeroSection } from "@/components/hero/hero-section";
-import { FeaturedTournamentBanner } from "./featured-tournament-banner";
-import { EntryOpenTournaments } from "./entry-open-tournaments";
-import { LiveBracketSnapshot } from "./live-bracket-snapshot";
-import { WinnerHighlight } from "./winner-highlight";
-import { StatisticsCard } from "./statistics-card";
 import { LiveTournamentPreview } from "./live-tournament-preview";
-import { LiveActivityFeed } from "./live-activity-feed";
-import { HomePersonalized } from "@/components/home/home-personalized";
 
 /**
- * ランディングのライブ体験島（client）。
- * 単一 LiveProvider（60秒Polling / Visibility対応 / WS・SSE差し替え可能な Transport）配下に配置。
- * ※ Provider / Transport の公開IFは不変（Consumer変更なし）。
- *
- * 感情設計の並び: FOMO → 目玉大会 → ライブ活動 → 社会的証明 → 受付 → 進行 → 王者 → 詳細。
+ * ランディング（client）— シンプル導線。
+ * Hero（背景動画 + 受付カウンター ENTRY OPEN 1枚 + CTA）で第一印象を作り、
+ * その直下に「開催中の大会」だけを置く最小構成。
+ * ※ LiveProvider は Hero 内のライブ指標（開催中/進行中/オンライン）で使用。
  */
 export function LandingLive({ initialFeatured }: { initialFeatured: TournamentSummary[] }) {
   return (
@@ -25,19 +17,9 @@ export function LandingLive({ initialFeatured }: { initialFeatured: TournamentSu
       <HeroSection />
 
       {/* スクロール到達点（Hero の Explore Live Tournament から遷移） */}
-      <div id="live" className="mx-auto max-w-7xl scroll-mt-20 space-y-10 px-4 py-12">
-        {/* ホーム・パーソナライズ（ADR-0019 / おすすめ・AI予測・トレンド） */}
-        <HomePersonalized />
-
-        <FeaturedTournamentBanner />
-        <EntryOpenTournaments />
-        <LiveBracketSnapshot />
-        <WinnerHighlight />
-        <StatisticsCard />
+      <div id="live" className="mx-auto max-w-7xl scroll-mt-20 px-4 py-12">
         <LiveTournamentPreview initial={initialFeatured} />
       </div>
-
-      <LiveActivityFeed />
     </LiveProvider>
   );
 }
