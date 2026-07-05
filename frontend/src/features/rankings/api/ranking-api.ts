@@ -20,11 +20,23 @@ export interface LeaderboardEntry {
   tier_key: string;
   tier_label: string;
   tier_color: string;
+  progress: number;
   tournaments: number;
   championships: number;
+  runner_ups: number;
+  top4: number;
   wins: number;
   losses: number;
   win_rate: number;
+}
+
+export interface RankHistoryItem {
+  tournament_id: string;
+  tournament_name: string;
+  ended_at: string | null;
+  placement: string;
+  rp_gained: number;
+  cumulative_rp: number;
 }
 
 export interface RankCard {
@@ -43,6 +55,7 @@ export interface RankCard {
   progress: number;
   championships: number;
   tournaments: number;
+  history: RankHistoryItem[];
 }
 
 export type SeasonScope = "all" | "current";

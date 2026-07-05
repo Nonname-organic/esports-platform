@@ -1,11 +1,12 @@
 """競技ランキングの Tier / RP 定義（SSOT / ADR-0015）。
 
 RP 付与式と Tier しきい値をここに一元化する。DTO・集約・フロントは必ずここ由来の値を使う。
+UI は数値しきい値を持たず、tier_for / tier_progress の結果（Tier）だけを受け取る。
 """
 
 from __future__ import annotations
 
-# 順位 → RP（1大会あたり）。standings 掲載＝参加とみなす。
+# 順位 → RP（1大会あたり / 大会終了時のみ加算・途中敗退で減点しない）。
 PLACEMENT_RP: dict[str, int] = {
     "champion": 1000,
     "runner_up": 600,
@@ -26,7 +27,7 @@ TIERS: list[dict] = [
 
 
 def tier_for(rp: int) -> dict:
-    """RP から現在の Tier を返す（純関数）。"""
+    """RP から現在の Tier を返す（純関数 / 公開API）。"""
     current = TIERS[0]
     for t in TIERS:
         if rp >= t["min_rp"]:
@@ -45,7 +46,7 @@ def next_tier_for(rp: int) -> dict | None:
 
 
 def tier_progress(rp: int) -> float:
-    """現在 Tier から次 Tier までの進捗（0.0–1.0 / 最上位は1.0）。"""
+    """現在 Tier から次 Tier までの進捗（0.0–1.0 / 最上位は1.0 / 公開API）。"""
     cur = tier_for(rp)
     nxt = next_tier_for(rp)
     if not nxt:

@@ -4,8 +4,8 @@ from typing import Optional
 from fastapi import APIRouter, Query
 
 from app.core.dependencies import Cache, DBSession
-from app.ranking.aggregator import RankingAggregator
-from app.ranking.tiers import list_tiers
+from app.rankings.aggregator import RankingAggregator
+from app.rankings.tiers import list_tiers
 from app.schemas.analytics import RankingEntry
 from app.schemas.common import ListResponse, Meta, Response
 from app.schemas.ranking import LeaderboardEntry, RankCard, TierInfo
