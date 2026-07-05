@@ -7,6 +7,7 @@ from app.core.dependencies import Cache, CurrentUser, DBSession
 from app.schemas.common import ListResponse, Meta, Response
 from app.schemas.player import GAME_ROLES, PlayerCreate, PlayerSchema, PlayerUpdate
 from app.schemas.career import PlayerCareerSchema, AchievementItem, RatingPoint
+from app.player_profile.dto import PlayerAnalysis, PlayerHistoryItem
 from app.services.player import PlayerService
 from app.services.career_service import CareerAggregationService
 from app.services.activity_service import ActivityService
@@ -48,6 +49,31 @@ async def get_player_rank_card_endpoint(player_id: uuid.UUID, db: DBSession, cac
     from app.schemas.ranking import PlayerRankCard
     card = await RankingAggregator(db, cache).player_rank_card(player_id)
     return Response(data=PlayerRankCard(**card), meta=None)
+
+
+# ── World-class Player Profile（ADR-0018 / Read Model・AI分析 / 追加のみ） ──────
+@router.get("/{player_id}/profile", response_model=Response[dict])
+async def get_player_profile(player_id: uuid.UUID, db: DBSession, cache: Cache):
+    """1ページ完結のプロフィール集約（basic/career/rank/achievements/history/analysis/activity）。"""
+    from app.player_profile.aggregator import PlayerProfileAggregator
+    data = await PlayerProfileAggregator(db, cache).profile(player_id)
+    return Response(data=data, meta=None)
+
+
+@router.get("/{player_id}/analysis", response_model=Response[PlayerAnalysis])
+async def get_player_analysis(player_id: uuid.UUID, db: DBSession, cache: Cache):
+    """AI分析（Read Only・Provider化・現状ルールベース）。"""
+    from app.player_profile.aggregator import PlayerProfileAggregator
+    data = await PlayerProfileAggregator(db, cache).analysis(player_id)
+    return Response(data=PlayerAnalysis(**data), meta=None)
+
+
+@router.get("/{player_id}/history", response_model=Response[list[PlayerHistoryItem]])
+async def get_player_history(player_id: uuid.UUID, db: DBSession, cache: Cache):
+    """大会履歴（placement/team/date）。"""
+    from app.player_profile.aggregator import PlayerProfileAggregator
+    items = await PlayerProfileAggregator(db, cache).history(player_id)
+    return Response(data=[PlayerHistoryItem(**i) for i in items], meta=None)
 
 
 @router.get("/{player_id}/rating-history", response_model=Response[list[RatingPoint]])

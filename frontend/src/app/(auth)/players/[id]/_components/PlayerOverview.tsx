@@ -9,6 +9,11 @@ import { StatsGrid } from "./shared/stats-grid";
 import { TabSkeleton } from "./shared/empty-state";
 import { fmtNum, fmtInt, fmtPct, DASH } from "./shared/stat-format";
 import { PlayerRankCard } from "./player-rank-card";
+import { AiAnalysisCard } from "@/components/player-profile/ai-analysis-card";
+import { CareerStatisticsCard } from "@/components/player-profile/career-statistics-card";
+import { AgentPoolCard } from "@/components/player-profile/agent-pool-card";
+import { MapPerformanceCard } from "@/components/player-profile/map-performance-card";
+import { TournamentHistoryCard } from "@/components/player-profile/tournament-history-card";
 
 interface Props {
   player: Player;
@@ -46,6 +51,15 @@ export function PlayerOverview({ player, playerId }: Props) {
 
       {/* ランクカード（競技ランキング / ADR-0016） */}
       <PlayerRankCard playerId={playerId} />
+
+      {/* AI 分析（ADR-0018 / Read Only・Provider化） */}
+      <AiAnalysisCard playerId={playerId} />
+
+      {/* Career / Agent / Map / History Widget（独立・ADR-0018） */}
+      <CareerStatisticsCard playerId={playerId} />
+      <AgentPoolCard playerId={playerId} />
+      <MapPerformanceCard playerId={playerId} />
+      <TournamentHistoryCard playerId={playerId} />
 
       {/* KPIサマリー */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
