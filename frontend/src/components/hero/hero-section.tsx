@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Trophy, Swords } from "lucide-react";
+import { Trophy, Swords, Users, Shield, Coins } from "lucide-react";
 import { useLive } from "@/features/live/provider/live-provider";
 import { useRelativeSeconds } from "@/features/live/hooks/use-relative-seconds";
 import { AnimatedNumber } from "@/components/live/animated-number";
@@ -121,33 +121,68 @@ function LiveStat({ label, value, unit }: { label: string; value: number; unit: 
 
 /**
  * Hero Statistics — プラットフォーム累計（実データ / モックしない）。
- * CountUp はしない（静かな Fade のみ）。数値未取得の間は同じ高さで "—" を敷き、
- * 取得後に opacity だけで差し替える（CLS 0）。
+ * アイコン + アクセント + ホバーグローの"魅せる"カード。CountUp はしない（静かな Fade）。
+ * 数値未取得の間は同じ高さで "—" を敷き、取得後に opacity だけで差し替える（CLS 0）。
  */
 function HeroStatistics({ className = "" }: { className?: string }) {
   const { totals } = useLive();
-  const items: { label: string; value: string | null }[] = [
-    { label: "開催大会", value: totals ? totals.tournaments.toLocaleString("ja-JP") : null },
-    { label: "登録プレイヤー", value: totals ? totals.players.toLocaleString("ja-JP") : null },
-    { label: "登録チーム", value: totals ? totals.teams.toLocaleString("ja-JP") : null },
+  const items = [
     {
+      icon: Trophy,
+      label: "開催大会",
+      value: totals ? totals.tournaments.toLocaleString("ja-JP") : null,
+      chip: "bg-brand-500/15 text-brand-300",
+      glow: "from-brand-500/30",
+      hoverBorder: "hover:border-brand-400/40",
+    },
+    {
+      icon: Users,
+      label: "登録プレイヤー",
+      value: totals ? totals.players.toLocaleString("ja-JP") : null,
+      chip: "bg-emerald-500/15 text-emerald-300",
+      glow: "from-emerald-500/30",
+      hoverBorder: "hover:border-emerald-400/40",
+    },
+    {
+      icon: Shield,
+      label: "登録チーム",
+      value: totals ? totals.teams.toLocaleString("ja-JP") : null,
+      chip: "bg-violet-500/15 text-violet-300",
+      glow: "from-violet-500/30",
+      hoverBorder: "hover:border-violet-400/40",
+    },
+    {
+      icon: Coins,
       label: "賞金総額",
       value: totals?.total_prize != null ? formatPrize(totals.total_prize) : null,
+      chip: "bg-amber-500/15 text-amber-300",
+      glow: "from-amber-500/30",
+      hoverBorder: "hover:border-amber-400/40",
     },
   ];
 
   return (
-    <dl className={`mt-14 grid w-full max-w-2xl grid-cols-2 gap-x-6 gap-y-7 sm:grid-cols-4 ${className}`}>
-      {items.map((it) => (
-        <div key={it.label} className="flex flex-col items-center">
+    <dl className={`mt-14 grid w-full max-w-3xl grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4 ${className}`}>
+      {items.map(({ icon: Icon, label, value, chip, glow, hoverBorder }) => (
+        <div
+          key={label}
+          className={`group relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-5 text-center backdrop-blur-md transition-all duration-300 hover:-translate-y-1 ${hoverBorder}`}
+        >
+          {/* 上部グロー（ホバーで点灯） */}
+          <div
+            className={`pointer-events-none absolute -top-10 left-1/2 h-24 w-24 -translate-x-1/2 rounded-full bg-gradient-to-b ${glow} to-transparent opacity-0 blur-2xl transition-opacity duration-300 group-hover:opacity-100`}
+          />
+          <span className={`mx-auto mb-3 inline-flex h-9 w-9 items-center justify-center rounded-xl ${chip}`}>
+            <Icon className="h-[18px] w-[18px]" />
+          </span>
           <dd
-            className="text-2xl font-black tabular-nums tracking-tight text-white transition-opacity duration-700 sm:text-3xl"
-            style={{ opacity: it.value === null ? 0 : 1 }}
+            className="text-2xl font-black leading-none tracking-tight text-white transition-opacity duration-700 tabular-nums sm:text-3xl"
+            style={{ opacity: value === null ? 0 : 1 }}
           >
-            {it.value ?? "—"}
+            {value ?? "—"}
           </dd>
-          <dt className="mt-1.5 text-[10px] font-medium uppercase tracking-[0.2em] text-slate-400 sm:text-[11px]">
-            {it.label}
+          <dt className="mt-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400 sm:text-[11px]">
+            {label}
           </dt>
         </div>
       ))}

@@ -16,8 +16,11 @@ function startShort(iso: string | null): string {
 }
 
 /**
- * 受付中で「最も締切が近い」大会 = Hero の受付カウンター。
+ * 受付中で「最も人気の」大会 = Hero の受付カウンター（ENTRY OPEN）。
  * 空港の搭乗ゲート / ディパーチャーボードを模した実データ表示（捏造なし）。
+ *
+ * 人気度: エントリー数（registered_teams）→ 充足率 → 締切が近い順。
+ * TODO: 将来はチーム/協賛のブースト係数（sponsored / featured weight）で優先表示する。
  */
 export function FeaturedEntry() {
   const { data, isLoading } = useQuery({
@@ -36,13 +39,20 @@ export function FeaturedEntry() {
   const t = (data ?? [])
     .slice()
     .sort((a, b) => {
+      // 人気順: エントリー数 → 充足率 → 締切が近い順。
+      const ra = a.registered_teams ?? 0;
+      const rb = b.registered_teams ?? 0;
+      if (rb !== ra) return rb - ra;
+      const fa = a.max_teams ? (a.registered_teams ?? 0) / a.max_teams : 0;
+      const fb = b.max_teams ? (b.registered_teams ?? 0) / b.max_teams : 0;
+      if (fb !== fa) return fb - fa;
       const ta = a.registration_end_at ? new Date(a.registration_end_at).getTime() : Infinity;
       const tb = b.registration_end_at ? new Date(b.registration_end_at).getTime() : Infinity;
       return ta - tb;
     })[0];
 
   if (isLoading && !t) {
-    return <div className="mt-10 h-[236px] w-full max-w-2xl animate-pulse rounded-2xl border border-white/10 bg-white/[0.03]" />;
+    return <div className="mx-auto mt-10 h-[236px] w-full max-w-2xl animate-pulse rounded-2xl border border-white/10 bg-white/[0.03]" />;
   }
   if (!t) return null;
 
@@ -50,7 +60,7 @@ export function FeaturedEntry() {
     <Link
       href={`/tournaments/${t.id}`}
       className={cn(
-        "group mt-10 block w-full max-w-2xl overflow-hidden rounded-2xl border border-green-500/30 bg-slate-950/80 backdrop-blur-md",
+        "group mx-auto mt-10 block w-full max-w-2xl overflow-hidden rounded-2xl border border-green-500/30 bg-slate-950/80 backdrop-blur-md",
         "shadow-[0_0_50px_-14px_rgba(34,197,94,0.55)] transition-all duration-300 hover:-translate-y-0.5 hover:border-green-400/60 hover:shadow-[0_0_60px_-8px_rgba(34,197,94,0.75)]",
       )}
     >

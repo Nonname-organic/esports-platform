@@ -19,14 +19,21 @@ import { useEffect, useMemo, useRef, useState } from "react";
  * 素材側で 5〜8秒ごとのカット/クロスフェード・HUD/文字/実況なしのシネマティックPVを推奨。
  */
 
-const D_WEBM = process.env.NEXT_PUBLIC_HERO_VIDEO_WEBM ?? "/hero/hero.webm";
-const D_MP4 = process.env.NEXT_PUBLIC_HERO_VIDEO_MP4 ?? "/hero/hero.mp4";
+// GitHub Variables 未設定時、build-arg は空文字 "" になり process.env にも "" が入る。
+// 空/空白は「未指定」として undefined 扱いにし、空 src の <source> を絶対に出さない。
+const env = (v: string | undefined): string | undefined => (v && v.trim() ? v.trim() : undefined);
+
+// webm はデフォルト同梱しない（未指定なら webm <source> 自体を出さない）。mp4 のみローカル既定を持つ。
+const D_WEBM = env(process.env.NEXT_PUBLIC_HERO_VIDEO_WEBM);
+const D_MP4 = env(process.env.NEXT_PUBLIC_HERO_VIDEO_MP4) ?? "/hero/hero.mp4";
 // Tablet/Mobile は仕様の単一env（_TABLET/_MOBILE = mp4想定）を優先し、webm別指定も許可。
-const T_WEBM = process.env.NEXT_PUBLIC_HERO_VIDEO_WEBM_TABLET ?? D_WEBM;
-const T_MP4 = process.env.NEXT_PUBLIC_HERO_VIDEO_MP4_TABLET ?? process.env.NEXT_PUBLIC_HERO_VIDEO_TABLET ?? D_MP4;
-const M_WEBM = process.env.NEXT_PUBLIC_HERO_VIDEO_WEBM_MOBILE ?? T_WEBM;
-const M_MP4 = process.env.NEXT_PUBLIC_HERO_VIDEO_MP4_MOBILE ?? process.env.NEXT_PUBLIC_HERO_VIDEO_MOBILE ?? T_MP4;
-const POSTER = process.env.NEXT_PUBLIC_HERO_POSTER ?? "/hero/hero-poster.svg";
+const T_WEBM = env(process.env.NEXT_PUBLIC_HERO_VIDEO_WEBM_TABLET) ?? D_WEBM;
+const T_MP4 =
+  env(process.env.NEXT_PUBLIC_HERO_VIDEO_MP4_TABLET) ?? env(process.env.NEXT_PUBLIC_HERO_VIDEO_TABLET) ?? D_MP4;
+const M_WEBM = env(process.env.NEXT_PUBLIC_HERO_VIDEO_WEBM_MOBILE) ?? T_WEBM;
+const M_MP4 =
+  env(process.env.NEXT_PUBLIC_HERO_VIDEO_MP4_MOBILE) ?? env(process.env.NEXT_PUBLIC_HERO_VIDEO_MOBILE) ?? T_MP4;
+const POSTER = env(process.env.NEXT_PUBLIC_HERO_POSTER) ?? "/hero/hero-poster.svg";
 
 type Tier = "desktop" | "tablet" | "mobile";
 function pickTier(): Tier {
@@ -35,7 +42,7 @@ function pickTier(): Tier {
   if (window.matchMedia("(max-width: 1024px)").matches) return "tablet";
   return "desktop";
 }
-const TIER_SOURCES: Record<Tier, { webm: string; mp4: string }> = {
+const TIER_SOURCES: Record<Tier, { webm?: string; mp4: string }> = {
   desktop: { webm: D_WEBM, mp4: D_MP4 },
   tablet: { webm: T_WEBM, mp4: T_MP4 },
   mobile: { webm: M_WEBM, mp4: M_MP4 },
@@ -154,7 +161,7 @@ export function HeroBackgroundVideo() {
           onCanPlay={() => setReady(true)}
           onError={() => setFailed(true)}
         >
-          <source src={sources.webm} type="video/webm" />
+          {sources.webm ? <source src={sources.webm} type="video/webm" /> : null}
           <source src={sources.mp4} type="video/mp4" />
         </video>
       )}
