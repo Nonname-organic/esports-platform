@@ -71,6 +71,14 @@ jobs:
           context: ${{ matrix.context }}
           target: ${{ matrix.target || '' }}
           push: true
+          # Hero 背景動画のURL（frontend のみ使用 / 他サービスでは未宣言ARGとして無視される）。
+          # GitHub Settings → Variables に HERO_VIDEO_MP4 等を設定するとビルド時に埋め込まれる。
+          build-args: |
+            NEXT_PUBLIC_HERO_VIDEO_MP4=${{ vars.HERO_VIDEO_MP4 }}
+            NEXT_PUBLIC_HERO_VIDEO_WEBM=${{ vars.HERO_VIDEO_WEBM }}
+            NEXT_PUBLIC_HERO_VIDEO_TABLET=${{ vars.HERO_VIDEO_TABLET }}
+            NEXT_PUBLIC_HERO_VIDEO_MOBILE=${{ vars.HERO_VIDEO_MOBILE }}
+            NEXT_PUBLIC_HERO_POSTER=${{ vars.HERO_POSTER }}
           tags: |
             ghcr.io/${{ steps.owner.outputs.value }}/esports-platform-${{ matrix.service }}:${{ needs.tag.outputs.image-tag }}
             ghcr.io/${{ steps.owner.outputs.value }}/esports-platform-${{ matrix.service }}:latest
