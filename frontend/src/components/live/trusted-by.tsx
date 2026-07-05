@@ -20,8 +20,8 @@ export function TrustedBy() {
             <span
               key={`${name}-${i}`}
               className={cn(
-                "select-none whitespace-nowrap text-2xl font-black tracking-wider text-slate-700 transition-colors duration-300",
-                "hover:text-white sm:text-3xl",
+                "inline-block select-none whitespace-nowrap text-2xl font-black tracking-wider text-slate-700 transition-all duration-300",
+                "hover:scale-110 hover:text-white sm:text-3xl",
               )}
             >
               {name}

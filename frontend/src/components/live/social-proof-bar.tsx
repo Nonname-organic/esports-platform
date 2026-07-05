@@ -15,18 +15,24 @@ export function SocialProofBar() {
   const { live, totals } = useLive();
 
   const items = [
-    { icon: Zap, color: "text-red-400", label: "開催中大会", value: live?.ongoing_tournaments ?? 0, live: true },
-    { icon: DoorOpen, color: "text-green-400", label: "受付中大会", value: live?.registration_open_tournaments ?? 0, live: true },
+    { icon: Zap, color: "text-red-400", label: "開催中大会", sub: "世界で進行中", value: live?.ongoing_tournaments ?? 0, live: true },
+    { icon: DoorOpen, color: "text-green-400", label: "受付中大会", sub: "今すぐ参加可", value: live?.registration_open_tournaments ?? 0, live: true },
     { icon: Trophy, color: "text-yellow-400", label: "総大会", value: totals?.tournaments ?? 0 },
-    { icon: Shield, color: "text-brand-400", label: "参加チーム", value: totals?.teams ?? 0 },
+    { icon: Shield, color: "text-brand-400", label: "参加チーム", sub: "が挑戦", value: totals?.teams ?? 0 },
     { icon: Swords, color: "text-purple-400", label: "総試合数", value: totals?.matches ?? 0 },
-    { icon: Coins, color: "text-yellow-400", label: "総賞金", value: Math.round(totals?.total_prize ?? 0), prefix: "¥" },
+    { icon: Coins, color: "text-yellow-400", label: "総賞金", sub: "突破", value: Math.round(totals?.total_prize ?? 0), prefix: "¥" },
     { icon: Crown, color: "text-amber-400", label: "優勝チーム", value: totals?.champions ?? 0 },
     { icon: Star, color: "text-pink-400", label: "MVP受賞", value: totals?.mvps ?? 0 },
   ];
 
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-4">
+      <div className="mb-3 flex items-center justify-center gap-2 text-center">
+        <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-live-blink" />
+        <p className="text-xs font-bold tracking-wide text-slate-400">
+          世界中で、<span className="text-white">今この瞬間も大会が動いている。</span>
+        </p>
+      </div>
       <div className="grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-4 xl:grid-cols-8">
         {items.map((it) => (
           <ProofTile key={it.label} {...it} />
@@ -37,9 +43,9 @@ export function SocialProofBar() {
 }
 
 function ProofTile({
-  icon: Icon, color, label, value, live, prefix,
+  icon: Icon, color, label, value, live, prefix, sub,
 }: {
-  icon: React.ElementType; color: string; label: string; value: number; live?: boolean; prefix?: string;
+  icon: React.ElementType; color: string; label: string; value: number; live?: boolean; prefix?: string; sub?: string;
 }) {
   const [pulse, setPulse] = useState(false);
   const prev = useRef(value);
@@ -63,6 +69,7 @@ function ProofTile({
         <AnimatedNumber value={value} durationMs={1200} />
       </p>
       <p className="text-[11px] text-slate-500">{label}</p>
+      {sub && <p className="text-[9px] text-slate-600">{sub}</p>}
     </div>
   );
 }

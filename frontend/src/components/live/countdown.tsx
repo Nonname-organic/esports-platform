@@ -22,38 +22,46 @@ export function Countdown({
     return <span className="text-sm font-bold text-slate-500">受付終了</span>;
   }
 
-  const critical = c.level === "critical";
-  const soon = c.level === "soon";
+  const lv = c.level;
+  const red = lv === "urgent" || lv === "critical" || lv === "final";
   const segCls = cn(
     "tabular-nums font-black leading-none",
     size === "lg" ? "text-3xl sm:text-4xl" : "text-xl sm:text-2xl",
-    critical ? "text-red-400" : soon ? "text-orange-300" : "text-white",
+    red ? "text-red-400" : lv === "soon" ? "text-orange-300" : "text-white",
   );
 
   return (
-    <div
-      className={cn(
-        "inline-flex items-end gap-2 rounded-xl px-1 transition-transform",
-        critical && "animate-live-blink scale-[1.03]",
-        className,
+    <div className="inline-flex flex-col items-start gap-1">
+      <div
+        className={cn(
+          "inline-flex items-end gap-2 rounded-xl px-1 transition-transform",
+          lv === "final" && "animate-live-blink scale-[1.05]",
+          lv === "critical" && "animate-shake",
+          className,
+        )}
+        style={
+          red
+            ? { filter: "drop-shadow(0 0 12px rgba(239,68,68,0.6))" }
+            : lv === "soon"
+            ? { filter: "drop-shadow(0 0 8px rgba(251,146,60,0.4))" }
+            : undefined
+        }
+        role="timer"
+        aria-label="エントリー締切までの残り時間"
+      >
+        <Seg v={c.days} label="DAYS" cls={segCls} />
+        <Colon size={size} />
+        <Seg v={c.hours} label="HRS" cls={segCls} />
+        <Colon size={size} />
+        <Seg v={c.minutes} label="MIN" cls={segCls} />
+        <Colon size={size} />
+        <Seg v={c.seconds} label="SEC" cls={segCls} />
+      </div>
+      {lv === "final" && (
+        <span className="inline-flex items-center gap-1 rounded-md bg-red-500/20 px-2 py-0.5 text-[10px] font-black tracking-wider text-red-300 animate-live-blink">
+          ● 残りわずか
+        </span>
       )}
-      style={
-        critical
-          ? { filter: "drop-shadow(0 0 12px rgba(239,68,68,0.6))" }
-          : soon
-          ? { filter: "drop-shadow(0 0 8px rgba(251,146,60,0.4))" }
-          : undefined
-      }
-      role="timer"
-      aria-label="エントリー締切までの残り時間"
-    >
-      <Seg v={c.days} label="DAYS" cls={segCls} />
-      <Colon size={size} />
-      <Seg v={c.hours} label="HRS" cls={segCls} />
-      <Colon size={size} />
-      <Seg v={c.minutes} label="MIN" cls={segCls} />
-      <Colon size={size} />
-      <Seg v={c.seconds} label="SEC" cls={segCls} />
     </div>
   );
 }

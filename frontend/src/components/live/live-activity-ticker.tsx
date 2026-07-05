@@ -2,9 +2,9 @@
 
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, UserPlus, Trophy, Megaphone, Award, Star, Swords } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { liveApi, type LiveActivityItem } from "@/features/live/api/live-api";
+import { activityMeta } from "@/features/live/lib/activity-meta";
 import { LiveDot } from "./live-dot";
 
 function relTime(iso: string): string {
@@ -13,16 +13,6 @@ function relTime(iso: string): string {
   if (sec < 60) return `${sec}秒前`;
   if (sec < 3600) return `${Math.floor(sec / 60)}分前`;
   return `${Math.floor(sec / 3600)}時間前`;
-}
-function iconFor(type: string): { Icon: React.ElementType; color: string } {
-  if (type.includes("mvp")) return { Icon: Star, color: "text-pink-400" };
-  if (type.includes("bracket") || type.includes("match")) return { Icon: Swords, color: "text-red-400" };
-  if (type.startsWith("player.team") || type.includes("registration") || type.includes("entry"))
-    return { Icon: UserPlus, color: "text-brand-400" };
-  if (type === "tournament.completed") return { Icon: Trophy, color: "text-yellow-400" };
-  if (type.startsWith("team.achievement")) return { Icon: Award, color: "text-purple-400" };
-  if (type.startsWith("tournament")) return { Icon: Megaphone, color: "text-green-400" };
-  return { Icon: Activity, color: "text-slate-400" };
 }
 
 const MOCK: LiveActivityItem[] = [
@@ -59,10 +49,11 @@ export function LiveActivityTicker() {
       <div className="flex min-w-0 flex-1 items-center gap-4 overflow-x-auto scrollbar-thin">
         {items.map((it) => {
           const actor = typeof it.metadata?.actor_name === "string" ? it.metadata.actor_name : undefined;
-          const { Icon, color } = iconFor(it.type);
+          const m = activityMeta(it.type);
           return (
             <span key={it.id} className="flex flex-shrink-0 items-center gap-1.5 whitespace-nowrap text-xs">
-              <Icon className={cn("h-3.5 w-3.5", color)} />
+              <m.Icon className={cn("h-3.5 w-3.5", m.color)} />
+              {m.label && <span className={cn("rounded px-1 text-[9px] font-black tracking-wider", m.bg, m.color)}>{m.label}</span>}
               {actor && <span className="font-semibold text-white">{actor}</span>}
               <span className="text-slate-400">{it.title}</span>
               <span className="text-slate-600">· {relTime(it.occurred_at)}</span>

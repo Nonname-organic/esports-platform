@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 
-export type CountdownLevel = "normal" | "soon" | "critical" | "expired";
+// normal(>3d) → soon(<=3d) → urgent(<=24h) → critical(<=12h) → final(<=1h) → expired
+export type CountdownLevel = "normal" | "soon" | "urgent" | "critical" | "final" | "expired";
 
 export interface CountdownParts {
   days: number;
@@ -20,7 +21,12 @@ function compute(target: string | null): CountdownParts {
   const totalMs = new Date(target).getTime() - Date.now();
   if (Number.isNaN(totalMs) || totalMs <= 0) return { ...ZERO, level: "expired" };
   const s = Math.floor(totalMs / 1000);
-  const level: CountdownLevel = totalMs <= 3_600_000 ? "critical" : totalMs <= 86_400_000 ? "soon" : "normal";
+  const level: CountdownLevel =
+    totalMs <= 3_600_000 ? "final"        // <= 1時間
+    : totalMs <= 43_200_000 ? "critical"  // <= 12時間
+    : totalMs <= 86_400_000 ? "urgent"    // <= 24時間
+    : totalMs <= 259_200_000 ? "soon"     // <= 3日
+    : "normal";
   return {
     days: Math.floor(s / 86400),
     hours: Math.floor((s % 86400) / 3600),

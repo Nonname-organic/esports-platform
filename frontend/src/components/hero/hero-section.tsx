@@ -7,6 +7,7 @@ import { useRelativeSeconds } from "@/features/live/hooks/use-relative-seconds";
 import { AnimatedNumber } from "@/components/live/animated-number";
 import { LiveDot } from "@/components/live/live-dot";
 import { HeroBackgroundVideo } from "./hero-background-video";
+import { HeroArenaFx } from "./hero-arena-fx";
 import { FloatingLiveCards } from "./floating-live-cards";
 import { FeaturedEntry } from "./featured-entry";
 
@@ -17,6 +18,7 @@ export function HeroSection() {
   return (
     <section className="relative flex min-h-[calc(100svh-3.5rem)] w-full items-center justify-center overflow-hidden">
       <HeroBackgroundVideo />
+      <HeroArenaFx />
       <FloatingLiveCards />
 
       {/* コンテンツ */}
@@ -53,18 +55,21 @@ export function HeroSection() {
         <div className="mt-10 flex flex-col gap-3 sm:flex-row">
           <Link
             href="/organizer/tournaments/new"
-            className="group relative inline-flex items-center justify-center gap-2 rounded-xl bg-brand-500 px-8 py-4 text-base font-bold text-white shadow-[0_0_30px_rgba(59,130,246,0.45)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-brand-400 hover:shadow-[0_0_44px_rgba(59,130,246,0.75)]"
+            className="arena-cta group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-xl bg-brand-500 px-8 py-4 text-base font-bold text-white shadow-[0_0_30px_rgba(59,130,246,0.45)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-brand-400 hover:shadow-[0_0_44px_rgba(59,130,246,0.75)] active:scale-[0.97]"
           >
-            <Trophy className="h-5 w-5" />
-            大会を開催する
-            <span className="absolute inset-0 -z-10 rounded-xl bg-brand-500/40 blur-xl transition-opacity duration-200 group-hover:opacity-100 opacity-60" />
+            {/* Hover Light Sweep */}
+            <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
+            <Trophy className="relative h-5 w-5" />
+            <span className="relative">大会を開催する</span>
+            <span className="absolute inset-0 -z-10 rounded-xl bg-brand-500/40 blur-xl opacity-60 transition-opacity duration-200 group-hover:opacity-100" />
           </Link>
           <Link
             href="/tournaments"
-            className="group inline-flex items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/5 px-8 py-4 text-base font-bold text-white backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-red-400/50 hover:bg-white/10 hover:shadow-[0_0_30px_rgba(225,29,72,0.35)]"
+            className="arena-cta group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-xl border border-white/20 bg-white/5 px-8 py-4 text-base font-bold text-white backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-red-400/50 hover:bg-white/10 hover:shadow-[0_0_30px_rgba(225,29,72,0.35)] active:scale-[0.97]"
           >
-            <Swords className="h-5 w-5 text-red-300" />
-            大会へ参加する
+            <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/15 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
+            <Swords className="relative h-5 w-5 text-red-300" />
+            <span className="relative">大会へ参加する</span>
           </Link>
         </div>
 

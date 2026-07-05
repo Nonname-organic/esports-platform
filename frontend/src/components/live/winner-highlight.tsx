@@ -61,6 +61,7 @@ function LastChampionCard({ c, className }: { c: RecentChampion; className?: str
         <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-yellow-500/10 blur-3xl" />
         {/* Shine スイープ（優勝の輝き） */}
         <span className="pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 bg-gradient-to-r from-transparent via-white/15 to-transparent animate-shine" />
+        <GoldParticles />
       </div>
 
       <div className="relative flex min-h-[15rem] flex-col justify-between p-6">
@@ -76,6 +77,7 @@ function LastChampionCard({ c, className }: { c: RecentChampion; className?: str
             {c.champion_team_name ?? "—"}
           </p>
           <p className="mt-1 text-sm text-slate-400">{c.tournament_name}</p>
+          <p className="mt-1 text-xs font-semibold tracking-wide text-yellow-500/80">頂点に立った王者 — 次に挑むのは、あなたのチームだ。</p>
 
           <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
             {c.runner_up_name && (
@@ -98,6 +100,36 @@ function LastChampionCard({ c, className }: { c: RecentChampion; className?: str
         </div>
       </div>
     </Link>
+  );
+}
+
+// 金色パーティクル（CSSのみ・座標固定でSSR/CSR一致）
+const PARTICLES = [
+  { left: "10%", delay: "0s", size: 4 },
+  { left: "24%", delay: "0.8s", size: 3 },
+  { left: "38%", delay: "1.6s", size: 5 },
+  { left: "52%", delay: "0.4s", size: 3 },
+  { left: "66%", delay: "2.1s", size: 4 },
+  { left: "80%", delay: "1.2s", size: 3 },
+  { left: "90%", delay: "2.6s", size: 5 },
+];
+function GoldParticles() {
+  return (
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3 overflow-hidden" aria-hidden>
+      {PARTICLES.map((p, i) => (
+        <span
+          key={i}
+          className="absolute bottom-0 rounded-full bg-yellow-300 animate-gold-float"
+          style={{
+            left: p.left,
+            width: p.size,
+            height: p.size,
+            animationDelay: p.delay,
+            boxShadow: "0 0 6px rgba(253,224,71,0.9)",
+          }}
+        />
+      ))}
+    </div>
   );
 }
 

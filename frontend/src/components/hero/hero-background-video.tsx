@@ -112,10 +112,13 @@ export function HeroBackgroundVideo() {
         />
       )}
 
-      {/* 2. アニメーション・グラデーション（Blue / Purple / Red Neon） */}
-      <div className="absolute -inset-[15%] bg-[radial-gradient(50%_50%_at_26%_32%,rgba(37,99,235,0.5),transparent_60%)] animate-aurora will-change-transform" />
-      <div className="absolute -inset-[15%] bg-[radial-gradient(46%_46%_at_50%_60%,rgba(147,51,234,0.4),transparent_60%)] animate-aurora-slow will-change-transform" />
-      <div className="absolute -inset-[15%] bg-[radial-gradient(48%_48%_at_78%_70%,rgba(225,29,72,0.42),transparent_60%)] animate-aurora will-change-transform" />
+      {/* 2. アニメーション・グラデーション（Blue / Purple / Red Neon）。
+             30秒周期の hue サイクルで Blue→Purple→Red→Blue を同期。 */}
+      <div className="absolute inset-0 animate-hue">
+        <div className="absolute -inset-[15%] bg-[radial-gradient(50%_50%_at_26%_32%,rgba(37,99,235,0.5),transparent_60%)] animate-aurora will-change-transform" />
+        <div className="absolute -inset-[15%] bg-[radial-gradient(46%_46%_at_50%_60%,rgba(147,51,234,0.4),transparent_60%)] animate-aurora-slow will-change-transform" />
+        <div className="absolute -inset-[15%] bg-[radial-gradient(48%_48%_at_78%_70%,rgba(225,29,72,0.42),transparent_60%)] animate-aurora will-change-transform" />
+      </div>
 
       {/* 3. 動画 */}
       {showVideo && (
@@ -150,8 +153,8 @@ export function HeroBackgroundVideo() {
         />
       )}
 
-      {/* 4. オーバーレイ（強め: UIを必ず前面に） */}
-      <div className="absolute inset-0 bg-slate-950/65" />
+      {/* 4. オーバーレイ（強め: UIを必ず前面に）。ベースはゆっくり明滅。 */}
+      <div className="absolute inset-0 bg-slate-950/65 animate-overlay-pulse" />
       <div className="absolute inset-0 bg-gradient-to-b from-slate-950/55 via-slate-950/45 to-slate-950" />
       <div className="absolute inset-0 bg-gradient-to-r from-slate-950/70 via-transparent to-slate-950/70" />
       <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-b from-transparent to-slate-950" />

@@ -159,13 +159,85 @@
   }
   .animate-board-flicker { animation: board-flicker 4s ease-in-out infinite; }
 
+  /* ── 大会会場（Arena）演出 ─────────────────────────────────────────────── */
+  /* 締切12h以内: わずかに揺れて危機感 */
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-2px); }
+    40% { transform: translateX(2px); }
+    60% { transform: translateX(-1.5px); }
+    80% { transform: translateX(1.5px); }
+  }
+  .animate-shake { animation: shake 0.6s ease-in-out infinite; }
+
+  /* Hero overlay/aurora の30秒 hue サイクル（Blue→Purple→Red→Blue） */
+  @keyframes hue-cycle {
+    0% { filter: hue-rotate(0deg); }
+    100% { filter: hue-rotate(360deg); }
+  }
+  .animate-hue { animation: hue-cycle 30s linear infinite; }
+
+  /* overlay のゆっくりした明滅 */
+  @keyframes overlay-pulse {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 0.66; }
+  }
+  .animate-overlay-pulse { animation: overlay-pulse 12s ease-in-out infinite; }
+
+  /* ステージライト風の移動グロー */
+  @keyframes light-sweep {
+    0% { transform: translateX(-40%) rotate(9deg); opacity: 0; }
+    50% { opacity: 0.5; }
+    100% { transform: translateX(140%) rotate(9deg); opacity: 0; }
+  }
+  .animate-light-sweep { animation: light-sweep 10s ease-in-out infinite; }
+  .animate-light-sweep-2 { animation: light-sweep 13s ease-in-out infinite 3s; }
+
+  /* カード背景のゆっくりズーム（アイドル） */
+  @keyframes slow-zoom {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.08); }
+  }
+  .animate-slow-zoom { animation: slow-zoom 16s ease-in-out infinite; }
+
+  /* 優勝の金色パーティクル */
+  @keyframes gold-float {
+    0% { transform: translateY(10px) scale(0.8); opacity: 0; }
+    25% { opacity: 1; }
+    100% { transform: translateY(-26px) scale(1); opacity: 0; }
+  }
+  .animate-gold-float { animation: gold-float 3.4s ease-in-out infinite; }
+
+  /* CTA クリックのリップル（CSSのみ・中心発） */
+  @keyframes ripple {
+    0% { transform: translate(-50%, -50%) scale(0); opacity: 0.5; }
+    100% { transform: translate(-50%, -50%) scale(2.6); opacity: 0; }
+  }
+  .arena-cta::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 26px;
+    height: 26px;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.5);
+    transform: translate(-50%, -50%) scale(0);
+    opacity: 0;
+    pointer-events: none;
+  }
+  .arena-cta:active::after { animation: ripple 0.6s ease-out; }
+
   @media (prefers-reduced-motion: reduce) {
     .animate-live-blink, .animate-live-ping, .count-flash, .animate-live-enter,
     .animate-aurora, .animate-aurora-slow, .animate-glow-pulse,
     .animate-scroll-wheel, .animate-soft-float, .card-pulse,
     .animate-float-a, .animate-float-b, .animate-float-c, .animate-marquee,
-    .animate-shine, .animate-board-flicker {
+    .animate-shine, .animate-board-flicker,
+    .animate-shake, .animate-hue, .animate-overlay-pulse, .animate-light-sweep,
+    .animate-light-sweep-2, .animate-slow-zoom, .animate-gold-float {
       animation: none !important;
     }
+    .arena-cta:active::after { animation: none !important; }
   }
 }
