@@ -58,6 +58,8 @@ class StatsService:
         champions = await self._db.scalar(
             select(func.count()).select_from(Tournament).where(Tournament.status == TournamentStatus.COMPLETED)
         )
+        # 総賞金（通貨混在は考慮せず単純合算 = 社会的証明用の概数）
+        total_prize = await self._db.scalar(select(func.coalesce(func.sum(Tournament.prize_pool), 0)))
 
         # FOMO用: 本日 / 直近5分のエントリー数（registered_at ベース）
         now = datetime.now(timezone.utc)
@@ -88,6 +90,7 @@ class StatsService:
                 "matches": int(total_matches or 0),
                 "champions": int(champions or 0),
                 "mvps": await self._count_mvps(),
+                "total_prize": float(total_prize or 0),
             },
         }
 

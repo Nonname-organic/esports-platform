@@ -20,6 +20,7 @@ export interface PlatformTotals {
   matches: number;
   champions?: number; // 追加フィールド（後方互換のため任意）
   mvps?: number;
+  total_prize?: number;
 }
 
 /** Winner Showcase 用の直近優勝チーム。 */

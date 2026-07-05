@@ -1,23 +1,26 @@
 "use client";
 
-import { Shield, User, Trophy, Swords, Crown, Star, DoorOpen, Zap } from "lucide-react";
+import { DoorOpen, Zap, Trophy, Users, Crown, Star, Swords, Coins } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLive } from "@/features/live/provider/live-provider";
 import { AnimatedNumber } from "./animated-number";
 
-/** 「使われているサービス」を示す社会的証明バンド（累計＋ライブ / CountUp）。 */
+/**
+ * 社会的証明バンド（累計＋ライブ / CountUp）。
+ * 数値は全て実データ（累計は API、受付中/開催中はライブ）。モックはしない。
+ */
 export function SocialProofBar() {
   const { live, totals } = useLive();
 
   const items = [
-    { icon: Shield, color: "text-brand-400", label: "登録チーム", value: totals?.teams ?? 0 },
-    { icon: User, color: "text-cyan-400", label: "登録プレイヤー", value: totals?.players ?? 0 },
-    { icon: Trophy, color: "text-yellow-400", label: "開催大会", value: totals?.tournaments ?? 0 },
     { icon: DoorOpen, color: "text-green-400", label: "受付中大会", value: live?.registration_open_tournaments ?? 0, live: true },
     { icon: Zap, color: "text-red-400", label: "開催中大会", value: live?.ongoing_tournaments ?? 0, live: true },
-    { icon: Swords, color: "text-purple-400", label: "総試合数", value: totals?.matches ?? 0 },
+    { icon: Trophy, color: "text-yellow-400", label: "総大会数", value: totals?.tournaments ?? 0 },
+    { icon: Users, color: "text-cyan-400", label: "参加者数", value: totals?.players ?? 0 },
     { icon: Crown, color: "text-amber-400", label: "優勝チーム", value: totals?.champions ?? 0 },
-    { icon: Star, color: "text-pink-400", label: "MVP受賞", value: totals?.mvps ?? 0 },
+    { icon: Star, color: "text-pink-400", label: "MVP数", value: totals?.mvps ?? 0 },
+    { icon: Swords, color: "text-purple-400", label: "総試合数", value: totals?.matches ?? 0 },
+    { icon: Coins, color: "text-yellow-400", label: "総賞金", value: Math.round(totals?.total_prize ?? 0), prefix: "¥" },
   ];
 
   return (
@@ -29,7 +32,8 @@ export function SocialProofBar() {
               <it.icon className={cn("h-4 w-4", it.color)} />
               {it.live && <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-live-blink" aria-hidden />}
             </div>
-            <p className="text-xl font-black text-white sm:text-2xl">
+            <p className="text-lg font-black text-white sm:text-2xl">
+              {it.prefix && <span className="text-slate-400">{it.prefix}</span>}
               <AnimatedNumber value={it.value} durationMs={1200} />
             </p>
             <p className="text-[11px] text-slate-500">{it.label}</p>

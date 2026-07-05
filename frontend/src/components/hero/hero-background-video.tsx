@@ -21,16 +21,31 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 const D_WEBM = process.env.NEXT_PUBLIC_HERO_VIDEO_WEBM ?? "/hero/hero.webm";
 const D_MP4 = process.env.NEXT_PUBLIC_HERO_VIDEO_MP4 ?? "/hero/hero.mp4";
-const M_WEBM = process.env.NEXT_PUBLIC_HERO_VIDEO_WEBM_MOBILE ?? D_WEBM;
-const M_MP4 = process.env.NEXT_PUBLIC_HERO_VIDEO_MP4_MOBILE ?? D_MP4;
+const T_WEBM = process.env.NEXT_PUBLIC_HERO_VIDEO_WEBM_TABLET ?? D_WEBM;
+const T_MP4 = process.env.NEXT_PUBLIC_HERO_VIDEO_MP4_TABLET ?? D_MP4;
+const M_WEBM = process.env.NEXT_PUBLIC_HERO_VIDEO_WEBM_MOBILE ?? T_WEBM;
+const M_MP4 = process.env.NEXT_PUBLIC_HERO_VIDEO_MP4_MOBILE ?? T_MP4;
 const POSTER = process.env.NEXT_PUBLIC_HERO_POSTER ?? "/hero/hero-poster.svg";
+
+type Tier = "desktop" | "tablet" | "mobile";
+function pickTier(): Tier {
+  if (typeof window === "undefined") return "desktop";
+  if (window.matchMedia("(max-width: 640px)").matches) return "mobile";
+  if (window.matchMedia("(max-width: 1024px)").matches) return "tablet";
+  return "desktop";
+}
+const TIER_SOURCES: Record<Tier, { webm: string; mp4: string }> = {
+  desktop: { webm: D_WEBM, mp4: D_MP4 },
+  tablet: { webm: T_WEBM, mp4: T_MP4 },
+  mobile: { webm: M_WEBM, mp4: M_MP4 },
+};
 
 export function HeroBackgroundVideo() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
   const [reduced, setReduced] = useState(false);
-  const [mobile, setMobile] = useState(false);
+  const [tier, setTier] = useState<Tier>("desktop");
 
   // prefers-reduced-motion
   useEffect(() => {
@@ -41,19 +56,16 @@ export function HeroBackgroundVideo() {
     return () => mq.removeEventListener?.("change", apply);
   }, []);
 
-  // ビューポートに応じた軽量版選択（Desktop/Mobile分離）
+  // ビューポートに応じた別動画（Desktop / Tablet / Mobile）
   useEffect(() => {
-    const mq = window.matchMedia("(max-width: 640px)");
-    const apply = () => setMobile(mq.matches);
+    const apply = () => setTier(pickTier());
     apply();
-    mq.addEventListener?.("change", apply);
-    return () => mq.removeEventListener?.("change", apply);
+    const mqs = [window.matchMedia("(max-width: 640px)"), window.matchMedia("(max-width: 1024px)")];
+    mqs.forEach((mq) => mq.addEventListener?.("change", apply));
+    return () => mqs.forEach((mq) => mq.removeEventListener?.("change", apply));
   }, []);
 
-  const sources = useMemo(
-    () => (mobile ? { webm: M_WEBM, mp4: M_MP4 } : { webm: D_WEBM, mp4: D_MP4 }),
-    [mobile],
-  );
+  const sources = useMemo(() => TIER_SOURCES[tier], [tier]);
 
   // ソース切替時に再読込
   useEffect(() => {
@@ -94,7 +106,7 @@ export function HeroBackgroundVideo() {
       {showVideo && (
         <video
           ref={videoRef}
-          key={mobile ? "m" : "d"}
+          key={tier}
           className={`absolute inset-0 h-full w-full scale-105 object-cover transition-opacity duration-1000 ${
             ready ? "opacity-100" : "opacity-0"
           }`}
