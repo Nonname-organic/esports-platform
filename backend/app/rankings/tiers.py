@@ -14,6 +14,9 @@ PLACEMENT_RP: dict[str, int] = {
     "participated": 100,
 }
 
+# Player RP のMVPボーナス（1MVPあたり / ADR-0016）。Team RP SSOT を再利用しつつ選手固有加点。
+MVP_RP: int = 150
+
 # Tier しきい値（min_rp 昇順）。key/label/color/icon は表示のSSOT。
 TIERS: list[dict] = [
     {"key": "bronze", "label": "Bronze", "min_rp": 0, "color": "#b45309", "icon": "shield"},

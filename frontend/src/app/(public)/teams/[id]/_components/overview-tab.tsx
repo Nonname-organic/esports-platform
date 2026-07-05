@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import type { TeamStats, Team } from "@/types/team";
 import { TeamSponsors } from "./team-sponsors";
 import { TeamAchievements } from "./team-achievements";
+import { TeamRankCard } from "./team-rank-card";
 
 interface OverviewTabProps {
   team: Team;
@@ -48,6 +49,9 @@ export function OverviewTab({ team, stats }: OverviewTabProps) {
 
       {/* 実績カード（既存データからの読み取り集約） */}
       <TeamAchievements teamId={String(team.id)} />
+
+      {/* ランクカード（競技ランキング / ADR-0016） */}
+      <TeamRankCard teamId={String(team.id)} />
 
       {/* 詳細スタッツグリッド */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">

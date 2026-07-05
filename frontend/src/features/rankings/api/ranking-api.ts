@@ -9,6 +9,24 @@ export interface TierInfo {
   icon: string;
 }
 
+export interface SeasonInfo {
+  key: string;
+  id: string;
+  label: string;
+  start_at: string | null;
+  end_at: string | null;
+  is_current: boolean;
+}
+
+export interface SeasonRankItem {
+  key: string;
+  label: string;
+  rp: number;
+  rank: number | null;
+  tier_label: string;
+  tier_color: string;
+}
+
 export interface LeaderboardEntry {
   rank: number;
   team_id: string;
@@ -30,6 +48,19 @@ export interface LeaderboardEntry {
   win_rate: number;
 }
 
+export interface PlayerLeaderboardEntry {
+  rank: number;
+  player_id: string;
+  in_game_name: string;
+  game: string;
+  rp: number;
+  tier_key: string;
+  tier_label: string;
+  tier_color: string;
+  progress: number;
+  mvps: number;
+}
+
 export interface RankHistoryItem {
   tournament_id: string;
   tournament_name: string;
@@ -39,10 +70,13 @@ export interface RankHistoryItem {
   cumulative_rp: number;
 }
 
+/** チーム/プレイヤー共通の RankCard（同一 SSOT / ADR-0016）。 */
 export interface RankCard {
-  team_id: string;
-  team_name: string;
-  team_tag: string;
+  team_id?: string;
+  team_name?: string;
+  team_tag?: string;
+  player_id?: string;
+  in_game_name?: string;
   game: string;
   rp: number;
   rank: number | null;
@@ -54,22 +88,40 @@ export interface RankCard {
   next_tier_rp: number | null;
   progress: number;
   championships: number;
-  tournaments: number;
-  history: RankHistoryItem[];
+  tournaments?: number;
+  current_season_rp: number;
+  previous_season_rp: number;
+  best_season_tier: string | null;
+  best_season_tier_color: string | null;
+  matches: number;
+  wins: number;
+  losses: number;
+  win_rate: number;
+  mvps?: number;
+  seasons: SeasonRankItem[];
+  history?: RankHistoryItem[];
 }
 
-export type SeasonScope = "all" | "current";
+export type SeasonScope = "all" | "current" | "previous";
 
 export const rankingApi = {
   tiers: (): Promise<ApiResponse<TierInfo[]>> => apiClient.get(`/api/v1/rankings/tiers`),
-  global: (params: { game?: string; season?: SeasonScope; limit?: number } = {}): Promise<ListResponse<LeaderboardEntry>> => {
-    const qs = new URLSearchParams();
-    if (params.game) qs.set("game", params.game);
-    if (params.season) qs.set("season", params.season);
-    if (params.limit) qs.set("limit", String(params.limit));
-    const q = qs.toString();
-    return apiClient.get(`/api/v1/rankings/global${q ? `?${q}` : ""}`);
-  },
-  teamCard: (teamId: string, season: SeasonScope = "all"): Promise<ApiResponse<RankCard>> =>
-    apiClient.get(`/api/v1/rankings/team/${teamId}?season=${season}`),
+  seasons: (): Promise<ApiResponse<SeasonInfo[]>> => apiClient.get(`/api/v1/seasons`),
+  global: (params: { game?: string; season?: SeasonScope; limit?: number } = {}): Promise<ListResponse<LeaderboardEntry>> =>
+    apiClient.get(`/api/v1/rankings/global${qs(params)}`),
+  players: (params: { game?: string; season?: SeasonScope; limit?: number } = {}): Promise<ListResponse<PlayerLeaderboardEntry>> =>
+    apiClient.get(`/api/v1/rankings/players${qs(params)}`),
+  teamRankCard: (teamId: string): Promise<ApiResponse<RankCard>> =>
+    apiClient.get(`/api/v1/teams/${teamId}/rank-card`),
+  playerRankCard: (playerId: string): Promise<ApiResponse<RankCard>> =>
+    apiClient.get(`/api/v1/players/${playerId}/rank-card`),
 };
+
+function qs(params: { game?: string; season?: SeasonScope; limit?: number }): string {
+  const p = new URLSearchParams();
+  if (params.game) p.set("game", params.game);
+  if (params.season) p.set("season", params.season);
+  if (params.limit) p.set("limit", String(params.limit));
+  const s = p.toString();
+  return s ? `?${s}` : "";
+}

@@ -18,6 +18,7 @@ from app.schemas.team import (
 )
 from app.schemas.career import TeamCareerSchema, AchievementItem, RivalItem
 from app.schemas.achievement import AchievementCardDTO
+from app.schemas.ranking import RankCard
 from app.services.team import TeamService
 from app.services.career_service import CareerAggregationService
 from app.achievements.aggregator import AchievementAggregator
@@ -57,6 +58,14 @@ async def get_team_achievement_card(team_id: uuid.UUID, db: DBSession, cache: Ca
     aggregator = AchievementAggregator(db, cache)
     card = await aggregator.get_team_card(team_id)
     return Response(data=AchievementCardDTO(**card), meta=None)
+
+
+@router.get("/{team_id}/rank-card", response_model=Response[RankCard])
+async def get_team_rank_card_endpoint(team_id: uuid.UUID, db: DBSession, cache: Cache):
+    """チームのランクカード（Tier/RP/Rank/Progress/Season内訳 / ADR-0016）。Achievement Card と横並び配置。"""
+    from app.rankings.aggregator import RankingAggregator
+    card = await RankingAggregator(db, cache).team_rank_card(team_id)
+    return Response(data=RankCard(**card), meta=None)
 
 
 def _team_detail(team) -> TeamDetailSchema:

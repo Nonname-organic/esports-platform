@@ -8,7 +8,13 @@ from app.rankings.aggregator import RankingAggregator
 from app.rankings.tiers import list_tiers
 from app.schemas.analytics import RankingEntry
 from app.schemas.common import ListResponse, Meta, Response
-from app.schemas.ranking import LeaderboardEntry, RankCard, TierInfo
+from app.schemas.ranking import (
+    LeaderboardEntry,
+    PlayerLeaderboardEntry,
+    PlayerRankCard,
+    RankCard,
+    TierInfo,
+)
 from app.services.ranking import RankingService
 
 router = APIRouter(prefix="/rankings", tags=["ランキング"])
@@ -26,15 +32,38 @@ async def get_global_rankings(
     db: DBSession,
     cache: Cache,
     game: Optional[str] = Query(default=None),
-    season: str = Query(default="all", pattern="^(all|current)$"),
+    season: str = Query(default="all", pattern="^(all|current|previous)$"),
     limit: int = Query(default=50, ge=1, le=100),
 ):
-    """チームのグローバル/シーズン・リーダーボード。"""
+    """チームのグローバル/シーズン・リーダーボード（season: all|current|previous）。"""
     board = await RankingAggregator(db, cache).global_team_leaderboard(game=game, season=season, limit=limit)
     return ListResponse(
         data=[LeaderboardEntry(**e) for e in board],
         meta=Meta(total=len(board), has_next=False),
     )
+
+
+@router.get("/players", response_model=ListResponse[PlayerLeaderboardEntry])
+async def get_global_player_rankings(
+    db: DBSession,
+    cache: Cache,
+    game: Optional[str] = Query(default=None),
+    season: str = Query(default="all", pattern="^(all|current|previous)$"),
+    limit: int = Query(default=50, ge=1, le=100),
+):
+    """プレイヤーのグローバル/シーズン・リーダーボード（Team RP SSOT + MVP / ADR-0016）。"""
+    board = await RankingAggregator(db, cache).global_player_leaderboard(game=game, season=season, limit=limit)
+    return ListResponse(
+        data=[PlayerLeaderboardEntry(**e) for e in board],
+        meta=Meta(total=len(board), has_next=False),
+    )
+
+
+@router.get("/player/{player_id}", response_model=Response[PlayerRankCard])
+async def get_player_rank_card(player_id: uuid.UUID, db: DBSession, cache: Cache):
+    """1プレイヤーのランクカード。"""
+    card = await RankingAggregator(db, cache).player_rank_card(player_id)
+    return Response(data=PlayerRankCard(**card), meta=None)
 
 
 @router.get("/team/{team_id}", response_model=Response[RankCard])

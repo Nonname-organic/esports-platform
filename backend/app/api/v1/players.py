@@ -41,6 +41,15 @@ async def get_player_achievements(player_id: uuid.UUID, db: DBSession, cache: Ca
     return Response(data=[AchievementItem(**a) for a in achievements], meta=None)
 
 
+@router.get("/{player_id}/rank-card", response_model=Response[PlayerRankCard])
+async def get_player_rank_card_endpoint(player_id: uuid.UUID, db: DBSession, cache: Cache):
+    """プレイヤーのランクカード（Tier/RP/Rank/Progress/Season内訳 / ADR-0016）。Achievement と横並び配置。"""
+    from app.rankings.aggregator import RankingAggregator
+    from app.schemas.ranking import PlayerRankCard
+    card = await RankingAggregator(db, cache).player_rank_card(player_id)
+    return Response(data=PlayerRankCard(**card), meta=None)
+
+
 @router.get("/{player_id}/rating-history", response_model=Response[list[RatingPoint]])
 async def get_player_rating_history(
     player_id: uuid.UUID, db: DBSession, cache: Cache,

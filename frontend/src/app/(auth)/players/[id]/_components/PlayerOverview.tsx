@@ -8,6 +8,7 @@ import { SummaryCard } from "./shared/summary-card";
 import { StatsGrid } from "./shared/stats-grid";
 import { TabSkeleton } from "./shared/empty-state";
 import { fmtNum, fmtInt, fmtPct, DASH } from "./shared/stat-format";
+import { PlayerRankCard } from "./player-rank-card";
 
 interface Props {
   player: Player;
@@ -42,6 +43,9 @@ export function PlayerOverview({ player, playerId }: Props) {
         )}
         {player.bio && <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-slate-300">{player.bio}</p>}
       </section>
+
+      {/* ランクカード（競技ランキング / ADR-0016） */}
+      <PlayerRankCard playerId={playerId} />
 
       {/* KPIサマリー */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">

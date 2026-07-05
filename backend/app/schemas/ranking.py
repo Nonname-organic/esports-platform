@@ -39,6 +39,15 @@ class LeaderboardEntry(BaseModel):
     win_rate: float
 
 
+class SeasonRankItem(BaseModel):
+    key: str
+    label: str
+    rp: int
+    rank: Optional[int] = None
+    tier_label: str
+    tier_color: str
+
+
 class RankHistoryItem(BaseModel):
     tournament_id: str
     tournament_name: str
@@ -64,4 +73,53 @@ class RankCard(BaseModel):
     progress: float
     championships: int
     tournaments: int
+    # シーズン内訳（ADR-0016・additive）
+    current_season_rp: int = 0
+    previous_season_rp: int = 0
+    best_season_tier: Optional[str] = None
+    best_season_tier_color: Optional[str] = None
+    matches: int = 0
+    wins: int = 0
+    losses: int = 0
+    win_rate: float = 0.0
+    seasons: list[SeasonRankItem] = []
     history: list[RankHistoryItem] = []
+
+
+class PlayerLeaderboardEntry(BaseModel):
+    rank: int
+    player_id: str
+    in_game_name: str
+    game: str
+    rp: int
+    tier_key: str
+    tier_label: str
+    tier_color: str
+    progress: float
+    mvps: int = 0
+
+
+class PlayerRankCard(BaseModel):
+    player_id: str
+    in_game_name: str
+    game: str
+    rp: int
+    rank: Optional[int] = None
+    total_ranked: int
+    tier_key: str
+    tier_label: str
+    tier_color: str
+    next_tier_label: Optional[str] = None
+    next_tier_rp: Optional[int] = None
+    progress: float
+    current_season_rp: int = 0
+    previous_season_rp: int = 0
+    best_season_tier: Optional[str] = None
+    best_season_tier_color: Optional[str] = None
+    mvps: int = 0
+    championships: int = 0
+    matches: int = 0
+    wins: int = 0
+    losses: int = 0
+    win_rate: float = 0.0
+    seasons: list[SeasonRankItem] = []
