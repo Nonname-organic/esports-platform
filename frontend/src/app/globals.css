@@ -228,6 +228,49 @@
   }
   .arena-cta:active::after { animation: ripple 0.6s ease-out; }
 
+  /* ══ Hero Experience（Cinematic / GPU: transform・opacity・filter のみ）══ */
+
+  /* Ambient Zoom（Ken Burns）: 30s で緩やかに拡縮。cover 維持のため最小 scale > 1。 */
+  @keyframes hero-ambient-zoom {
+    0%, 100% { transform: scale(1.02); }
+    50%      { transform: scale(1.10); }
+  }
+  .hero-ambient-zoom { animation: hero-ambient-zoom 30s ease-in-out infinite; will-change: transform; }
+
+  /* Dynamic Light: 巨大 radial を 50s かけて漂わせ、画面全体に"呼吸"を与える（気付かないレベル）。 */
+  @keyframes hero-light-drift {
+    0%   { transform: translate3d(-4%, -3%, 0) rotate(0deg) scale(1.00); }
+    50%  { transform: translate3d(4%, 3%, 0)   rotate(8deg) scale(1.18); }
+    100% { transform: translate3d(-4%, -3%, 0) rotate(0deg) scale(1.00); }
+  }
+  .hero-light-drift { animation: hero-light-drift 50s ease-in-out infinite; will-change: transform; }
+
+  /* Film Grain: 静止ノイズ（feTurbulence）。4K でも粗く見えない極薄。動かさない。 */
+  .hero-grain {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 140px 140px;
+    opacity: 0.035;
+    mix-blend-mode: overlay;
+  }
+
+  /* Content Reveal（stagger）: 既定は可視（reduced-motion / no-JS でも必ず見える）。
+     motion 許可時のみ opacity/translateY で立ち上げる。fill: both で delay 中は 0% を保持。 */
+  .hero-reveal { opacity: 1; }
+  @keyframes hero-reveal-up {
+    from { opacity: 0; transform: translateY(18px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .hero-reveal {
+      opacity: 0;
+      animation: hero-reveal-up 0.9s cubic-bezier(0.16, 0.84, 0.30, 1) both;
+    }
+    .hero-reveal-1 { animation-delay: 0.12s; }
+    .hero-reveal-2 { animation-delay: 0.24s; }
+    .hero-reveal-3 { animation-delay: 0.44s; }
+    .hero-reveal-4 { animation-delay: 0.62s; }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .animate-live-blink, .animate-live-ping, .count-flash, .animate-live-enter,
     .animate-aurora, .animate-aurora-slow, .animate-glow-pulse,
@@ -235,7 +278,8 @@
     .animate-float-a, .animate-float-b, .animate-float-c, .animate-marquee,
     .animate-shine, .animate-board-flicker,
     .animate-shake, .animate-hue, .animate-overlay-pulse, .animate-light-sweep,
-    .animate-light-sweep-2, .animate-slow-zoom, .animate-gold-float {
+    .animate-light-sweep-2, .animate-slow-zoom, .animate-gold-float,
+    .hero-ambient-zoom, .hero-light-drift {
       animation: none !important;
     }
     .arena-cta:active::after { animation: none !important; }

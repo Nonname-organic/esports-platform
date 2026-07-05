@@ -46,6 +46,7 @@ export function HeroBackgroundVideo() {
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
   const [reduced, setReduced] = useState(false);
+  const [saveData, setSaveData] = useState(false);
   const [tier, setTier] = useState<Tier>("desktop");
 
   // prefers-reduced-motion
@@ -55,6 +56,19 @@ export function HeroBackgroundVideo() {
     apply();
     mq.addEventListener?.("change", apply);
     return () => mq.removeEventListener?.("change", apply);
+  }, []);
+
+  // Save-Data / 低速回線（2g系）: 動画を読み込まず Poster のみに落とす
+  useEffect(() => {
+    const conn = (navigator as unknown as {
+      connection?: { saveData?: boolean; effectiveType?: string };
+    }).connection;
+    if (!conn) return;
+    const apply = () =>
+      setSaveData(Boolean(conn.saveData) || /(^|-)2g$/.test(conn.effectiveType ?? ""));
+    apply();
+    (conn as unknown as EventTarget).addEventListener?.("change", apply);
+    return () => (conn as unknown as EventTarget).removeEventListener?.("change", apply);
   }, []);
 
   // ビューポートに応じた別動画（Desktop / Tablet / Mobile）
@@ -70,16 +84,16 @@ export function HeroBackgroundVideo() {
 
   // ソース切替時に再読込
   useEffect(() => {
-    if (videoRef.current && !reduced && !failed) {
+    if (videoRef.current && !reduced && !failed && !saveData) {
       setReady(false);
       videoRef.current.load();
     }
-  }, [sources, reduced, failed]);
+  }, [sources, reduced, failed, saveData]);
 
   // IntersectionObserver: 画面外で pause / 画面内で play
   useEffect(() => {
     const el = videoRef.current;
-    if (!el || reduced || failed) return;
+    if (!el || reduced || failed || saveData) return;
     const io = new IntersectionObserver(
       (entries) => {
         const e = entries[0];
@@ -91,9 +105,9 @@ export function HeroBackgroundVideo() {
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [reduced, failed]);
+  }, [reduced, failed, saveData]);
 
-  const showVideo = !reduced && !failed;
+  const showVideo = !reduced && !failed && !saveData;
 
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
@@ -102,11 +116,13 @@ export function HeroBackgroundVideo() {
       {/* 0. ベース色 */}
       <div className="absolute inset-0 bg-slate-950" />
 
-      {/* 1. Poster（動画読み込み前のベース。動画表示時は薄く敷き、Aurora の下に置く） */}
+      {/* 1. Poster（LCP 担当・最初に表示。動画表示時は薄く敷き、Aurora の下に置く） */}
       {showVideo && (
         <img
           src={POSTER}
           alt=""
+          fetchPriority="high"
+          decoding="async"
           className="absolute inset-0 h-full w-full scale-105 object-cover opacity-80"
           style={{ filter: "brightness(0.5) contrast(1.05)" }}
         />
@@ -125,10 +141,10 @@ export function HeroBackgroundVideo() {
         <video
           ref={videoRef}
           key={tier}
-          className={`absolute inset-0 h-full w-full scale-105 object-cover transition-opacity duration-1000 ${
+          className={`hero-ambient-zoom absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ${
             ready ? "opacity-100" : "opacity-0"
           }`}
-          style={{ filter: "brightness(0.5) contrast(1.08) saturate(1.08)" }}
+          style={{ filter: "brightness(0.55) contrast(1.14) saturate(0.9)" }}
           autoPlay
           muted
           loop
@@ -143,21 +159,23 @@ export function HeroBackgroundVideo() {
         </video>
       )}
 
-      {/* poster（reduced-motion / 動画非表示時のメインビジュアル。Aurora の上） */}
+      {/* poster（reduced-motion / Save-Data / 動画非表示時のメインビジュアル・LCP。Aurora の上） */}
       {!showVideo && (
         <img
           src={POSTER}
           alt=""
+          fetchPriority="high"
+          decoding="async"
           className="absolute inset-0 h-full w-full scale-105 object-cover opacity-90"
           style={{ filter: "brightness(0.55) contrast(1.05)" }}
         />
       )}
 
-      {/* 4. オーバーレイ（強め: UIを必ず前面に）。ベースはゆっくり明滅。 */}
-      <div className="absolute inset-0 bg-slate-950/65 animate-overlay-pulse" />
-      <div className="absolute inset-0 bg-gradient-to-b from-slate-950/55 via-slate-950/45 to-slate-950" />
-      <div className="absolute inset-0 bg-gradient-to-r from-slate-950/70 via-transparent to-slate-950/70" />
-      <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-b from-transparent to-slate-950" />
+      {/* 4. Cinematic Grade（映画的カラコレ: 暗部強調 + 縦横グラデ + 極薄デュオトーン。
+             Soft Vignette / Film Grain / Bottom Blend は上位の HeroCinematicOverlay で付与） */}
+      <div className="absolute inset-0 bg-gradient-to-b from-slate-950/70 via-slate-950/35 to-slate-950/85" />
+      <div className="absolute inset-0 bg-gradient-to-r from-slate-950/55 via-transparent to-slate-950/55" />
+      <div className="absolute inset-0 mix-blend-overlay bg-[linear-gradient(105deg,rgba(29,78,216,0.10),transparent_42%,rgba(190,18,60,0.10))]" />
     </div>
   );
 }
