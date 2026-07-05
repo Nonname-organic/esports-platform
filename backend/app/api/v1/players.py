@@ -7,6 +7,7 @@ from app.core.dependencies import Cache, CurrentUser, DBSession
 from app.schemas.common import ListResponse, Meta, Response
 from app.schemas.player import GAME_ROLES, PlayerCreate, PlayerSchema, PlayerUpdate
 from app.schemas.career import PlayerCareerSchema, AchievementItem, RatingPoint
+from app.schemas.ranking import PlayerRankCard
 from app.player_profile.dto import PlayerAnalysis, PlayerHistoryItem
 from app.services.player import PlayerService
 from app.services.career_service import CareerAggregationService
@@ -46,7 +47,6 @@ async def get_player_achievements(player_id: uuid.UUID, db: DBSession, cache: Ca
 async def get_player_rank_card_endpoint(player_id: uuid.UUID, db: DBSession, cache: Cache):
     """プレイヤーのランクカード（Tier/RP/Rank/Progress/Season内訳 / ADR-0016）。Achievement と横並び配置。"""
     from app.rankings.aggregator import RankingAggregator
-    from app.schemas.ranking import PlayerRankCard
     card = await RankingAggregator(db, cache).player_rank_card(player_id)
     return Response(data=PlayerRankCard(**card), meta=None)
 
