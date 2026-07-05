@@ -129,6 +129,31 @@ async def get_tournament(tournament_id: uuid.UUID, db: DBSession, cache: Cache):
     return Response(data=_build_detail(tournament, count), meta=None)
 
 
+# ── 没入型 大会詳細 Read Model（ADR-0017・公開・追加のみ / 既存API不変） ──────────
+@router.get("/{tournament_id}/overview", response_model=Response[dict])
+async def get_tournament_overview(tournament_id: uuid.UUID, db: DBSession, cache: Cache):
+    """Hero/Stream/Results 用の集約（現在の試合・配信・完了結果を含む）。"""
+    from app.services.tournament_immersion import TournamentImmersionService
+    data = await TournamentImmersionService(db, cache).overview(tournament_id)
+    return Response(data=data, meta=None)
+
+
+@router.get("/{tournament_id}/live", response_model=Response[dict])
+async def get_tournament_live(tournament_id: uuid.UUID, db: DBSession, cache: Cache):
+    """Live Status / Live Ticker / Upcoming 用（進行率・現在試合・次の試合）。"""
+    from app.services.tournament_immersion import TournamentImmersionService
+    data = await TournamentImmersionService(db, cache).live_status(tournament_id)
+    return Response(data=data, meta=None)
+
+
+@router.get("/{tournament_id}/statistics", response_model=Response[dict])
+async def get_tournament_statistics(tournament_id: uuid.UUID, db: DBSession, cache: Cache):
+    """Statistics カード用（参加数・消化率・賞金・MVP・優勝）。"""
+    from app.services.tournament_immersion import TournamentImmersionService
+    data = await TournamentImmersionService(db, cache).statistics(tournament_id)
+    return Response(data=data, meta=None)
+
+
 @router.patch("/{tournament_id}", response_model=Response[TournamentDetail])
 async def update_tournament(
     tournament_id: uuid.UUID, data: TournamentUpdate,

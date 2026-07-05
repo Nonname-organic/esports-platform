@@ -366,19 +366,21 @@ function BracketMatchCard({ match, isSelected, onClick }: BracketMatchCardProps)
     <button
       onClick={onClick}
       className={cn(
-        "w-full overflow-hidden rounded-lg border bg-slate-900 text-left transition-all duration-150",
-        "hover:border-brand-500/50 hover:shadow-md hover:shadow-brand-500/10",
+        "w-full overflow-hidden rounded-lg border bg-slate-900 text-left transition-all duration-150 will-change-transform",
+        "hover:-translate-y-0.5 hover:border-brand-500/50 hover:shadow-md hover:shadow-brand-500/10",
         "focus:outline-none focus:ring-2 focus:ring-brand-500/50",
         isSelected && "border-brand-500/70 shadow-md shadow-brand-500/10",
-        isOngoing && !isSelected && "border-red-500/40 shadow-sm shadow-red-500/10",
-        !isOngoing && !isSelected && "border-white/8",
+        // LIVE: 赤点滅 + Glow / Completed: 少しフェード / それ以外: 通常
+        isOngoing && !isSelected && "border-red-500/50 shadow-[0_0_18px_-4px_rgba(239,68,68,0.6)] animate-glow-pulse",
+        isCompleted && !isSelected && "border-white/8 opacity-95",
+        !isOngoing && !isCompleted && !isSelected && "border-white/8",
       )}
       aria-label={`${match.team1?.name ?? "TBD"} vs ${match.team2?.name ?? "TBD"}`}
     >
       {/* ステータスバー */}
       {isOngoing && (
         <div className="flex items-center gap-1.5 border-b border-red-500/20 bg-red-500/10 px-2.5 py-1">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-400" />
+          <span className="h-1.5 w-1.5 animate-live-blink rounded-full bg-red-400" />
           <span className="text-[10px] font-semibold uppercase tracking-wider text-red-400">Live</span>
         </div>
       )}

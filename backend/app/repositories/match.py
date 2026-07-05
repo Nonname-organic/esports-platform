@@ -50,6 +50,22 @@ class MatchRepository(BaseRepository[Match]):
         )
         return list(result.scalars().all())
 
+    async def get_tournament_matches_full(
+        self, tournament_id: uuid.UUID
+    ) -> list[Match]:
+        """大会の全試合（team1/team2/games/map を eager load / 没入ページの read model 用・read-only）。"""
+        result = await self._db.execute(
+            select(Match)
+            .where(Match.tournament_id == tournament_id)
+            .options(
+                selectinload(Match.team1),
+                selectinload(Match.team2),
+                selectinload(Match.games).selectinload(MatchGame.map),
+            )
+            .order_by(Match.round_number.asc(), Match.match_number.asc())
+        )
+        return list(result.scalars().all())
+
     async def get_game(
         self, match_id: uuid.UUID, game_number: int
     ) -> MatchGame | None:

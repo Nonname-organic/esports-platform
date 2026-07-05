@@ -1,6 +1,7 @@
 import { Calendar, Users, Shield, Info, FileText } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import type { TournamentDetail } from "@/types/tournament";
+import { TournamentImmersion } from "@/components/tournament-live/tournament-immersion";
 
 const FORMAT_LABEL: Record<string, string> = {
   single_elimination: "シングルエリミネーション",
@@ -48,6 +49,9 @@ export function OverviewTab({ tournament }: OverviewTabProps) {
     <div className="grid grid-cols-1 gap-6 pt-6 lg:grid-cols-3">
       {/* メインコンテンツ */}
       <div className="space-y-6 lg:col-span-2">
+        {/* 没入型ライブ Widget（ADR-0017 / Live=Read Model・WS差し替え可） */}
+        <TournamentImmersion tournamentId={String(tournament.id)} status={tournament.status} />
+
         {/* 概要 */}
         {tournament.description && (
           <section className="rounded-xl border border-white/10 bg-slate-900 p-5">
