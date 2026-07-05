@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Trophy, Swords, ChevronDown } from "lucide-react";
+import { Trophy, Swords } from "lucide-react";
 import { useLive } from "@/features/live/provider/live-provider";
 import { useRelativeSeconds } from "@/features/live/hooks/use-relative-seconds";
 import { AnimatedNumber } from "@/components/live/animated-number";
@@ -76,19 +76,6 @@ export function HeroSection() {
         {/* 受付中の目玉大会（締切が最も近い） */}
         <FeaturedEntry />
       </div>
-
-      {/* スクロール誘導 */}
-      <Link
-        href="#live"
-        aria-label="ライブ大会を見る"
-        className="absolute bottom-6 left-1/2 z-10 flex -translate-x-1/2 flex-col items-center gap-2 text-slate-400 transition-colors hover:text-white animate-soft-float"
-      >
-        <span className="text-[11px] font-semibold uppercase tracking-[0.25em]">Explore Live Tournament</span>
-        <span className="flex h-8 w-5 items-start justify-center rounded-full border-2 border-white/40 p-1">
-          <span className="h-1.5 w-1 rounded-full bg-white/80 animate-scroll-wheel" />
-        </span>
-        <ChevronDown className="h-3.5 w-3.5" />
-      </Link>
     </section>
   );
 }
