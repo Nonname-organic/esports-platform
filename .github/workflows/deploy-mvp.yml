@@ -1,10 +1,13 @@
 name: Deploy — MVP (ECS Fargate)
 
 on:
-  workflow_run:
-    workflows: ["Build & Push"]
-    branches: [main]
-    types: [completed]
+  # 手動実行のみ。EC2 + docker-compose 運用のため、自動デプロイは deploy-demo.yml を使用。
+  # ECS Fargate へ移行する場合は下記 workflow_run を有効化し、AWS OIDC を設定すること。
+  workflow_dispatch:
+  # workflow_run:
+  #   workflows: ["Build & Push"]
+  #   branches: [main]
+  #   types: [completed]
 
 concurrency:
   group: deploy-mvp

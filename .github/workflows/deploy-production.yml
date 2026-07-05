@@ -1,10 +1,13 @@
 name: Deploy — Production (EKS via ArgoCD)
 
 on:
-  workflow_run:
-    workflows: ["Build & Push"]
-    branches: [main]
-    types: [completed]
+  # 手動実行のみ。EC2 + docker-compose 運用のため、自動デプロイは deploy-demo.yml を使用。
+  # EKS/ArgoCD へ移行する場合は下記 workflow_run を有効化すること。
+  workflow_dispatch:
+  # workflow_run:
+  #   workflows: ["Build & Push"]
+  #   branches: [main]
+  #   types: [completed]
 
 concurrency:
   group: deploy-production
