@@ -14,6 +14,7 @@ import { LiveStatusBar } from "./live-status-bar";
 import { StatisticsCard } from "./statistics-card";
 import { LiveTournamentPreview } from "./live-tournament-preview";
 import { LiveActivityFeed } from "./live-activity-feed";
+import { HomePersonalized } from "@/components/home/home-personalized";
 
 /**
  * ランディングのライブ体験島（client）。
@@ -29,6 +30,9 @@ export function LandingLive({ initialFeatured }: { initialFeatured: TournamentSu
 
       {/* スクロール到達点（Hero の Explore Live Tournament から遷移） */}
       <div id="live" className="mx-auto max-w-7xl scroll-mt-20 space-y-10 px-4 py-12">
+        {/* ホーム・パーソナライズ（ADR-0019 / おすすめ・AI予測・トレンド） */}
+        <HomePersonalized />
+
         <FomoStrip />
         <FeaturedTournamentBanner />
         <LiveActivityTicker />
