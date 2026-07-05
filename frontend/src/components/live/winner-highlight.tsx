@@ -59,6 +59,8 @@ function LastChampionCard({ c, className }: { c: RecentChampion; className?: str
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/70 to-slate-950/30" />
         <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-yellow-500/10 blur-3xl" />
+        {/* Shine スイープ（優勝の輝き） */}
+        <span className="pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 bg-gradient-to-r from-transparent via-white/15 to-transparent animate-shine" />
       </div>
 
       <div className="relative flex min-h-[15rem] flex-col justify-between p-6">

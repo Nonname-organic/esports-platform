@@ -21,10 +21,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 const D_WEBM = process.env.NEXT_PUBLIC_HERO_VIDEO_WEBM ?? "/hero/hero.webm";
 const D_MP4 = process.env.NEXT_PUBLIC_HERO_VIDEO_MP4 ?? "/hero/hero.mp4";
+// Tablet/Mobile は仕様の単一env（_TABLET/_MOBILE = mp4想定）を優先し、webm別指定も許可。
 const T_WEBM = process.env.NEXT_PUBLIC_HERO_VIDEO_WEBM_TABLET ?? D_WEBM;
-const T_MP4 = process.env.NEXT_PUBLIC_HERO_VIDEO_MP4_TABLET ?? D_MP4;
+const T_MP4 = process.env.NEXT_PUBLIC_HERO_VIDEO_MP4_TABLET ?? process.env.NEXT_PUBLIC_HERO_VIDEO_TABLET ?? D_MP4;
 const M_WEBM = process.env.NEXT_PUBLIC_HERO_VIDEO_WEBM_MOBILE ?? T_WEBM;
-const M_MP4 = process.env.NEXT_PUBLIC_HERO_VIDEO_MP4_MOBILE ?? T_MP4;
+const M_MP4 = process.env.NEXT_PUBLIC_HERO_VIDEO_MP4_MOBILE ?? process.env.NEXT_PUBLIC_HERO_VIDEO_MOBILE ?? T_MP4;
 const POSTER = process.env.NEXT_PUBLIC_HERO_POSTER ?? "/hero/hero-poster.svg";
 
 type Tier = "desktop" | "tablet" | "mobile";
@@ -96,13 +97,27 @@ export function HeroBackgroundVideo() {
 
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
-      {/* 1. アニメーション・グラデーション（Blue / Purple / Red Neon） */}
+      {/* レイヤ順: Poster → Aurora → Video → Overlay（CLSゼロ・全て absolute） */}
+
+      {/* 0. ベース色 */}
       <div className="absolute inset-0 bg-slate-950" />
+
+      {/* 1. Poster（動画読み込み前のベース。動画表示時は薄く敷き、Aurora の下に置く） */}
+      {showVideo && (
+        <img
+          src={POSTER}
+          alt=""
+          className="absolute inset-0 h-full w-full scale-105 object-cover opacity-80"
+          style={{ filter: "brightness(0.5) contrast(1.05)" }}
+        />
+      )}
+
+      {/* 2. アニメーション・グラデーション（Blue / Purple / Red Neon） */}
       <div className="absolute -inset-[15%] bg-[radial-gradient(50%_50%_at_26%_32%,rgba(37,99,235,0.5),transparent_60%)] animate-aurora will-change-transform" />
       <div className="absolute -inset-[15%] bg-[radial-gradient(46%_46%_at_50%_60%,rgba(147,51,234,0.4),transparent_60%)] animate-aurora-slow will-change-transform" />
       <div className="absolute -inset-[15%] bg-[radial-gradient(48%_48%_at_78%_70%,rgba(225,29,72,0.42),transparent_60%)] animate-aurora will-change-transform" />
 
-      {/* 2. 動画 */}
+      {/* 3. 動画 */}
       {showVideo && (
         <video
           ref={videoRef}
@@ -125,7 +140,7 @@ export function HeroBackgroundVideo() {
         </video>
       )}
 
-      {/* poster（reduced-motion / 動画非表示時） */}
+      {/* poster（reduced-motion / 動画非表示時のメインビジュアル。Aurora の上） */}
       {!showVideo && (
         <img
           src={POSTER}
@@ -135,7 +150,7 @@ export function HeroBackgroundVideo() {
         />
       )}
 
-      {/* 3. オーバーレイ（強め: UIを必ず前面に） */}
+      {/* 4. オーバーレイ（強め: UIを必ず前面に） */}
       <div className="absolute inset-0 bg-slate-950/65" />
       <div className="absolute inset-0 bg-gradient-to-b from-slate-950/55 via-slate-950/45 to-slate-950" />
       <div className="absolute inset-0 bg-gradient-to-r from-slate-950/70 via-transparent to-slate-950/70" />

@@ -144,11 +144,27 @@
   }
   .animate-marquee { animation: marquee 32s linear infinite; }
 
+  /* Winner Highlight: 斜めの光沢スイープ（transform/opacity のみ） */
+  @keyframes shine {
+    0% { transform: translateX(-140%) skewX(-18deg); opacity: 0; }
+    12% { opacity: 1; }
+    55%, 100% { transform: translateX(240%) skewX(-18deg); opacity: 0; }
+  }
+  .animate-shine { animation: shine 5s ease-in-out infinite; }
+
+  /* Departure board（受付カウンター）の数字のわずかな明滅 */
+  @keyframes board-flicker {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.92; }
+  }
+  .animate-board-flicker { animation: board-flicker 4s ease-in-out infinite; }
+
   @media (prefers-reduced-motion: reduce) {
     .animate-live-blink, .animate-live-ping, .count-flash, .animate-live-enter,
     .animate-aurora, .animate-aurora-slow, .animate-glow-pulse,
     .animate-scroll-wheel, .animate-soft-float, .card-pulse,
-    .animate-float-a, .animate-float-b, .animate-float-c, .animate-marquee {
+    .animate-float-a, .animate-float-b, .animate-float-c, .animate-marquee,
+    .animate-shine, .animate-board-flicker {
       animation: none !important;
     }
   }
