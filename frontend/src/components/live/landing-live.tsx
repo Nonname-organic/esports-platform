@@ -3,14 +3,10 @@
 import type { TournamentSummary } from "@/types/tournament";
 import { LiveProvider } from "@/features/live/provider/live-provider";
 import { HeroSection } from "@/components/hero/hero-section";
-import { FomoStrip } from "./fomo-strip";
 import { FeaturedTournamentBanner } from "./featured-tournament-banner";
-import { LiveActivityTicker } from "./live-activity-ticker";
-import { SocialProofBar } from "./social-proof-bar";
 import { EntryOpenTournaments } from "./entry-open-tournaments";
 import { LiveBracketSnapshot } from "./live-bracket-snapshot";
 import { WinnerHighlight } from "./winner-highlight";
-import { LiveStatusBar } from "./live-status-bar";
 import { StatisticsCard } from "./statistics-card";
 import { LiveTournamentPreview } from "./live-tournament-preview";
 import { LiveActivityFeed } from "./live-activity-feed";
@@ -33,14 +29,10 @@ export function LandingLive({ initialFeatured }: { initialFeatured: TournamentSu
         {/* ホーム・パーソナライズ（ADR-0019 / おすすめ・AI予測・トレンド） */}
         <HomePersonalized />
 
-        <FomoStrip />
         <FeaturedTournamentBanner />
-        <LiveActivityTicker />
-        <SocialProofBar />
         <EntryOpenTournaments />
         <LiveBracketSnapshot />
         <WinnerHighlight />
-        <LiveStatusBar />
         <StatisticsCard />
         <LiveTournamentPreview initial={initialFeatured} />
       </div>
