@@ -7,6 +7,7 @@ import { useRelativeSeconds } from "@/features/live/hooks/use-relative-seconds";
 import { AnimatedNumber } from "@/components/live/animated-number";
 import { LiveDot } from "@/components/live/live-dot";
 import { HeroBackgroundVideo } from "./hero-background-video";
+import { FloatingLiveCards } from "./floating-live-cards";
 import { FeaturedEntry } from "./featured-entry";
 
 export function HeroSection() {
@@ -16,6 +17,7 @@ export function HeroSection() {
   return (
     <section className="relative flex min-h-[calc(100svh-3.5rem)] w-full items-center justify-center overflow-hidden">
       <HeroBackgroundVideo />
+      <FloatingLiveCards />
 
       {/* コンテンツ */}
       <div className="relative z-10 mx-auto flex w-full max-w-4xl flex-col items-center px-4 py-20 text-center">

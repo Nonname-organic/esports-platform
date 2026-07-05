@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, UserPlus, Trophy, Megaphone, Award } from "lucide-react";
+import { Activity, UserPlus, Trophy, Megaphone, Award, Star, Swords } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { liveApi, type LiveActivityItem } from "@/features/live/api/live-api";
 import { LiveDot } from "./live-dot";
@@ -15,7 +15,10 @@ function relTime(iso: string): string {
   return `${Math.floor(sec / 3600)}時間前`;
 }
 function iconFor(type: string): { Icon: React.ElementType; color: string } {
-  if (type.startsWith("player.team")) return { Icon: UserPlus, color: "text-brand-400" };
+  if (type.includes("mvp")) return { Icon: Star, color: "text-pink-400" };
+  if (type.includes("bracket") || type.includes("match")) return { Icon: Swords, color: "text-red-400" };
+  if (type.startsWith("player.team") || type.includes("registration") || type.includes("entry"))
+    return { Icon: UserPlus, color: "text-brand-400" };
   if (type === "tournament.completed") return { Icon: Trophy, color: "text-yellow-400" };
   if (type.startsWith("team.achievement")) return { Icon: Award, color: "text-purple-400" };
   if (type.startsWith("tournament")) return { Icon: Megaphone, color: "text-green-400" };
@@ -23,9 +26,11 @@ function iconFor(type: string): { Icon: React.ElementType; color: string } {
 }
 
 const MOCK: LiveActivityItem[] = [
-  { id: "t1", type: "player.team.joined", title: "大会エントリー", metadata: { actor_name: "Team AAA" }, occurred_at: new Date(Date.now() - 5000).toISOString() },
-  { id: "t2", type: "tournament.completed", title: "優勝しました", metadata: { actor_name: "BBB" }, occurred_at: new Date(Date.now() - 180000).toISOString() },
-  { id: "t3", type: "tournament.published", title: "大会開始", metadata: { actor_name: "CCC" }, occurred_at: new Date(Date.now() - 1000).toISOString() },
+  { id: "t1", type: "tournament.entry", title: "大会へ参加しました", metadata: { actor_name: "VARREL" }, occurred_at: new Date(Date.now() - 8000).toISOString() },
+  { id: "t2", type: "tournament.bracket", title: "ブラケット進出", metadata: { actor_name: "ABC" }, occurred_at: new Date(Date.now() - 32000).toISOString() },
+  { id: "t3", type: "match.mvp", title: "MVP獲得", metadata: { actor_name: "Player" }, occurred_at: new Date(Date.now() - 120000).toISOString() },
+  { id: "t4", type: "tournament.completed", title: "優勝しました", metadata: { actor_name: "XYZ" }, occurred_at: new Date(Date.now() - 1500).toISOString() },
+  { id: "t5", type: "tournament.published", title: "受付開始", metadata: { actor_name: "Premier Open" }, occurred_at: new Date(Date.now() - 1000).toISOString() },
 ];
 
 /** Hero 近くの横型リアルタイム・ティッカー（右下フィードとは別に常時視界へ）。 */

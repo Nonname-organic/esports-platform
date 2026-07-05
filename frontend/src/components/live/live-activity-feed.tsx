@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, X, UserPlus, Trophy, Megaphone, Award } from "lucide-react";
+import { Activity, X, UserPlus, Trophy, Megaphone, Award, Star, Swords } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { liveApi, type LiveActivityItem } from "@/features/live/api/live-api";
 import { LiveDot } from "./live-dot";
@@ -17,7 +17,10 @@ function relTime(iso: string): string {
 
 // イベント種別 → アイコン + 色
 function iconFor(type: string): { Icon: React.ElementType; color: string } {
-  if (type.startsWith("player.team")) return { Icon: UserPlus, color: "text-brand-400" };
+  if (type.includes("mvp")) return { Icon: Star, color: "text-pink-400" };
+  if (type.includes("bracket") || type.includes("match")) return { Icon: Swords, color: "text-red-400" };
+  if (type.startsWith("player.team") || type.includes("registration") || type.includes("entry"))
+    return { Icon: UserPlus, color: "text-brand-400" };
   if (type === "tournament.completed") return { Icon: Trophy, color: "text-yellow-400" };
   if (type.startsWith("team.achievement")) return { Icon: Award, color: "text-purple-400" };
   if (type.startsWith("tournament")) return { Icon: Megaphone, color: "text-green-400" };
@@ -26,9 +29,11 @@ function iconFor(type: string): { Icon: React.ElementType; color: string } {
 
 // Backendに公開イベントがまだ無い場合の賑わい補完（リンクは張らない）。
 const MOCK_FEED: LiveActivityItem[] = [
-  { id: "m1", type: "player.team.joined", title: "「AXELIA」に加入しました", metadata: { actor_name: "Team AXELIA" }, occurred_at: new Date(Date.now() - 5000).toISOString() },
-  { id: "m2", type: "tournament.completed", title: "「Summer Cup」が終了しました", metadata: { actor_name: "NIX" }, occurred_at: new Date(Date.now() - 12000).toISOString() },
-  { id: "m3", type: "tournament.published", title: "受付を開始しました", metadata: { actor_name: "Premier Open" }, occurred_at: new Date(Date.now() - 60000).toISOString() },
+  { id: "m1", type: "tournament.entry", title: "大会へ参加しました", metadata: { actor_name: "VARREL" }, occurred_at: new Date(Date.now() - 8000).toISOString() },
+  { id: "m2", type: "tournament.bracket", title: "ブラケット進出", metadata: { actor_name: "ABC" }, occurred_at: new Date(Date.now() - 32000).toISOString() },
+  { id: "m3", type: "match.mvp", title: "MVP獲得", metadata: { actor_name: "PlayerName" }, occurred_at: new Date(Date.now() - 120000).toISOString() },
+  { id: "m4", type: "tournament.completed", title: "優勝しました", metadata: { actor_name: "XYZ" }, occurred_at: new Date(Date.now() - 2000).toISOString() },
+  { id: "m5", type: "tournament.published", title: "受付開始", metadata: { actor_name: "Premier Open" }, occurred_at: new Date(Date.now() - 1000).toISOString() },
 ];
 
 export function LiveActivityFeed() {

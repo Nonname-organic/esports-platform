@@ -1,6 +1,7 @@
 import { Trophy, Zap, Users } from "lucide-react";
 import { serverFetch } from "@/lib/api-client";
 import { LandingLive } from "@/components/live/landing-live";
+import { TrustedBy } from "@/components/live/trusted-by";
 import type { ListResponse, TournamentSummary } from "@/types/tournament";
 
 // ISR: 5分ごとに再生成
@@ -49,7 +50,7 @@ export default async function HomePage() {
       <LandingLive initialFeatured={featured} />
 
       {/* 機能ハイライト（その他説明・控えめ） */}
-      <section className="mx-auto max-w-7xl px-4 pb-20">
+      <section className="mx-auto max-w-7xl px-4 pb-12">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           {FEATURES.map(({ icon: Icon, title, desc, color }) => (
             <div
@@ -63,6 +64,9 @@ export default async function HomePage() {
           ))}
         </div>
       </section>
+
+      {/* 社会的証明（Trusted by） */}
+      <TrustedBy />
     </>
   );
 }

@@ -13,12 +13,13 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.redis import RedisCache
+from app.core.storage import resign_stored_url
 from app.models.domain_event import DomainEvent
 from app.models.enums import MatchStatus, TournamentStatus
 from app.models.match import Match
 from app.models.player import Player
 from app.models.team import Team
-from app.models.tournament import Tournament
+from app.models.tournament import Tournament, TournamentRegistration
 from app.models.tournament_report import TournamentReport
 
 STATS_CACHE_TTL = 15          # 秒（ライブ感優先の短TTL）
@@ -58,13 +59,27 @@ class StatsService:
             select(func.count()).select_from(Tournament).where(Tournament.status == TournamentStatus.COMPLETED)
         )
 
+        # FOMO用: 本日 / 直近5分のエントリー数（registered_at ベース）
+        now = datetime.now(timezone.utc)
+        day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        entries_today = await self._db.scalar(
+            select(func.count()).select_from(TournamentRegistration)
+            .where(TournamentRegistration.registered_at >= day_start)
+        )
+        entries_recent = await self._db.scalar(
+            select(func.count()).select_from(TournamentRegistration)
+            .where(TournamentRegistration.registered_at >= now - timedelta(minutes=5))
+        )
+
         return {
             "live": {
                 "ongoing_tournaments": int(ongoing_tournaments or 0),
                 "registration_open_tournaments": int(registration_open_tournaments or 0),
                 "ongoing_matches": int(ongoing_matches or 0),
                 "online_participants": await self._estimate_online(),
-                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "entries_today": int(entries_today or 0),
+                "entries_recent": int(entries_recent or 0),
+                "updated_at": now.isoformat(),
             },
             "totals": {
                 "tournaments": int(total_tournaments or 0),
@@ -92,7 +107,10 @@ class StatsService:
             return cached  # type: ignore[return-value]
 
         rows = (await self._db.execute(
-            select(TournamentReport.data, Tournament.id, Tournament.name, Tournament.game, Tournament.end_at)
+            select(
+                TournamentReport.data, Tournament.id, Tournament.name, Tournament.game,
+                Tournament.end_at, Tournament.prize_pool, Tournament.prize_currency, Tournament.banner_url,
+            )
             .join(Tournament, Tournament.id == TournamentReport.tournament_id)
             .where(Tournament.status == TournamentStatus.COMPLETED)
             .order_by(TournamentReport.generated_at.desc())
@@ -100,9 +118,10 @@ class StatsService:
         )).all()
 
         out: list[dict] = []
-        for data, tid, name, game, end_at in rows:
+        for data, tid, name, game, end_at, prize_pool, prize_currency, banner_url in rows:
             d = data or {}
             champ = d.get("champion") or {}
+            runner = d.get("runner_up") or {}
             mvp = d.get("mvp")
             mvp_name = mvp.get("player_name") if isinstance(mvp, dict) else (mvp if isinstance(mvp, str) else None)
             if not champ.get("team_name"):
@@ -113,7 +132,11 @@ class StatsService:
                 "game": game.value if hasattr(game, "value") else str(game),
                 "champion_team_id": champ.get("team_id"),
                 "champion_team_name": champ.get("team_name"),
+                "runner_up_name": runner.get("team_name"),
                 "mvp_name": mvp_name,
+                "prize": float(prize_pool) if prize_pool is not None else None,
+                "prize_currency": prize_currency or "JPY",
+                "banner_url": resign_stored_url(banner_url),
                 "ended_at": end_at.isoformat() if end_at else None,
             })
         await self._cache.set(cache_key, out, ttl=60)

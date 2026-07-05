@@ -2,16 +2,16 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { Clock, Users, Coins, ChevronRight } from "lucide-react";
+import { Users, Coins, ChevronRight } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { cn, getGameColor, formatPrize } from "@/lib/utils";
 import type { ListResponse, TournamentSummary } from "@/types/tournament";
-import { deadlineLabel } from "@/features/live/lib/format";
+import { Countdown } from "@/components/live/countdown";
 import { LiveDot } from "@/components/live/live-dot";
 
-/** 受付中で「最も締切が近い」大会を Hero 直下に表示（受付会場のメインカウンター）。 */
+/** 受付中で「最も締切が近い」大会 = Hero の受付カウンター（大会受付画面の中心）。 */
 export function FeaturedEntry() {
-  const { data } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["live", "entry-open"],
     queryFn: async () => {
       const res = await apiClient.get<ListResponse<TournamentSummary>>(
@@ -32,18 +32,21 @@ export function FeaturedEntry() {
       return ta - tb;
     })[0];
 
+  // CLS回避: ロード中は同じ高さのスケルトンを予約
+  if (isLoading && !featured) {
+    return <div className="mt-10 h-[188px] w-full max-w-2xl animate-pulse rounded-2xl border border-white/10 bg-white/[0.03]" />;
+  }
   if (!featured) return null;
-  const dl = deadlineLabel(featured.registration_end_at);
 
   return (
     <Link
       href={`/tournaments/${featured.id}`}
       className={cn(
-        "group mt-10 block w-full max-w-2xl overflow-hidden rounded-2xl border border-green-500/30 bg-slate-950/60 backdrop-blur-md",
-        "shadow-[0_0_40px_-12px_rgba(34,197,94,0.5)] transition-all duration-300 hover:-translate-y-0.5 hover:border-green-400/60 hover:shadow-[0_0_50px_-8px_rgba(34,197,94,0.7)]",
+        "group mt-10 block w-full max-w-2xl overflow-hidden rounded-2xl border border-green-500/30 bg-slate-950/70 backdrop-blur-md",
+        "shadow-[0_0_50px_-14px_rgba(34,197,94,0.55)] transition-all duration-300 hover:-translate-y-0.5 hover:border-green-400/60 hover:shadow-[0_0_60px_-8px_rgba(34,197,94,0.75)]",
       )}
     >
-      {/* 上段: ENTRY OPEN */}
+      {/* ENTRY OPEN 帯 */}
       <div className="flex items-center gap-2 border-b border-white/10 bg-green-500/10 px-4 py-1.5">
         <LiveDot />
         <span className="text-[11px] font-black tracking-widest text-green-400">ENTRY OPEN</span>
@@ -52,34 +55,38 @@ export function FeaturedEntry() {
         </span>
       </div>
 
-      {/* 下段: 大会名 + 情報 */}
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3 text-left">
-        <span className="min-w-0 flex-1 truncate text-base font-black text-white transition-colors group-hover:text-green-300 sm:text-lg">
+      <div className="px-5 py-4 text-left">
+        {/* 大会名 */}
+        <h2 className="truncate text-xl font-black text-white transition-colors group-hover:text-green-300 sm:text-2xl">
           {featured.name}
-        </span>
+        </h2>
 
-        {dl && (
-          <span className={cn("inline-flex items-center gap-1 text-sm font-bold", dl.urgent ? "text-red-400 animate-glow-pulse" : "text-yellow-400")}>
-            <Clock className="h-3.5 w-3.5" />
-            {dl.text}
+        {/* 参加数 + 賞金 */}
+        <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+          <span className="inline-flex items-center gap-1.5 text-slate-300">
+            <Users className="h-4 w-4 text-slate-500" />
+            <span className="font-black text-white">{featured.registered_teams}</span>
+            <span className="text-slate-500">/ {featured.max_teams} Teams</span>
           </span>
-        )}
-        <span className="inline-flex items-center gap-1 text-sm text-slate-300">
-          <Users className="h-3.5 w-3.5 text-slate-500" />
-          <span className="font-bold text-white">{featured.registered_teams}</span>
-          <span className="text-slate-500">/{featured.max_teams}</span>
-        </span>
-        {featured.prize_pool != null && featured.prize_pool > 0 && (
-          <span className="inline-flex items-center gap-1 text-sm font-bold text-yellow-400">
-            <Coins className="h-3.5 w-3.5" />
-            {formatPrize(featured.prize_pool)}
-          </span>
-        )}
+          {featured.prize_pool != null && featured.prize_pool > 0 && (
+            <span className="inline-flex items-center gap-1.5 font-bold text-yellow-400">
+              <Coins className="h-4 w-4" />
+              {formatPrize(featured.prize_pool)}
+            </span>
+          )}
+        </div>
 
-        <span className="inline-flex items-center gap-1 rounded-lg bg-green-500 px-3 py-1.5 text-xs font-bold text-white transition-transform group-hover:translate-x-0.5">
-          エントリー
-          <ChevronRight className="h-3.5 w-3.5" />
-        </span>
+        {/* カウントダウン */}
+        <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="mb-1 text-[10px] font-bold uppercase tracking-widest text-slate-500">Entry closes in</p>
+            <Countdown target={featured.registration_end_at} size="lg" />
+          </div>
+          <span className="inline-flex items-center gap-1 rounded-lg bg-green-500 px-4 py-2 text-sm font-black text-white transition-transform group-hover:translate-x-0.5">
+            エントリー
+            <ChevronRight className="h-4 w-4" />
+          </span>
+        </div>
       </div>
     </Link>
   );

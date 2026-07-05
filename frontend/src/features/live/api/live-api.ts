@@ -7,6 +7,8 @@ export interface LiveStats {
   registration_open_tournaments?: number; // 追加フィールド（後方互換のため任意）
   ongoing_matches: number;
   online_participants: number;
+  entries_today?: number;   // FOMO: 本日のエントリー数
+  entries_recent?: number;  // FOMO: 直近5分のエントリー数
   updated_at: string;
 }
 
@@ -20,14 +22,18 @@ export interface PlatformTotals {
   mvps?: number;
 }
 
-/** Winner Highlight 用の直近優勝チーム。 */
+/** Winner Showcase 用の直近優勝チーム。 */
 export interface RecentChampion {
   tournament_id: string;
   tournament_name: string;
   game: string;
   champion_team_id: string | null;
   champion_team_name: string | null;
+  runner_up_name?: string | null;
   mvp_name: string | null;
+  prize?: number | null;
+  prize_currency?: string;
+  banner_url?: string | null;
   ended_at: string | null;
 }
 
