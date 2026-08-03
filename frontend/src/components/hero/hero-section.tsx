@@ -3,9 +3,8 @@
 import Link from "next/link";
 import { Trophy, Swords, Users, Shield, Coins } from "lucide-react";
 import { useLive } from "@/features/live/provider/live-provider";
-import { useRelativeSeconds } from "@/features/live/hooks/use-relative-seconds";
+import { useCountUp } from "@/features/live/hooks/use-count-up";
 import { AnimatedNumber } from "@/components/live/animated-number";
-import { LiveDot } from "@/components/live/live-dot";
 import { HeroBackgroundVideo } from "./hero-background-video";
 import { HeroArenaFx } from "./hero-arena-fx";
 import { HeroCinematicOverlay } from "./hero-cinematic-overlay";
@@ -25,8 +24,6 @@ import { usePointerParallax } from "./use-pointer-parallax";
  * すべて GPU（transform・opacity・filter）。reduced-motion / Save-Data では静止・Poster のみ。
  */
 export function HeroSection() {
-  const { live, lastUpdated } = useLive();
-  const rel = useRelativeSeconds(lastUpdated);
   const sectionRef = usePointerParallax<HTMLElement>();
 
   return (
@@ -41,19 +38,6 @@ export function HeroSection() {
 
       {/* コンテンツ */}
       <div className="relative z-10 mx-auto flex w-full max-w-4xl flex-col items-center px-4 py-20 text-center">
-        {/* 上部: ライブ・ステータス（Hero内リアルタイム要素） */}
-        <div className="hero-reveal mb-8 inline-flex flex-wrap items-center justify-center gap-x-4 gap-y-2 rounded-full border border-white/10 bg-white/[0.04] px-5 py-2 backdrop-blur-md">
-          <span className="inline-flex items-center gap-2">
-            <LiveDot />
-            <span className="text-xs font-black tracking-widest text-green-400">LIVE</span>
-          </span>
-          <span className="hidden h-3.5 w-px bg-white/15 sm:block" />
-          <LiveStat label="開催中" value={live?.ongoing_tournaments ?? 0} unit="大会" />
-          <LiveStat label="進行中" value={live?.ongoing_matches ?? 0} unit="試合" />
-          <LiveStat label="オンライン" value={live?.online_participants ?? 0} unit="人" />
-          <span className="hidden text-[11px] text-slate-500 sm:inline">更新 {rel}</span>
-        </div>
-
         {/* Hero Copy（ブランド + インパクトコピー） */}
         <h1 className="hero-reveal text-balance text-6xl font-black leading-[0.95] tracking-tight text-white drop-shadow-[0_2px_28px_rgba(0,0,0,0.7)] sm:text-7xl lg:text-8xl">
           <span className="mb-5 block text-[11px] font-semibold tracking-[0.55em] text-slate-400 sm:text-xs">
@@ -87,11 +71,13 @@ export function HeroSection() {
           </Link>
           <Link
             href="/organizer/tournaments/new"
-            className="arena-cta group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-xl border border-white/20 bg-white/5 px-8 py-4 text-base font-bold text-white backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-red-400/50 hover:bg-white/10 hover:shadow-[0_0_30px_rgba(225,29,72,0.35)] active:scale-[0.97]"
+            className="arena-cta group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-xl bg-brand-500 px-8 py-4 text-base font-bold text-white shadow-[0_0_30px_rgba(59,130,246,0.45)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-brand-400 hover:shadow-[0_0_44px_rgba(59,130,246,0.75)] active:scale-[0.97]"
           >
-            <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/15 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
-            <Trophy className="relative h-5 w-5 text-red-300" />
+            {/* Hover Light Sweep */}
+            <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
+            <Trophy className="relative h-5 w-5" />
             <span className="relative">大会を掲載する</span>
+            <span className="absolute inset-0 -z-10 rounded-xl bg-brand-500/40 opacity-60 blur-xl transition-opacity duration-200 group-hover:opacity-100" />
           </Link>
         </div>
 
@@ -107,21 +93,10 @@ export function HeroSection() {
   );
 }
 
-function LiveStat({ label, value, unit }: { label: string; value: number; unit: string }) {
-  return (
-    <span className="inline-flex items-baseline gap-1 text-xs text-slate-400">
-      <span className="hidden text-slate-500 sm:inline">{label}</span>
-      <span className="text-sm font-bold text-white">
-        <AnimatedNumber value={value} durationMs={800} />
-      </span>
-      <span className="text-slate-500">{unit}</span>
-    </span>
-  );
-}
-
 /**
  * Hero Statistics — プラットフォーム累計（実データ / モックしない）。
- * アイコン + アクセント + ホバーグローの"魅せる"カード。CountUp はしない（静かな Fade）。
+ * アイコン + アクセント + ホバーグローの"魅せる"カード。
+ * 取得後に 0 → 実値へ CountUp し、以降のポーリング更新でも増分をアニメーションで加算する。
  * 数値未取得の間は同じ高さで "—" を敷き、取得後に opacity だけで差し替える（CLS 0）。
  */
 function HeroStatistics({ className = "" }: { className?: string }) {
@@ -130,7 +105,8 @@ function HeroStatistics({ className = "" }: { className?: string }) {
     {
       icon: Trophy,
       label: "開催大会",
-      value: totals ? totals.tournaments.toLocaleString("ja-JP") : null,
+      value: totals?.tournaments ?? null,
+      prize: false,
       chip: "bg-brand-500/15 text-brand-300",
       glow: "from-brand-500/30",
       hoverBorder: "hover:border-brand-400/40",
@@ -138,7 +114,8 @@ function HeroStatistics({ className = "" }: { className?: string }) {
     {
       icon: Users,
       label: "登録プレイヤー",
-      value: totals ? totals.players.toLocaleString("ja-JP") : null,
+      value: totals?.players ?? null,
+      prize: false,
       chip: "bg-emerald-500/15 text-emerald-300",
       glow: "from-emerald-500/30",
       hoverBorder: "hover:border-emerald-400/40",
@@ -146,7 +123,8 @@ function HeroStatistics({ className = "" }: { className?: string }) {
     {
       icon: Shield,
       label: "登録チーム",
-      value: totals ? totals.teams.toLocaleString("ja-JP") : null,
+      value: totals?.teams ?? null,
+      prize: false,
       chip: "bg-violet-500/15 text-violet-300",
       glow: "from-violet-500/30",
       hoverBorder: "hover:border-violet-400/40",
@@ -154,7 +132,8 @@ function HeroStatistics({ className = "" }: { className?: string }) {
     {
       icon: Coins,
       label: "賞金総額",
-      value: totals?.total_prize != null ? formatPrize(totals.total_prize) : null,
+      value: totals?.total_prize ?? null,
+      prize: true,
       chip: "bg-amber-500/15 text-amber-300",
       glow: "from-amber-500/30",
       hoverBorder: "hover:border-amber-400/40",
@@ -163,7 +142,7 @@ function HeroStatistics({ className = "" }: { className?: string }) {
 
   return (
     <dl className={`mt-14 grid w-full max-w-3xl grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4 ${className}`}>
-      {items.map(({ icon: Icon, label, value, chip, glow, hoverBorder }) => (
+      {items.map(({ icon: Icon, label, value, prize, chip, glow, hoverBorder }) => (
         <div
           key={label}
           className={`group relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-5 text-center backdrop-blur-md transition-all duration-300 hover:-translate-y-1 ${hoverBorder}`}
@@ -179,7 +158,11 @@ function HeroStatistics({ className = "" }: { className?: string }) {
             className="text-2xl font-black leading-none tracking-tight text-white transition-opacity duration-700 tabular-nums sm:text-3xl"
             style={{ opacity: value === null ? 0 : 1 }}
           >
-            {value ?? "—"}
+            {value === null ? "—" : prize ? (
+              <PrizeCountUp value={value} />
+            ) : (
+              <AnimatedNumber value={value} durationMs={1500} />
+            )}
           </dd>
           <dt className="mt-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400 sm:text-[11px]">
             {label}
@@ -188,6 +171,12 @@ function HeroStatistics({ className = "" }: { className?: string }) {
       ))}
     </dl>
   );
+}
+
+/** 賞金総額のCountUp。生の金額を補間し、¥X万/億の表記でフォーマットして表示する。 */
+function PrizeCountUp({ value }: { value: number }) {
+  const n = useCountUp(value, 1500);
+  return <span className="inline-block tabular-nums">{formatPrize(n)}</span>;
 }
 
 function formatPrize(n: number): string {
