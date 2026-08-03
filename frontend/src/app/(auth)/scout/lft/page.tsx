@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Search, Filter, ChevronRight, Plus, Clock, MapPin } from "lucide-react";
+import { Search, ChevronRight, Plus, Clock, MapPin } from "lucide-react";
 import { useLFTList } from "@/features/lft/hooks/use-lft";
 import { useAuthStore } from "@/store/auth-store";
 import { cn } from "@/lib/utils";
 import type { LFTPost } from "@/features/lft/api/lft-api";
 import { ROLES, RANKS, REGIONS } from "./_components/lft-form";
+import { ScoutFilterBar, type ScoutStatusOption } from "../_components/scout-filter-bar";
 
 const RANK_COLOR: Record<string, string> = {
   Iron: "text-slate-400", Bronze: "text-orange-700", Silver: "text-slate-300",
@@ -25,20 +26,28 @@ const EXP_LABEL: Record<string, string> = {
   none: "大会未経験", some: "大会経験少", many: "大会経験多",
 };
 
-const sel = "rounded-lg border border-white/10 bg-slate-800 px-3 py-1.5 text-xs text-white outline-none focus:border-brand-500";
+// フィルタピル配色はカードバッジ(STATUS_LABEL)と同系統
+const FILTER_STATUSES: ScoutStatusOption[] = [
+  { value: "", label: "すべて", activeCls: "bg-brand-500 text-white shadow-sm" },
+  { value: "open", label: "募集中", dot: "bg-green-400", activeCls: "border-green-400/40 bg-green-500/20 text-green-300" },
+  { value: "negotiating", label: "交渉中", dot: "bg-yellow-400", activeCls: "border-yellow-400/40 bg-yellow-500/20 text-yellow-300" },
+  { value: "closed", label: "募集停止", dot: "bg-slate-400", activeCls: "border-slate-400/40 bg-slate-500/25 text-slate-200" },
+];
 
 export default function LFTListPage() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const [filterRole, setFilterRole] = useState("");
   const [filterRegion, setFilterRegion] = useState("");
-  const [filterRank, setFilterRank] = useState("");
+  const [filterRankMin, setFilterRankMin] = useState("");
+  const [filterRankMax, setFilterRankMax] = useState("");
   const [filterStatus, setFilterStatus] = useState("open");
 
   const { data: posts, isLoading } = useLFTList({
     status: filterStatus || undefined,
     region: filterRegion || undefined,
     role: filterRole || undefined,
-    rank: filterRank || undefined,
+    min_rank: filterRankMin || undefined,
+    max_rank: filterRankMax || undefined,
   });
 
   return (
@@ -57,31 +66,22 @@ export default function LFTListPage() {
         )}
       </div>
 
-      <div className="mb-6 rounded-2xl border border-white/10 bg-slate-900 p-4 space-y-3">
-        <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
-          <Filter className="h-3.5 w-3.5" />絞り込み
-        </div>
-        <div className="flex flex-wrap gap-3">
-          <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className={sel}>
-            <option value="">全ステータス</option>
-            <option value="open">募集中</option>
-            <option value="negotiating">交渉中</option>
-            <option value="closed">募集停止</option>
-          </select>
-          <select value={filterRole} onChange={(e) => setFilterRole(e.target.value)} className={sel}>
-            <option value="">全ロール</option>
-            {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-          </select>
-          <select value={filterRank} onChange={(e) => setFilterRank(e.target.value)} className={sel}>
-            <option value="">全ランク</option>
-            {RANKS.map((r) => <option key={r} value={r}>{r}</option>)}
-          </select>
-          <select value={filterRegion} onChange={(e) => setFilterRegion(e.target.value)} className={sel}>
-            <option value="">全地域</option>
-            {REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
-          </select>
-        </div>
-      </div>
+      <ScoutFilterBar
+        statusOptions={FILTER_STATUSES}
+        status={filterStatus}
+        onStatus={setFilterStatus}
+        role={filterRole}
+        onRole={setFilterRole}
+        roles={ROLES}
+        rankMin={filterRankMin}
+        onRankMin={setFilterRankMin}
+        rankMax={filterRankMax}
+        onRankMax={setFilterRankMax}
+        ranks={RANKS}
+        region={filterRegion}
+        onRegion={setFilterRegion}
+        regions={REGIONS}
+      />
 
       {isLoading ? (
         <div className="space-y-3">
@@ -131,6 +131,19 @@ function LFTCard({ post }: { post: LFTPost }) {
               </div>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0 text-xs">
+              {/* 大会実績（AXELIA競技ランキング — ランクマッチの自己申告より信頼できる実績） */}
+              {post.tier_label && post.rp != null && post.rp > 0 && (
+                <span
+                  className="rounded-full border px-2 py-0.5 text-[10px] font-bold"
+                  style={{ color: post.tier_color ?? undefined, borderColor: `${post.tier_color}66` }}
+                  title={`大会実績: ${post.rp} RP${post.ranking ? ` / 総合${post.ranking}位` : ""}`}
+                >
+                  {post.tier_label} · {post.rp}RP
+                </span>
+              )}
+              {(post.mvps ?? 0) > 0 && (
+                <span className="text-[10px] font-bold text-yellow-400">⭐MVP×{post.mvps}</span>
+              )}
               <span className={cn("font-bold", RANK_COLOR[post.current_rank] ?? "text-slate-400")}>
                 {post.current_rank}
               </span>

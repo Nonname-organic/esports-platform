@@ -19,8 +19,10 @@ export function Header() {
 
         {/* 主要ナビ */}
         <nav className="hidden flex-shrink-0 items-center gap-1 md:flex">
-          <Link href="/tournaments" className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-slate-400 hover:text-white transition-colors">大会</Link>
+          <Link href="/tournaments" className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-slate-400 hover:text-white transition-colors">大会一覧</Link>
+          <Link href="/scout" className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-slate-400 hover:text-white transition-colors">スカウト</Link>
           <Link href="/rankings" className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-slate-400 hover:text-white transition-colors">ランキング</Link>
+          <Link href="/analytics" className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-slate-400 hover:text-white transition-colors">統計</Link>
         </nav>
 
         {/* グローバル検索 */}

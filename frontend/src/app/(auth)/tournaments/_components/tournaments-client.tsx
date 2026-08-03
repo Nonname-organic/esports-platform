@@ -19,12 +19,38 @@ const GAMES: Array<{ value: GameType | "ALL"; label: string }> = [
   { value: "OVERWATCH", label: "OW2" },
 ];
 
-const STATUSES: Array<{ value: TournamentStatus | "ALL"; label: string }> = [
-  { value: "ALL", label: "すべてのステータス" },
-  { value: "registration_open", label: "参加受付中" },
-  { value: "ongoing", label: "開催中" },
-  { value: "completed", label: "終了済み" },
-  { value: "cancelled", label: "中止" },
+// ステータスはカードバッジと同じ色系統で統一（受付中=緑 / 開催中=赤LIVE / 終了=グレー / 中止=ローズ）
+const STATUSES: Array<{
+  value: TournamentStatus | "ALL";
+  label: string;
+  dot?: string;
+  active: string;
+}> = [
+  { value: "ALL", label: "すべて", active: "bg-brand-500 text-white shadow-sm" },
+  {
+    value: "registration_open",
+    label: "参加受付中",
+    dot: "bg-green-400",
+    active: "border-green-400/40 bg-green-500/20 text-green-300",
+  },
+  {
+    value: "ongoing",
+    label: "開催中",
+    dot: "bg-red-400 animate-pulse",
+    active: "border-red-400/40 bg-red-500/20 text-red-300",
+  },
+  {
+    value: "completed",
+    label: "終了済み",
+    dot: "bg-slate-400",
+    active: "border-slate-400/40 bg-slate-500/25 text-slate-200",
+  },
+  {
+    value: "cancelled",
+    label: "中止",
+    dot: "bg-rose-500",
+    active: "border-rose-400/40 bg-rose-500/15 text-rose-300",
+  },
 ];
 
 const SORTS: Array<{ value: TournamentSortOrder; label: string }> = [
@@ -225,6 +251,9 @@ export function TournamentsClient() {
 
         {/* ゲームタブ */}
         <div className="flex flex-wrap items-center gap-1 rounded-xl border border-white/10 bg-white/5 p-1">
+          <span className="hidden select-none px-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500 sm:inline">
+            ゲーム
+          </span>
           {GAMES.map(({ value, label }) => (
             <button
               key={value}
@@ -239,18 +268,27 @@ export function TournamentsClient() {
               {label}
             </button>
           ))}
+        </div>
 
-          <div className="mx-1 h-4 w-px bg-white/10" />
-
-          <select
-            value={status}
-            onChange={(e) => setStatus(e.target.value as TournamentStatus | "ALL")}
-            className="rounded-lg border border-transparent bg-transparent py-1.5 pl-2 pr-6 text-sm text-slate-400 outline-none hover:text-white focus:text-white"
-          >
-            {STATUSES.map(({ value, label }) => (
-              <option key={value} value={value}>{label}</option>
-            ))}
-          </select>
+        {/* ステータスフィルター（色分けピル: カードバッジと同じ色系統） */}
+        <div className="flex flex-wrap items-center gap-1 rounded-xl border border-white/10 bg-white/5 p-1">
+          <span className="hidden select-none px-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500 sm:inline">
+            ステータス
+          </span>
+          {STATUSES.map(({ value, label, dot, active }) => (
+            <button
+              key={value}
+              onClick={() => setStatus(value)}
+              aria-pressed={status === value}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-lg border border-transparent px-3 py-1.5 text-sm font-medium transition-colors",
+                status === value ? active : "text-slate-400 hover:text-white",
+              )}
+            >
+              {dot && <span className={cn("h-1.5 w-1.5 rounded-full", dot)} />}
+              {label}
+            </button>
+          ))}
 
           {hasFilters && (
             <button

@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.core.dependencies import CurrentUser, DBSession
+from app.core.ranks import ranks_in_range
 from app.models.team import Team, TeamMember
 from app.models.team_recruitment import TeamRecruitment
 from app.schemas.common import Response, ListResponse, Meta
@@ -80,6 +81,12 @@ class LFPSchema(BaseModel):
     is_public: bool
     created_at: str
     updated_at: str
+    # チームの大会実績（競技ランキング連携 / 一覧APIでのみ付与・読み取り専用）
+    rp: Optional[int] = None
+    tier_label: Optional[str] = None
+    tier_color: Optional[str] = None
+    championships: Optional[int] = None
+    ranking: Optional[int] = None
 
 
 def _to_schema(r: TeamRecruitment, team: Team) -> LFPSchema:
@@ -144,6 +151,7 @@ async def list_lfp(
     region: Optional[str] = Query(default=None),
     role: Optional[str] = Query(default=None),
     min_rank: Optional[str] = Query(default=None),
+    max_rank: Optional[str] = Query(default=None),
     limit: int = Query(default=30, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ):
@@ -152,8 +160,9 @@ async def list_lfp(
         q = q.where(TeamRecruitment.status == status)
     if region:
         q = q.where(TeamRecruitment.region == region)
-    if min_rank:
-        q = q.where(TeamRecruitment.min_rank == min_rank)
+    if min_rank or max_rank:
+        # 募集に設定されたランク値が指定範囲内のものだけ返す（単純な範囲チェック）
+        q = q.where(TeamRecruitment.min_rank.in_(ranks_in_range(min_rank, max_rank)))
     q = q.order_by(TeamRecruitment.created_at.desc()).limit(limit).offset(offset)
 
     rows = list((await db.execute(q)).scalars().all())
@@ -166,6 +175,26 @@ async def list_lfp(
         team = (await db.execute(select(Team).where(Team.id == r.team_id))).scalar_one_or_none()
         if team:
             items.append(_to_schema(r, team))
+
+    # チームの大会実績（RP/Tier/優勝数）を付与 — スカウトの差別化要素。
+    try:
+        from app.core.redis import RedisCache, get_redis
+        from app.rankings.aggregator import FULL_LIMIT, RankingAggregator
+
+        board = await RankingAggregator(db, RedisCache(await get_redis())).global_team_leaderboard(
+            season="all", limit=FULL_LIMIT
+        )
+        by_team = {e["team_id"]: e for e in board}
+        for item in items:
+            e = by_team.get(item.team_id)
+            if e:
+                item.rp = e["rp"]
+                item.tier_label = e["tier_label"]
+                item.tier_color = e["tier_color"]
+                item.championships = e.get("championships", 0)
+                item.ranking = e.get("rank")
+    except Exception:
+        pass  # ランキング取得失敗時も一覧自体は返す（防御的）
 
     total = await db.scalar(select(func.count(TeamRecruitment.id)).where(TeamRecruitment.is_public == True))
     return ListResponse(data=items, meta=Meta(total=total, cursor=None, has_next=len(items) == limit))

@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select, func
 
 from app.core.dependencies import CurrentUser, DBSession
+from app.core.ranks import ranks_in_range
 from app.models.player import Player
 from app.models.player_lft import PlayerLFT
 from app.models.user import User
@@ -79,6 +80,12 @@ class LFTSchema(BaseModel):
     is_public: bool
     created_at: str
     updated_at: str
+    # 大会実績（競技ランキング連携 / 一覧APIでのみ付与・読み取り専用）
+    rp: Optional[int] = None
+    tier_label: Optional[str] = None
+    tier_color: Optional[str] = None
+    mvps: Optional[int] = None
+    ranking: Optional[int] = None
 
 
 def _to_schema(r: PlayerLFT, player: Player, user: Optional[User] = None) -> LFTSchema:
@@ -117,6 +124,8 @@ async def list_lft(
     region: Optional[str] = Query(default=None),
     role: Optional[str] = Query(default=None),
     rank: Optional[str] = Query(default=None),
+    min_rank: Optional[str] = Query(default=None),
+    max_rank: Optional[str] = Query(default=None),
     limit: int = Query(default=30, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ):
@@ -125,8 +134,10 @@ async def list_lft(
         q = q.where(PlayerLFT.status == status)
     if region:
         q = q.where(PlayerLFT.region == region)
-    if rank:
+    if rank:  # 旧: 完全一致（後方互換）
         q = q.where(PlayerLFT.current_rank == rank)
+    if min_rank or max_rank:  # 新: 現在ランクの範囲絞り込み
+        q = q.where(PlayerLFT.current_rank.in_(ranks_in_range(min_rank, max_rank)))
     q = q.order_by(PlayerLFT.updated_at.desc()).limit(limit).offset(offset)
 
     rows = list((await db.execute(q)).scalars().all())
@@ -141,6 +152,26 @@ async def list_lft(
             continue
         user = (await db.execute(select(User).where(User.id == r.user_id))).scalar_one_or_none()
         items.append(_to_schema(r, player, user))
+
+    # 大会実績（RP/Tier/MVP）を付与 — スカウトの差別化要素。leaderboardはRedisキャッシュ済みで軽量。
+    try:
+        from app.core.redis import RedisCache, get_redis
+        from app.rankings.aggregator import FULL_LIMIT, RankingAggregator
+
+        board = await RankingAggregator(db, RedisCache(await get_redis())).global_player_leaderboard(
+            season="all", limit=FULL_LIMIT
+        )
+        by_player = {e["player_id"]: e for e in board}
+        for item in items:
+            e = by_player.get(item.player_id)
+            if e:
+                item.rp = e["rp"]
+                item.tier_label = e["tier_label"]
+                item.tier_color = e["tier_color"]
+                item.mvps = e.get("mvps", 0)
+                item.ranking = e.get("rank")
+    except Exception:
+        pass  # ランキング取得失敗時も一覧自体は返す（防御的）
 
     total = await db.scalar(select(func.count(PlayerLFT.id)).where(PlayerLFT.is_public == True))
     return ListResponse(data=items, meta=Meta(total=total, cursor=None, has_next=len(rows) == limit))

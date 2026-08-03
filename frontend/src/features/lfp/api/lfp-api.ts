@@ -23,6 +23,12 @@ export interface LFPPost {
   discord: string | null;
   deadline: string | null;
   is_public: boolean;
+  // チームの大会実績（一覧APIが競技ランキングから付与 / 未参加チームはnull）
+  rp?: number | null;
+  tier_label?: string | null;
+  tier_color?: string | null;
+  championships?: number | null;
+  ranking?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -51,6 +57,7 @@ export interface LFPSearchParams {
   region?: string;
   role?: string;
   min_rank?: string;
+  max_rank?: string;
   limit?: number;
   offset?: number;
 }
@@ -62,6 +69,7 @@ export const lfpApi = {
     if (params?.region) qs.set("region", params.region);
     if (params?.role) qs.set("role", params.role);
     if (params?.min_rank) qs.set("min_rank", params.min_rank);
+    if (params?.max_rank) qs.set("max_rank", params.max_rank);
     if (params?.limit) qs.set("limit", String(params.limit));
     if (params?.offset) qs.set("offset", String(params.offset));
     return apiClient.get(`/api/v1/lfp${qs.toString() ? `?${qs}` : ""}`);
