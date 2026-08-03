@@ -160,7 +160,8 @@ async def _rebuild_player_stats_for_date(
         .where(
             and_(
                 Match.status == "completed",
-                func.date(Match.completed_at) == target_date,
+                # Match モデルの完了時刻は ended_at（completed_at は存在しない）
+                func.date(Match.ended_at) == target_date,
             )
         )
         .group_by(

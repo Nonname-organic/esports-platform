@@ -17,7 +17,7 @@ export const analyticsKeys = {
   playerRankings: (params: object) => [...analyticsKeys.all, "players", params] as const,
   heatmap: (params: object) => [...analyticsKeys.all, "heatmap", params] as const,
   veto: (params: object) => [...analyticsKeys.all, "veto", params] as const,
-  growth: (months: number) => [...analyticsKeys.all, "growth", months] as const,
+  upsets: (params: object) => [...analyticsKeys.all, "upsets", params] as const,
 };
 
 // ── 既存フック ───────────────────────────────────────────────────────────────
@@ -127,10 +127,10 @@ export function useAnalyticsVeto(params: { game: GameType; tournamentId?: string
   });
 }
 
-export function useAnalyticsGrowth(months = 12) {
+export function useAnalyticsUpsets(params: { game?: GameType; limit?: number } = {}) {
   return useQuery({
-    queryKey: analyticsKeys.growth(months),
-    queryFn: () => analyticsApi.growth(months),
+    queryKey: analyticsKeys.upsets(params),
+    queryFn: () => analyticsApi.upsets(params),
     select: (res) => res.data,
     staleTime: 10 * 60 * 1000,
   });

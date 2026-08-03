@@ -127,14 +127,15 @@ async def get_map_veto(
     return ListResponse(data=data, meta=Meta(total=len(data), has_next=False))
 
 
-@router.get("/growth", response_model=ListResponse[dict])
-async def get_growth(
+@router.get("/upsets", response_model=Response[dict])
+async def get_upsets(
     db: DBSession, cache: Cache,
-    months: int = Query(default=12, ge=3, le=36),
+    game: GameType | None = Query(default=None),
+    limit: int = Query(default=10, ge=1, le=50),
 ):
-    """月次成長推移（完了大会数 / 新規チーム / 新規ユーザー）。"""
-    data = await _dash(db, cache).growth(months)
-    return ListResponse(data=data, meta=Meta(total=len(data), has_next=False))
+    """ジャイアントキリング統計（RP下位がRP上位を撃破した番狂わせ — 大会限定メタ）。"""
+    data = await _dash(db, cache).upsets(game, limit)
+    return Response(data=data, meta=None)
 
 
 @router.get("/rankings/{tournament_id}", response_model=ListResponse[RankingEntry])

@@ -109,9 +109,13 @@ export const analyticsApi = {
     return apiClient.get(`/api/v1/analytics/veto?${qs.toString()}`);
   },
 
-  /** 月次成長推移（完了大会 / 新規チーム / 新規ユーザー） */
-  growth: (months = 12): Promise<ListResponse<GrowthPoint>> =>
-    apiClient.get(`/api/v1/analytics/growth?months=${months}`),
+  /** ジャイアントキリング統計（RP下位がRP上位を撃破した番狂わせ） */
+  upsets: (params?: { game?: GameType; limit?: number }): Promise<{ data: UpsetStats }> => {
+    const qs = new URLSearchParams();
+    if (params?.game) qs.set("game", params.game);
+    if (params?.limit) qs.set("limit", String(params.limit));
+    return apiClient.get(`/api/v1/analytics/upsets${qs.toString() ? `?${qs}` : ""}`);
+  },
 };
 
 export interface MapVetoStat {
@@ -122,9 +126,26 @@ export interface MapVetoStat {
   pick_rate: number;
 }
 
-export interface GrowthPoint {
-  month: string; // "YYYY-MM"
-  tournaments: number;
-  new_teams: number;
-  new_users: number;
+export interface GiantKiller {
+  team_id: string;
+  team_name: string;
+  team_tag: string;
+  rp: number;
+  upsets: number;
+  biggest_gap: number;
+  biggest_victim_name: string | null;
+}
+
+export interface UpsetStats {
+  ranked_matches: number;
+  upsets: number;
+  upset_rate: number;
+  giant_killers: GiantKiller[];
+  recent_upsets: {
+    winner_name: string;
+    loser_name: string;
+    rp_gap: number;
+    tournament_name: string;
+    at: string | null;
+  }[];
 }

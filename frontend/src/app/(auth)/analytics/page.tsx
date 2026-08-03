@@ -10,7 +10,7 @@ import { AgentSection } from "./_components/agent-section";
 import { HeatMapSection } from "./_components/heatmap-section";
 import { RankingsSection } from "./_components/rankings-section";
 import { VetoSection } from "./_components/veto-section";
-import { GrowthSection } from "./_components/growth-section";
+import { UpsetSection } from "./_components/upset-section";
 
 // ── スケルトン ────────────────────────────────────────────────────────────────
 function SectionSkeleton({ h = 72 }: { h?: number }) {
@@ -86,13 +86,13 @@ export default function AnalyticsDashboardPage() {
           <HeatMapSection />
         </Suspense>
 
-        {/* ── BAN/PICK + 成長推移（外部公開の差別化セクション） ── */}
+        {/* ── BAN/PICK + ジャイアントキリング（外部公開の差別化セクション） ── */}
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
           <Suspense fallback={<SectionSkeleton h={64} />}>
             <VetoSection />
           </Suspense>
           <Suspense fallback={<SectionSkeleton h={64} />}>
-            <GrowthSection />
+            <UpsetSection />
           </Suspense>
         </div>
 
