@@ -6,7 +6,15 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       {
         protocol: "https",
-        hostname: "**.amazonaws.com", // S3画像
+        hostname: "**.amazonaws.com", // S3画像（AWS構成）
+      },
+      {
+        protocol: "https",
+        hostname: "**.r2.dev", // Cloudflare R2 公開バケット（無料構成）
+      },
+      {
+        protocol: "https",
+        hostname: "**.r2.cloudflarestorage.com", // R2 S3互換エンドポイント
       },
     ],
   },
@@ -17,7 +25,7 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        // HTML・RSC（画面遷移データ）は CloudFront にキャッシュさせない。
+        // HTML・RSC（画面遷移データ）は CDN エッジ（CloudFront / Cloudflare 等）にキャッシュさせない。
         // これをしないと LFP/LFT 等の更新後もエッジが古いページを返し続ける。
         // _next/static（ハッシュ付き不変アセット）と _next/image は除外し、キャッシュを維持。
         source: "/((?!_next/static|_next/image|favicon.ico).*)",

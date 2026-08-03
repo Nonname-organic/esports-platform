@@ -71,3 +71,7 @@ desktop.ini
 *.log
 tmp/
 temp/
+
+# TLS/certbot (server-side only)
+certbot-www/
+nginx/ssl/

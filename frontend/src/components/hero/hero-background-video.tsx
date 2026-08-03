@@ -15,7 +15,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
  *   - IntersectionObserver: 画面外では pause。
  *   - 動画未配置/失敗: onError で動画を隠し、下層グラデーション/poster を表示（CLS無し）。
  *
- * 動画URLは env で差し替え可能（CloudFront配信想定）。Mobile用は軽量版を別指定可能。
+ * 動画URLは env で差し替え可能（CloudFront / Cloudflare R2 等のCDN配信想定）。Mobile用は軽量版を別指定可能。
  * 素材側で 5〜8秒ごとのカット/クロスフェード・HUD/文字/実況なしのシネマティックPVを推奨。
  */
 

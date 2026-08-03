@@ -52,6 +52,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # ARM64 (Oracle Cloud A1 等) 向けクロスビルド用
+      - uses: docker/setup-qemu-action@v3
+
       - uses: docker/setup-buildx-action@v3
 
       - name: Set lowercase owner
@@ -71,6 +74,8 @@ jobs:
           context: ${{ matrix.context }}
           target: ${{ matrix.target || '' }}
           push: true
+          # amd64 = EC2等 / arm64 = Oracle Cloud Always Free (Ampere A1)
+          platforms: linux/amd64,linux/arm64
           # Hero 背景動画のURL（frontend のみ使用 / 他サービスでは未宣言ARGとして無視される）。
           # GitHub Settings → Variables に HERO_VIDEO_MP4 等を設定するとビルド時に埋め込まれる。
           build-args: |

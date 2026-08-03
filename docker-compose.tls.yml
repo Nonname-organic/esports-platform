@@ -1,0 +1,17 @@
+# TLS override: nginx が Let's Encrypt 証明書で直接 HTTPS を終端する（CloudFront 不要の無料構成用）。
+#
+# 前提:
+#   - nginx/nginx-tls.conf の YOUR_DOMAIN を置換済み
+#   - ホストの /etc/letsencrypt に certbot で証明書発行済み
+#     (発行手順は docs/phase10_demo_free_tier.md)
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.tls.yml up -d
+version: "3.9"
+
+services:
+  nginx:
+    volumes:
+      - ./nginx/nginx-tls.conf:/etc/nginx/nginx.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - ./certbot-www:/var/www/certbot:ro

@@ -1,230 +1,313 @@
-# Phase 10 — $0 Demo インフラ
+# Phase 10 — $0 運用インフラ（Oracle Cloud 版）
 
-AWSを一切使わずに本番相当の構成を無料枠内で動かすためのセットアップガイドです。  
-アクセスが増えてAWSへ移行する場合は末尾の「AWS移行手順」を参照してください。
+AWS（EC2 + CloudFront + S3）の無料期間終了に伴い、**完全無料で常時稼働**できる構成へ移行するためのガイドです。
+
+> **2026-08 改訂**: 旧版は Fly.io + Neon + Upstash 前提でしたが、Fly.io は無料枠を廃止（新規は $5 トライアルのみ）、
+> Koyeb も新規無料枠を停止したため全面改訂しました。2026年時点で「常時稼働コンテナが無料」なのは
+> 実質 **Oracle Cloud Always Free** のみです。
 
 ---
 
 ## アーキテクチャ概要
 
+**現行の EC2 構成（docker-compose 全部載せ）をそのまま Oracle Cloud の無料VMへ移す**方針です。
+アプリケーションコードの変更は不要で、置き換わるのはインフラ層のみです。
+
 ```
 ユーザー
+  │ HTTPS
+  ▼
+DuckDNS (無料DNS: xxx.duckdns.org)
   │
-  ├─► Vercel (Next.js フロントエンド)   ← GitHub push で自動デプロイ
-  │
-  └─► Fly.io esports-platform-api      ← FastAPI
-        │
-        ├─ Neon (PostgreSQL)            ← アクセス時のみ起動するサーバーレスDB
-        ├─ Upstash Redis                ← キャッシュ + ジョブキュー (SQS代替)
-        └─ Cloudflare R2 (S3互換)      ← ファイルストレージ
+  ▼
+Oracle Cloud VM — VM.Standard.A1.Flex (ARM 2 OCPU / 12GB, Always Free)
+  └─ docker compose
+       ├─ nginx      ← Let's Encrypt でTLS終端（CloudFront の代替）
+       ├─ frontend   ← Next.js
+       ├─ api        ← FastAPI
+       ├─ worker     ← バックグラウンドジョブ（Redis キュー）
+       ├─ postgres   ← DB（RDS の代替・VM内）
+       ├─ redis      ← キャッシュ + キュー（SQS の代替）
+       └─ discord-bot（profile: discord）
 
-  Fly.io esports-platform-worker        ← バックグラウンドジョブ処理
-        │
-        ├─ Neon (同上)
-        └─ Upstash Redis (BRPOP でキュー取得)
+Cloudflare R2 (S3互換・egress無料)
+  └─ Hero動画・アップロードファイル（S3 + CloudFront 配信の代替）
+
+GitHub Actions + GHCR
+  └─ push → multi-arch (amd64+arm64) ビルド → SSH デプロイ（従来と同じ）
 ```
 
----
+| 旧 (AWS) | 新 (無料) |
+|---|---|
+| EC2 t2.micro | Oracle VM.Standard.A1.Flex（2 OCPU / 12GB — 大幅スペックUP） |
+| CloudFront (TLS/CDN) | nginx + Let's Encrypt（TLS）。CDNなし※ |
+| S3 (動画・ファイル) | Cloudflare R2（10GB, egress 無料） |
+| Route 53 相当 | DuckDNS（無料サブドメイン） |
+| SQS | Redis リスト（実装済み `USE_REDIS_QUEUE=true`） |
+| RDS 相当 | compose 内 PostgreSQL（従来どおり） |
 
-## 各サービスの無料枠
+※ 動画など重いアセットは R2 から直接配信するため、CDNなしでも体感への影響は小さい。
+独自ドメインを取得すれば Cloudflare 無料プランのCDNを前段に置くことも可能（任意・ドメイン代のみ）。
+
+## 各サービスの無料枠（2026-08 時点）
 
 | サービス | 用途 | 無料枠 |
 |----------|------|--------|
-| **Vercel** | Next.js ホスティング | 無制限 (Hobby) |
-| **Fly.io** | API + Worker コンテナ | $5/月クレジット (shared-cpu-1x×2台で十分) |
-| **Neon** | PostgreSQL | 0.5 GB、autosuspend あり |
-| **Upstash** | Redis (キャッシュ + キュー) | 10,000 コマンド/日、256 MB |
-| **Cloudflare R2** | ファイルストレージ | 10 GB ストレージ、無料 egress |
+| **Oracle Cloud** | VM (API/Worker/DB/全部) | Always Free: Ampere A1 合計 2 OCPU / 12GB (2026-06 に 4/24 から縮小)、ブートボリューム 200GB まで |
+| **Cloudflare R2** | 動画・ファイル | 10GB ストレージ、egress 無料、読み取り1000万回/月 |
+| **DuckDNS** | DNS | 無料（5サブドメインまで） |
+| **Let's Encrypt** | TLS証明書 | 無料（90日ごと自動更新） |
+| **GitHub Actions/GHCR** | CI/CD | Public リポジトリは無制限 |
 
 ---
 
 ## セットアップ手順
 
-### 1. Neon (PostgreSQL)
+### 1. Oracle Cloud — アカウントと VM 作成
 
-1. [neon.tech](https://neon.tech) でアカウント作成 → プロジェクト作成
-2. 接続情報をメモ:
-   - Host: `ep-xxx.ap-southeast-1.aws.neon.tech`
-   - Database: `neondb` (または任意の名前)
-   - User: `neondb_owner`
-   - Password: コンソールで確認
+1. [oracle.com/cloud/free](https://www.oracle.com/cloud/free/) でアカウント作成
+   - **ホームリージョンは後から変更不可**。`Japan East (Tokyo)` か `Japan Central (Osaka)` を選択
+   - クレジットカード登録が必要（Always Free 内なら課金なし）
+2. Compute → Instances → Create Instance:
+   - Shape: **VM.Standard.A1.Flex — 2 OCPU / 12GB**（Always Free 上限いっぱいを1台に割当）
+   - Image: **Ubuntu 24.04 (aarch64)**
+   - SSH公開鍵を登録（デプロイ用に新規作成推奨: `ssh-keygen -t ed25519 -f oci_deploy`）
+   - ⚠️ 「Out of capacity」エラーが出る場合: 時間を変えて再試行するか、
+     アカウントを **Pay As You Go にアップグレード**すると通りやすくなる
+     （Always Free リソースのみ使う限り $0 のまま。さらに、無料アカウントの
+     アイドルVM自動停止ポリシーの対象からも外れるため **PAYG化を推奨**）
+3. **パブリックIPを予約IPに変更**（無料・インスタンス再作成でもIP維持）:
+   - Instance → Attached VNICs → IPv4 Addresses → Edit → Reserved Public IP
 
-3. マイグレーション用に `DB_SSL_REQUIRED=true` が必要です（後述の Fly.io セットアップで設定）。
+### 2. ネットワーク開放（2箇所必要 — ハマりポイント）
 
-### 2. Upstash Redis
+**(a) OCI 側** — VCN → Security List に Ingress ルール追加:
 
-1. [upstash.com](https://upstash.com) でアカウント作成 → Redis データベース作成 (region: `ap-northeast-1`)
-2. 接続情報をメモ:
-   - Host: `xxx.upstash.io`
-   - Port: `6379`
-   - Password: コンソールで確認
+| Port | Source |
+|---|---|
+| 80 | 0.0.0.0/0 |
+| 443 | 0.0.0.0/0 |
 
-> Upstash は TLS 接続を要求します。既存の `redis_url` プロパティが `rediss://` スキームを使うよう、  
-> `REDIS_PASSWORD` を設定すれば自動的に対応しています。
-
-### 3. Cloudflare R2
-
-1. Cloudflare ダッシュボード → R2 → バケット作成 (例: `esports-demo`)
-2. R2 API トークン作成:
-   - Access Key ID → `AWS_ACCESS_KEY_ID`
-   - Secret Access Key → `AWS_SECRET_ACCESS_KEY`
-3. エンドポイント URL: `https://<account-id>.r2.cloudflarestorage.com`
-
-R2 は boto3 の S3 クライアントと互換性があります。`S3_ENDPOINT_URL` を設定するだけで切り替わります。
-
-### 4. Fly.io — API
+**(b) VM 内の iptables** — Oracle の Ubuntu イメージは**デフォルトで 22 以外を REJECT** します:
 
 ```bash
-# flyctl インストール (macOS)
-brew install flyctl
-flyctl auth login
-
-# アプリ作成
-flyctl apps create esports-platform-api --org <your-org>
-
-# シークレット設定 (値は各サービスのコンソールで確認)
-flyctl secrets set --app esports-platform-api \
-  SECRET_KEY="<32文字以上のランダム文字列>" \
-  DB_HOST="ep-xxx.ap-southeast-1.aws.neon.tech" \
-  DB_NAME="neondb" \
-  DB_USER="neondb_owner" \
-  DB_PASSWORD="<neon-password>" \
-  REDIS_HOST="xxx.upstash.io" \
-  REDIS_PORT="6379" \
-  REDIS_PASSWORD="<upstash-password>" \
-  S3_BUCKET_NAME="esports-demo" \
-  S3_ENDPOINT_URL="https://<account-id>.r2.cloudflarestorage.com" \
-  AWS_ACCESS_KEY_ID="<r2-key-id>" \
-  AWS_SECRET_ACCESS_KEY="<r2-secret>" \
-  ALLOWED_ORIGINS="https://<your-app>.vercel.app"
+sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80 -j ACCEPT
+sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 443 -j ACCEPT
+sudo netfilter-persistent save
 ```
 
-`fly.toml` は `infrastructure/fly/api/fly.toml` にあります。
-
-### 5. Fly.io — Worker
+### 3. Docker インストールとアプリ配置
 
 ```bash
-flyctl apps create esports-platform-worker --org <your-org>
+# VM に SSH ログイン (ubuntu ユーザー)
+ssh -i oci_deploy ubuntu@<VMのIP>
 
-flyctl secrets set --app esports-platform-worker \
-  SECRET_KEY="<同じ値>" \
-  DB_HOST="<neon-host>" \
-  DB_NAME="neondb" \
-  DB_USER="neondb_owner" \
-  DB_PASSWORD="<neon-password>" \
-  REDIS_HOST="xxx.upstash.io" \
-  REDIS_PORT="6379" \
-  REDIS_PASSWORD="<upstash-password>" \
-  S3_BUCKET_NAME="esports-demo" \
-  S3_ENDPOINT_URL="https://<account-id>.r2.cloudflarestorage.com" \
-  AWS_ACCESS_KEY_ID="<r2-key-id>" \
-  AWS_SECRET_ACCESS_KEY="<r2-secret>"
+# Docker
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker ubuntu && exit   # 入り直して反映
+
+# アプリ配置（/opt/app 固定 — デプロイworkflowが参照）
+sudo mkdir -p /opt/app && sudo chown ubuntu:ubuntu /opt/app
+git clone https://github.com/<your-org>/esports-platform.git /opt/app
+cd /opt/app
+mkdir -p certbot-www nginx/ssl
 ```
 
-`fly.toml` は `infrastructure/fly/worker/fly.toml` にあります。
+> プライベートリポジトリの場合、clone には Fine-grained PAT（Contents: Read）を使用:
+> `git clone https://<PAT>@github.com/<your-org>/esports-platform.git /opt/app`
 
-### 6. GitHub Secrets の設定
+`backend/.env` を作成（EC2 の `/opt/app/backend/.env` からコピーして以下を確認）:
 
-GitHub リポジトリ → Settings → Secrets and variables → Actions:
+```bash
+SECRET_KEY=<32文字以上>
+DB_PASSWORD=<任意>
+USE_REDIS_QUEUE=true
+ALLOWED_ORIGINS=https://<your-sub>.duckdns.org
+PUBLIC_WEB_URL=https://<your-sub>.duckdns.org
+# Cloudflare R2 (手順5で取得)
+S3_BUCKET_NAME=esports-uploads
+S3_ENDPOINT_URL=https://<account-id>.r2.cloudflarestorage.com
+AWS_ACCESS_KEY_ID=<r2-key-id>
+AWS_SECRET_ACCESS_KEY=<r2-secret>
+```
 
-| シークレット名 | 値 |
-|---|---|
-| `FLY_API_TOKEN` | `flyctl auth token` の出力 |
+Discord Bot を使う場合はルートにも `.env`（compose が参照）:
 
-GitHub Variables:
+```bash
+PUBLIC_WEB_URL=https://<your-sub>.duckdns.org
+DISCORD_BOT_TOKEN=...
+BOT_API_TOKEN=...
+```
 
-| 変数名 | 値 |
-|---|---|
-| `DEMO_DOMAIN` | Fly.io の API URL (例: `esports-platform-api.fly.dev`) |
+### 4. DuckDNS（無料DNS）
 
-### 7. Vercel — フロントエンド
+[duckdns.org](https://www.duckdns.org) に GitHub アカウント等でログイン → サブドメイン作成 → VM の**予約IP**を登録。
+予約IPなら IP は変わらないため、DuckDNS の定期更新 cron は不要です。
 
-1. [vercel.com](https://vercel.com) でアカウント作成 → GitHub リポジトリをインポート
-2. Root Directory: `frontend`
-3. 環境変数を設定:
-   - `NEXT_PUBLIC_API_URL=https://esports-platform-api.fly.dev`
+### 5. Cloudflare R2（動画・ファイルストレージ）
 
-push するたびに Vercel が自動デプロイします。
+1. Cloudflare ダッシュボード → R2 → バケット作成:
+   - `esports-uploads`（API用・非公開）
+   - `esports-media`（Hero動画用・**Settings → Public access → r2.dev subdomain を有効化**）
+2. R2 API トークン作成（Object Read & Write）→ `backend/.env` の `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` へ
+3. Hero 動画を `esports-media` にアップロードし、`https://pub-xxxx.r2.dev/hero.mp4` 形式の公開URLを控える
+
+> R2 は boto3 互換。`S3_ENDPOINT_URL` を設定するだけでバックエンドは無変更で動作します。
+> Hero動画が小さい（〜20MB程度）なら R2 を使わず `frontend/public/hero/hero.mp4` に同梱する選択肢もあります
+> （その場合 HERO_VIDEO_* 変数は未設定のままでOK — ローカルパスにフォールバックします）。
+
+### 6. GitHub Secrets / Variables の更新と初回デプロイ（HTTP）
+
+Settings → Secrets and variables → Actions:
+
+| 種別 | 名前 | 値 |
+|---|---|---|
+| Secret | `DEMO_SSH_HOST` | VM の予約IP |
+| Secret | `DEMO_SSH_KEY` | `oci_deploy` 秘密鍵の中身 |
+| Variable | `DEMO_SSH_USER` | `ubuntu` |
+| Variable | `DEMO_DOMAIN` | `<your-sub>.duckdns.org` |
+| Variable | `HERO_VIDEO_MP4` ほか | R2 の公開URL（`https://pub-xxxx.r2.dev/...`）。ローカル同梱なら削除 |
+
+> ⚠️ `DEMO_COMPOSE_FILES` は**まだ設定しない**こと（証明書発行前に TLS 構成で起動すると nginx が起動失敗する）。
+> 旧 `DEMO_EC2_HOST` / `DEMO_EC2_SSH_KEY` は AWS 解体後に削除してかまいません
+> （`DEMO_SSH_*` が優先されるフォールバック実装のため、残っていても無害）。
+
+設定できたら Actions タブ → **Build & Push** → Run workflow で手動実行。
+完了すると **Deploy — Demo (SSH VM)** が連動し、新VMに HTTP 構成でスタック一式が起動します
+（GHCR のプライベートイメージ認証は workflow が自動で行うため、初回起動は必ずこの経路で行う）。
+
+`http://<your-sub>.duckdns.org/health` が 200 を返せば成功です。
+
+### 7. Let's Encrypt 証明書発行と TLS 切替
+
+HTTP 構成が動いている状態で、VM 上で webroot 方式により発行します:
+
+```bash
+ssh -i oci_deploy ubuntu@<VMのIP>
+sudo apt install -y certbot
+sudo certbot certonly --webroot -w /opt/app/certbot-www -d <your-sub>.duckdns.org
+
+# TLS 設定のドメイン置換
+cd /opt/app
+sed -i 's/YOUR_DOMAIN/<your-sub>.duckdns.org/g' nginx/nginx-tls.conf
+
+# TLS 構成で再起動（イメージは初回デプロイで取得済み）
+IMAGE_ORG=<github-org小文字> docker compose \
+  -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.tls.yml up -d
+```
+
+自動更新（90日ごと）時に nginx をリロードさせるフック:
+
+```bash
+sudo tee /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh <<'EOF'
+#!/bin/sh
+cd /opt/app && docker compose exec -T nginx nginx -s reload
+EOF
+sudo chmod +x /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
+```
+
+最後に GitHub Variables に **`DEMO_COMPOSE_FILES` = `docker-compose.yml:docker-compose.prod.yml:docker-compose.tls.yml`** を追加。
+以降の自動デプロイも TLS 構成を維持するようになります。
+
+### 8. データ移行（EC2 → Oracle VM）
+
+```bash
+# 手元PC等から: EC2 でダンプ → 新VMへリストア
+ssh ec2-user@<EC2-IP> "docker compose -f /opt/app/docker-compose.yml exec -T postgres \
+  pg_dump -U esports_user -d esports_db --clean --if-exists" > dump.sql
+
+scp -i oci_deploy dump.sql ubuntu@<新VM-IP>:/tmp/
+ssh -i oci_deploy ubuntu@<新VM-IP> \
+  "cd /opt/app && docker compose exec -T postgres psql -U esports_user -d esports_db < /tmp/dump.sql && rm /tmp/dump.sql"
+
+# リストア後、スキーマを最新マイグレーションに揃える
+ssh -i oci_deploy ubuntu@<新VM-IP> \
+  "cd /opt/app && docker compose exec -T api alembic upgrade head"
+```
+
+S3 のアップロード済みファイルは `aws s3 sync s3://<bucket> ./s3-data` でローカルへ取得後、
+rclone 等で R2 の `esports-uploads` へ転送します。
+
+### 9. 動作確認チェックリスト
+
+- [ ] `https://<your-sub>.duckdns.org/health` → 200
+- [ ] `https://<your-sub>.duckdns.org` → フロントエンド表示・Hero動画再生
+- [ ] ログイン → API 通信（`/api/`）が HTTPS で成功
+- [ ] `main` に空コミットを push → Build & Push (arm64) → Deploy — Demo (SSH VM) が成功
+- [ ] worker ログでキュー消化を確認: `docker compose logs -f worker`
+- [ ] Discord Bot（使用時）: `docker compose --profile discord up -d`
 
 ---
 
-## CI/CD フロー
+## CI/CD フロー（変更点のみ）
 
 ```
 git push main
-  │
-  ├─► Build & Push (.github/workflows/build.yml)
-  │     └─ GHCR に API/Worker/Frontend イメージをプッシュ
-  │
-  └─► Deploy — Demo (.github/workflows/deploy-demo.yml)
-        ├─ flyctl deploy esports-platform-api   (新イメージで更新)
-        ├─ flyctl deploy esports-platform-worker
-        └─ flyctl ssh console -C "alembic upgrade head"  (マイグレーション)
-
-  Vercel は GitHub push を検知して独自に自動デプロイ
+  ├─► Build & Push: linux/amd64 + linux/arm64 のマルチアーチイメージを GHCR へ
+  └─► Deploy — Demo (SSH VM): DEMO_SSH_HOST へ SSH → compose pull → up -d → alembic upgrade
 ```
+
+従来の EC2 デプロイと同じ仕組みのまま、接続先だけが Oracle VM に変わります。
+Private リポジトリで Actions の無料枠（2,000分/月）が厳しい場合は、EC2 廃止後に
+`build.yml` の `platforms` を `linux/arm64` のみに絞るとビルド時間がほぼ半減します。
 
 ---
 
-## キュー動作の仕組み
+## AWS 解体手順（課金停止）
 
-デモ環境では `USE_REDIS_QUEUE=true` により、SQS の代わりに Upstash Redis のリストをキューとして使用します。
+移行完了・動作確認後に実施。**順序どおりに**:
 
-| 操作 | SQS (AWS) | Redis (デモ) |
-|------|-----------|--------------|
-| メッセージ送信 | `sqs.send_message` | `LPUSH queue:match_events <json>` |
-| メッセージ受信 | `receive_message` (long poll) | `BRPOP queue:match_events 20` |
-| 処理完了後 | `delete_message` | 不要 (POPで取得済み) |
-| 再試行 | VisibilityTimeout 経由 | 失敗時は再PUSH (将来対応) |
+1. **CloudFront**: ディストリビューションを Disable → 反映後 Delete
+2. **S3**: バケットを空にしてから Delete（動画は R2 へ移行済みであること）
+3. **EC2**: インスタンス Terminate → 残った **EBS ボリューム / スナップショット** を削除
+4. **Elastic IP**: 保持していれば Release（未使用EIPは課金対象）
+5. Terraform 管理分は `cd infrastructure/terraform/environments/demo && terraform destroy` でも可
+6. 数日後に **Billing ダッシュボードで請求が $0 になっていることを確認**
+7. GitHub の旧 Secrets（`DEMO_EC2_*`）と `HERO_VIDEO_*` の CloudFront URL を削除・更新
 
 ---
 
-## AWS 移行手順
+## 代替案（参考）
 
-アクセスが増えて Fly.io の無料枠を超えたら:
+### マネージド分割構成（Neon + Upstash + R2）
 
-### 1. Terraform で AWS 環境を構築
+バックエンドには切替スイッチが実装済みのため、VM を使わず DB/Redis をマネージドに分割することも可能です:
+`DB_SSL_REQUIRED=true`（Neon）、`REDIS_TLS=true`（Upstash）、`S3_ENDPOINT_URL`（R2）、`USE_REDIS_QUEUE=true`。
+ただし **API/Worker を常時無料で動かせるコンテナ実行環境が現存しない**（Fly.io/Koyeb 無料枠廃止、
+Render は Worker が $7/月〜）ため、2026年時点では Oracle VM 構成を推奨します。
+`infrastructure/fly/` の設定は旧構成の名残であり、現在は使用していません。
 
-```bash
-cd infrastructure/terraform/environments/demo  # または mvp
-terraform init
-terraform apply
-```
+### アクセス増加時の AWS 復帰
 
-### 2. 環境変数の切り替え
+Terraform 一式（`infrastructure/terraform/environments/demo|mvp`）は維持しているため、いつでも戻せます:
 
-| 変数 | デモ値 | AWS値 |
+| 変数 | 無料構成 | AWS |
 |------|--------|-------|
-| `USE_REDIS_QUEUE` | `true` | `false` |
-| `SQS_MATCH_QUEUE_URL` | (未設定) | SQS URL |
-| `SQS_NOTIFICATION_QUEUE_URL` | (未設定) | SQS URL |
-| `SQS_ANALYTICS_QUEUE_URL` | (未設定) | SQS URL |
-| `S3_ENDPOINT_URL` | R2 エンドポイント | (削除) |
-| `DB_SSL_REQUIRED` | `true` | `false` (VPC内接続) |
-
-### 3. デプロイ先の切り替え
-
-- Demo EC2/ECS: `.github/workflows/deploy-mvp.yml` が引き継ぐ
-- EKS: `.github/workflows/deploy-production.yml` が引き継ぐ
+| `USE_REDIS_QUEUE` | `true` | `false` + `SQS_*_QUEUE_URL` 設定 |
+| `S3_ENDPOINT_URL` | R2 エンドポイント | （削除） |
+| `DB_SSL_REQUIRED` | `false`（VM内DB） | `false`（VPC内RDS）/ Neon併用なら `true` |
+| デプロイ先 | `DEMO_SSH_HOST`（Oracle） | `deploy-mvp.yml` / `deploy-production.yml` |
 
 ---
 
 ## トラブルシューティング
 
-### Fly.io で `flyctl ssh console` が失敗する
+### A1 インスタンスが「Out of capacity」で作れない
+時間帯を変えて再試行（早朝が通りやすい）。それでもダメなら PAYG へアップグレード（無料のまま優先度が上がる）。
+OCPU を 1 に減らすと通ることもある（後から 2 に拡張可能）。
 
-```bash
-flyctl agent restart
-flyctl ssh console --app esports-platform-api -C "alembic upgrade head"
-```
+### ポート 80/443 に外から繋がらない
+OCI Security List と VM 内 iptables の**両方**を確認（手順2）。`sudo iptables -L INPUT -n --line-numbers` で
+REJECT ルールより上に ACCEPT が入っているか確認。
 
-### Neon の接続がタイムアウトする
+### 無料アカウントで VM が勝手に停止された
+Always Free（未アップグレード）アカウントは、CPU/ネットワーク使用率が低いインスタンスを
+Oracle が自動停止することがあります。PAYG へのアップグレードで対象外になります（課金リソースを作らない限り $0）。
 
-Neon は 5分間アクセスがないとサスペンドします。最初のリクエストで2〜3秒かかることがありますが正常です。  
-本番移行時に AWS RDS に切り替えることでこの問題はなくなります。
+### 証明書更新後も古い証明書が使われる
+`/etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh` が実行可能か確認。
+手動リロード: `cd /opt/app && docker compose exec nginx nginx -s reload`
 
-### Upstash の 10,000 コマンド/日の上限に達した
-
-- Grafana でキューの深さ (`esports_sqs_queue_depth`) を確認
-- イベント発火頻度を下げるか、Upstash の有料プランに移行 ($0.2/10万コマンド)
-- または `USE_REDIS_QUEUE=false` + SQS に切り替え
+### ARM イメージ関連のエラー（`exec format error`）
+GHCR のイメージが arm64 を含んでいるか確認: `docker manifest inspect ghcr.io/<org>/esports-platform-api:latest`。
+`build.yml` の `platforms: linux/amd64,linux/arm64` が効いた後のビルドを pull していること。

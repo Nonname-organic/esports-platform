@@ -9,6 +9,10 @@ VALORANT / League of Legends / Apex Legends などの e-Sports 大会を一元�
 [![CI](https://github.com/your-username/esports-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/your-username/esports-platform/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
+> **💰 運用コストについて**: 本 README のインフラ解説は AWS 12ヶ月無料枠を前提としています。
+> 無料枠終了後の **完全無料（$0/月）運用構成**（Oracle Cloud Always Free + Cloudflare R2 + DuckDNS）への
+> 移行手順は [docs/phase10_demo_free_tier.md](docs/phase10_demo_free_tier.md) を参照してください。
+
 ---
 
 ## 目次

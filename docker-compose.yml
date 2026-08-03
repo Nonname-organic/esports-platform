@@ -9,6 +9,8 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/ssl:/etc/nginx/ssl:ro
+      # Let's Encrypt HTTP-01 チャレンジ用 webroot（certbot --webroot -w /opt/app/certbot-www）
+      - ./certbot-www:/var/www/certbot:ro
     depends_on:
       - api
       - frontend

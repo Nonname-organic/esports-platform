@@ -1,4 +1,8 @@
-name: Deploy — Demo (EC2)
+# SSH先は Secrets/Variables で切替可能:
+#   DEMO_SSH_HOST / DEMO_SSH_KEY (新: Oracle Cloud 等の任意VM)
+#   DEMO_EC2_HOST / DEMO_EC2_SSH_KEY (旧: EC2 — 後方互換フォールバック)
+#   vars.DEMO_SSH_USER (既定 ec2-user / Oracle Ubuntu は "ubuntu")
+name: Deploy — Demo (SSH VM)
 
 on:
   workflow_run:
@@ -12,7 +16,7 @@ concurrency:
 
 jobs:
   deploy:
-    name: SSH deploy to EC2
+    name: SSH deploy to demo VM
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     environment:
@@ -36,11 +40,14 @@ jobs:
           GHCR_USER: ${{ github.actor }}
           IMAGE_TAG: ${{ steps.tag.outputs.value }}
           IMAGE_ORG: ${{ steps.owner.outputs.value }}
+          # TLS構成へ切替後は vars.DEMO_COMPOSE_FILES に
+          # "docker-compose.yml:docker-compose.prod.yml:docker-compose.tls.yml" を設定する
+          COMPOSE_FILE: ${{ vars.DEMO_COMPOSE_FILES || 'docker-compose.yml:docker-compose.prod.yml' }}
         with:
-          host: ${{ secrets.DEMO_EC2_HOST }}
-          username: ec2-user
-          key: ${{ secrets.DEMO_EC2_SSH_KEY }}
-          envs: GHCR_TOKEN,GHCR_USER,IMAGE_TAG,IMAGE_ORG
+          host: ${{ secrets.DEMO_SSH_HOST || secrets.DEMO_EC2_HOST }}
+          username: ${{ vars.DEMO_SSH_USER || 'ec2-user' }}
+          key: ${{ secrets.DEMO_SSH_KEY || secrets.DEMO_EC2_SSH_KEY }}
+          envs: GHCR_TOKEN,GHCR_USER,IMAGE_TAG,IMAGE_ORG,COMPOSE_FILE
           script: |
             set -euo pipefail
 
@@ -48,19 +55,21 @@ jobs:
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
 
             cd /opt/app
+            export COMPOSE_FILE
 
             # Pull new images (docker-compose.prod.yml overrides build: → image:)
-            IMAGE_TAG="$IMAGE_TAG" IMAGE_ORG="$IMAGE_ORG" \
-              docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
+            IMAGE_TAG="$IMAGE_TAG" IMAGE_ORG="$IMAGE_ORG" docker compose pull
 
             # Restart services; new containers start before old ones stop
             IMAGE_TAG="$IMAGE_TAG" IMAGE_ORG="$IMAGE_ORG" \
-              docker compose -f docker-compose.yml -f docker-compose.prod.yml \
-              up -d --remove-orphans
+              docker compose up -d --remove-orphans
 
-            # Wait for API readiness (uses /health/live — process-alive check only)
+            # Wait for API readiness (uses /health/live — process-alive check only).
+            # NOTE: api image has no curl — use in-container Python instead.
             for i in $(seq 1 12); do
-              docker compose exec -T api curl -sf http://localhost:8000/health/live && break
+              docker compose exec -T api python -c \
+                "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/live', timeout=3)" \
+                && break
               echo "Waiting for API... ($i/12)"
               sleep 5
             done
