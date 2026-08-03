@@ -1,0 +1,13 @@
+# ホスト側の成果物・依存をビルドコンテキストから除外。
+# これが無いと COPY . . でWindows/ホスト用の node_modules・.next がコンテナへ混入し、
+# SWC のネイティブバイナリ不整合 ("data did not match any variant of untagged enum Config") で
+# npm run build が失敗する。依存は deps ステージの npm install が提供する。
+node_modules
+.next
+out
+coverage
+playwright-report
+test-results
+playwright/.auth
+*.log
+.env*

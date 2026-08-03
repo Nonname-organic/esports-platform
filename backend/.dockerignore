@@ -1,0 +1,9 @@
+# ホスト側の成果物・秘密情報をビルドコンテキストから除外
+__pycache__
+**/__pycache__
+*.pyc
+.pytest_cache
+test-results
+venv
+.venv
+.env

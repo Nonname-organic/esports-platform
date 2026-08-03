@@ -20,7 +20,7 @@ bcrypt==4.2.0
 
 # Validation
 pydantic==2.9.2
-pydantic-settings==2.6.1
+pydantic-settings==2.7.1  # >=2.7: NoDecode (ALLOWED_ORIGINS のカンマ区切り対応に使用)
 email-validator==2.2.0
 
 # HTTP Client (for Discord / Riot API)

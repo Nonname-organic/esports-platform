@@ -77,7 +77,8 @@ services:
         limits:
           memory: 300M
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health/live"]
+      # イメージに curl が無いため Python でチェック
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/live', timeout=3)"]
       interval: 30s
       timeout: 5s
       retries: 3

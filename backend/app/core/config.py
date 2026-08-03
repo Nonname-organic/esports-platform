@@ -1,8 +1,8 @@
 from functools import lru_cache
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -107,8 +107,9 @@ class Settings(BaseSettings):
     RIOT_SYNC_INTERVAL_HOURS: int = 6    # 0 で自動同期OFF
     RIOT_SYNC_DELAY_SECONDS: float = 2.0  # プロフィール間の待機（レート制限緩和）
 
-    # CORS
-    ALLOWED_ORIGINS: list[str] = ["http://localhost:3000"]
+    # CORS — NoDecode で pydantic-settings のJSON先行デコードを止め、
+    # validator でカンマ区切り文字列 (例: "http://a.com,http://b.com") を受け付ける
+    ALLOWED_ORIGINS: Annotated[list[str], NoDecode] = ["http://localhost:3000"]
 
     @field_validator("ALLOWED_ORIGINS", mode="before")
     @classmethod
