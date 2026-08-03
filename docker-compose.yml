@@ -107,6 +107,29 @@ services:
         limits:
           memory: 150M
 
+  # 定期ジョブ（日次集計 / S3エクスポート / 週次ランキングスナップショット）
+  scheduler:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: production
+    command: python -m arq app.workers.etl_scheduler.WorkerSettings
+    env_file:
+      - ./backend/.env
+    environment:
+      - REDIS_HOST=redis
+      - DB_HOST=postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 150M
+
   redis:
     image: redis:7-alpine
     command: redis-server --maxmemory 120mb --maxmemory-policy allkeys-lru --save ""

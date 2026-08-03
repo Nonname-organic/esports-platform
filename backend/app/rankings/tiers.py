@@ -14,6 +14,29 @@ PLACEMENT_RP: dict[str, int] = {
     "participated": 100,
 }
 
+# 大会規模係数: 参加チーム数が多い大会ほど RP を重くする（RP = PLACEMENT_RP × 係数）。
+# 4チーム未満の大会は係数 0.0 = RP対象外（自作自演の小規模大会でのRP稼ぎ防止）。
+MIN_TEAMS_FOR_RP: int = 4
+SCALE_MULTIPLIERS: list[tuple[int, float]] = [  # (この数以上, 係数) — 降順で評価
+    (32, 2.0),
+    (16, 1.5),
+    (8, 1.0),
+    (MIN_TEAMS_FOR_RP, 0.5),
+]
+
+
+def scale_multiplier(team_count: int) -> float:
+    """参加チーム数 → 大会規模係数（純関数 / 公開API）。4未満は 0.0（RP対象外）。"""
+    for min_teams, mult in SCALE_MULTIPLIERS:
+        if team_count >= min_teams:
+            return mult
+    return 0.0
+
+
+def placement_rp(label: str, team_count: int) -> int:
+    """placement ラベルと参加チーム数から実際の付与RPを返す（規模係数込み・整数丸め）。"""
+    return round(PLACEMENT_RP.get(label, 0) * scale_multiplier(team_count))
+
 # Player RP のMVPボーナス（1MVPあたり / ADR-0016）。Team RP SSOT を再利用しつつ選手固有加点。
 MVP_RP: int = 150
 

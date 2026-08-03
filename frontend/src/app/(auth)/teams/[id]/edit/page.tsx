@@ -21,6 +21,7 @@ const schema = z.object({
   logo_url: z.string().url().optional().or(z.literal("")),
   banner_url: z.string().url().optional().or(z.literal("")),
   twitter_handle: z.string().max(50).optional(),
+  stats_public: z.boolean().optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -49,6 +50,7 @@ export default function TeamEditPage({ params }: { params: Promise<{ id: string 
       logo_url: team.logo_url ?? "",
       banner_url: team.banner_url ?? "",
       twitter_handle: (team as any).twitter_handle ?? "",
+      stats_public: (team as any).stats_public ?? true,
     });
   }, [team, reset]);
 
@@ -152,6 +154,18 @@ export default function TeamEditPage({ params }: { params: Promise<{ id: string 
             <input {...register("twitter_handle")} className={inputClass()} placeholder="@なし" />
           </div>
         </div>
+
+        {/* 戦績の詳細分析の公開設定（第2層のみ。大会結果・ランキングは常に公開） */}
+        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+          <input type="checkbox" {...register("stats_public")} className="mt-0.5 h-4 w-4 accent-brand-500" />
+          <span>
+            <span className="block text-sm font-semibold text-white">戦績の詳細分析を公開する</span>
+            <span className="mt-0.5 block text-xs text-slate-500">
+              マップ別勝率・構成などの傾向分析の公開設定です。オフにしても大会結果・順位・ランキング掲載は公開されたまま、
+              プラットフォーム全体の統計にはチーム名なしで集計されます。
+            </span>
+          </span>
+        </label>
 
         <div className="flex gap-3">
           <button

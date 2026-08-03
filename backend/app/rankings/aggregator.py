@@ -21,7 +21,7 @@ from app.models.player import Player
 from app.models.team import Team, TeamMember
 from app.models.tournament import Tournament, TournamentRegistration
 from app.models.tournament_report import TournamentReport
-from app.rankings.tiers import MVP_RP, PLACEMENT_RP, next_tier_for, tier_for, tier_progress
+from app.rankings.tiers import MVP_RP, next_tier_for, placement_rp, tier_for, tier_progress
 from app.reports.aggregator import TournamentReportAggregator
 from app.seasons.utils import season_label
 from app.seasons.utils import season_window as _season_window
@@ -30,6 +30,19 @@ RANKING_CACHE_TTL = 900  # 15分
 DEFAULT_LIMIT = 100
 FULL_LIMIT = 100000
 TOP4_CUTOFF = 4
+
+
+def _assign_competition_ranks(entries: list[dict]) -> None:
+    """RP同点は同順位（1,2,2,4方式）。entriesはソート済み前提・rankをin-placeで付与。"""
+    prev_rp: Optional[int] = None
+    prev_rank = 0
+    for i, e in enumerate(entries, 1):
+        if e["rp"] == prev_rp:
+            e["rank"] = prev_rank
+        else:
+            e["rank"] = i
+            prev_rank = i
+            prev_rp = e["rp"]
 
 
 def _placements(data: dict) -> dict[str, str]:
@@ -77,7 +90,7 @@ class RankingAggregator:
     async def _compute(self, *, game: Optional[str], season: str) -> list[dict]:
         start, end = _season_window(season)
 
-        q = select(Tournament.id).where(Tournament.status == TournamentStatus.COMPLETED)
+        q = select(Tournament.id, Tournament.end_at).where(Tournament.status == TournamentStatus.COMPLETED)
         if game:
             try:
                 q = q.where(Tournament.game == GameType(game))
@@ -85,21 +98,26 @@ class RankingAggregator:
                 return []
         if start and end:
             q = q.where(Tournament.end_at >= start, Tournament.end_at < end)
-        tournament_ids = list((await self._db.execute(q)).scalars().all())
+        tournaments = (await self._db.execute(q)).all()
 
         agg: dict[str, dict] = {}
-        for tid in tournament_ids:
+        for tid, t_end_at in tournaments:
             data = await self._report_data(tid)
             if not data:
                 continue
             placements = _placements(data)
+            # 参加チーム数（規模係数の根拠）。4未満は係数0 = RP対象外なのでスキップ。
+            team_count = len(placements)
+            if placement_rp("participated", team_count) == 0:
+                continue
             standings = {s.get("team_id"): s for s in (data.get("standings") or []) if s.get("team_id")}
+            ended_iso = t_end_at.isoformat() if t_end_at else ""
             for team_id, label in placements.items():
                 a = agg.setdefault(team_id, {
                     "rp": 0, "tournaments": 0, "championships": 0, "runner_ups": 0, "top4": 0,
-                    "wins": 0, "losses": 0,
+                    "wins": 0, "losses": 0, "last_ended_at": "",
                 })
-                a["rp"] += PLACEMENT_RP.get(label, 0)
+                a["rp"] += placement_rp(label, team_count)
                 a["tournaments"] += 1
                 if label == "champion":
                     a["championships"] += 1
@@ -110,6 +128,8 @@ class RankingAggregator:
                 s = standings.get(team_id) or {}
                 a["wins"] += int(s.get("wins", 0) or 0)
                 a["losses"] += int(s.get("losses", 0) or 0)
+                if ended_iso > a["last_ended_at"]:
+                    a["last_ended_at"] = ended_iso
 
         if not agg:
             return []
@@ -146,12 +166,44 @@ class RankingAggregator:
                 "wins": a["wins"],
                 "losses": a["losses"],
                 "win_rate": round(a["wins"] / total, 4) if total else 0.0,
+                "last_ended_at": a["last_ended_at"] or None,
             })
 
-        entries.sort(key=lambda e: (e["rp"], e["championships"], e["wins"]), reverse=True)
-        for i, e in enumerate(entries, 1):
-            e["rank"] = i
+        # タイブレーク: RP → 優勝数 → 直近大会日が新しい方
+        entries.sort(key=lambda e: (e["rp"], e["championships"], e.get("last_ended_at") or ""), reverse=True)
+        _assign_competition_ranks(entries)
+        if game is None:  # スナップショットはゲーム横断のみ保持
+            await self._apply_rank_changes(entries, scope="team", season=season, id_key="team_id")
         return entries
+
+    async def _apply_rank_changes(
+        self, entries: list[dict], *, scope: str, season: str, id_key: str
+    ) -> None:
+        """直近の週次スナップショット（今日より前）と比較して rank_change を付与する。
+
+        正=上昇 / 負=下降 / 0=変動なし / None=新規 or スナップショット未取得。
+        テーブル未作成でも安全に無視する（防御的）。
+        """
+        if season not in ("all", "current"):
+            return
+        try:
+            row = (await self._db.execute(text(
+                "SELECT MAX(captured_at) FROM ranking_snapshots "
+                "WHERE scope = :scope AND season = :season AND captured_at < CURRENT_DATE"
+            ), {"scope": scope, "season": season})).first()
+            latest = row[0] if row else None
+            if not latest:
+                return
+            rows = (await self._db.execute(text(
+                "SELECT entity_id, rank FROM ranking_snapshots "
+                "WHERE scope = :scope AND season = :season AND captured_at = :captured"
+            ), {"scope": scope, "season": season, "captured": latest})).all()
+            prev = {str(r[0]): int(r[1]) for r in rows}
+            for e in entries:
+                p = prev.get(e[id_key])
+                e["rank_change"] = (p - e["rank"]) if p is not None else None
+        except Exception:
+            return
 
     # ── チーム・ランクカード（Team Page 連携用に完全共通化） ───────────────────
     async def team_rank_card(self, team_id: uuid.UUID, *, season: str = "all") -> dict:
@@ -251,10 +303,13 @@ class RankingAggregator:
             data = await self._report_data(tid)
             if not data:
                 continue
-            label = _placements(data).get(str(team_id))
+            placements = _placements(data)
+            label = placements.get(str(team_id))
             if not label:
                 continue
-            gained = PLACEMENT_RP.get(label, 0)
+            gained = placement_rp(label, len(placements))
+            if gained == 0:  # 4チーム未満の大会はRP対象外
+                continue
             cumulative += gained
             out.append({
                 "tournament_id": str(tid),
@@ -337,8 +392,9 @@ class RankingAggregator:
                 "mvps": mvp_counts.get(pid, 0),
             })
         entries.sort(key=lambda e: (e["rp"], e["mvps"]), reverse=True)
-        for i, e in enumerate(entries, 1):
-            e["rank"] = i
+        _assign_competition_ranks(entries)
+        if game is None:
+            await self._apply_rank_changes(entries, scope="player", season=season, id_key="player_id")
         return entries
 
     async def player_rank_card(self, player_id: uuid.UUID) -> dict:

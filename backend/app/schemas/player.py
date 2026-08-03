@@ -79,6 +79,8 @@ class PlayerUpdate(BaseModel):
     nationality: Optional[str] = Field(None, max_length=50)
     twitter_handle: Optional[str] = Field(None, max_length=100)
     twitch_handle: Optional[str] = Field(None, max_length=100)
+    # 個人詳細スタッツ（第2層）の公開設定。MVP・大会成績（第1層）は常に公開。
+    stats_public: Optional[bool] = None
 
 
 class PlayerSchema(BaseModel):
@@ -101,6 +103,7 @@ class PlayerSchema(BaseModel):
     bio: Optional[str]
     twitter_handle: Optional[str]
     twitch_handle: Optional[str]
+    stats_public: bool = True
     created_at: datetime
     updated_at: datetime
 

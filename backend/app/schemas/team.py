@@ -26,6 +26,8 @@ class TeamUpdate(BaseModel):
     logo_url: Optional[str] = Field(None, max_length=2048)
     banner_url: Optional[str] = Field(None, max_length=2048)
     twitter_handle: Optional[str] = Field(None, max_length=50)
+    # 傾向分析（第2層）の公開設定。結果・ランキング（第1層）はこの設定に関わらず公開。
+    stats_public: Optional[bool] = None
 
 
 class TeamSummarySchema(BaseModel):
@@ -46,6 +48,7 @@ class TeamDetailSchema(TeamSummarySchema):
     country: Optional[str]
     banner_url: Optional[str]
     twitter_handle: Optional[str]
+    stats_public: bool = True
     updated_at: datetime
 
 

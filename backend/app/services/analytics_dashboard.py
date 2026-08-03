@@ -15,11 +15,12 @@ from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.redis import RedisCache
-from app.models.enums import GameType, MatchStatus
-from app.models.match import Map, Match, MatchGame, PlayerMatchStats
+from app.models.enums import BanPickAction, GameType, MatchStatus, TournamentStatus
+from app.models.match import BanPick, Map, Match, MatchGame, PlayerMatchStats
 from app.models.player import Player
 from app.models.team import Team, TeamMember
 from app.models.tournament import Tournament
+from app.models.user import User
 
 TTL = 300  # 5分
 
@@ -391,4 +392,88 @@ class AnalyticsDashboardService:
                 "games": games,
                 "win_rate": round((wins or 0) / games, 4) if games else 0.0,
             })
+        return out
+
+    # ── マップ BAN/PICK 率（ban_picks — 大会限定データ / 外部公開の目玉） ─────────
+    async def map_veto(
+        self, game: GameType, tournament_id: Optional[uuid.UUID] = None,
+    ) -> list[dict]:
+        cache_key = f"analytics:veto:{game.value}:{tournament_id or 'all'}"
+        cached = await self._cache.get(cache_key)
+        if cached is not None:
+            return cached  # type: ignore[return-value]
+
+        conds = [Tournament.game == game]
+        if tournament_id:
+            conds.append(Match.tournament_id == tournament_id)
+        rows = (await self._db.execute(
+            select(
+                Map.display_name,
+                func.sum(case((BanPick.action == BanPickAction.BAN, 1), else_=0)).label("bans"),
+                func.sum(case((BanPick.action == BanPickAction.PICK, 1), else_=0)).label("picks"),
+            )
+            .select_from(BanPick)
+            .join(Match, BanPick.match_id == Match.id)
+            .join(Tournament, Match.tournament_id == Tournament.id)
+            .join(Map, BanPick.map_id == Map.id)
+            .where(*conds)
+            .group_by(Map.display_name)
+        )).all()
+
+        total_bans = sum(int(r.bans or 0) for r in rows) or 1
+        total_picks = sum(int(r.picks or 0) for r in rows) or 1
+        out = []
+        for r in rows:
+            bans, picks = int(r.bans or 0), int(r.picks or 0)
+            out.append({
+                "map_name": r.display_name,
+                "bans": bans,
+                "picks": picks,
+                "ban_rate": round(bans / total_bans, 4),
+                "pick_rate": round(picks / total_picks, 4),
+            })
+        out.sort(key=lambda x: x["ban_rate"], reverse=True)
+        await self._cache.set(cache_key, out, ttl=TTL)
+        return out
+
+    # ── 月次成長推移（大会数 / 新規チーム / 新規ユーザー — 公開ページの成長曲線） ──
+    async def growth(self, months: int = 12) -> list[dict]:
+        cache_key = f"analytics:growth:{months}"
+        cached = await self._cache.get(cache_key)
+        if cached is not None:
+            return cached  # type: ignore[return-value]
+
+        month_t = func.to_char(func.date_trunc("month", Tournament.end_at), "YYYY-MM")
+        t_rows = (await self._db.execute(
+            select(month_t, func.count())
+            .where(Tournament.status == TournamentStatus.COMPLETED, Tournament.end_at.isnot(None))
+            .group_by(month_t)
+        )).all()
+        month_team = func.to_char(func.date_trunc("month", Team.created_at), "YYYY-MM")
+        team_rows = (await self._db.execute(select(month_team, func.count()).group_by(month_team))).all()
+        month_user = func.to_char(func.date_trunc("month", User.created_at), "YYYY-MM")
+        user_rows = (await self._db.execute(select(month_user, func.count()).group_by(month_user))).all()
+
+        t_map = {r[0]: int(r[1]) for r in t_rows if r[0]}
+        team_map = {r[0]: int(r[1]) for r in team_rows if r[0]}
+        user_map = {r[0]: int(r[1]) for r in user_rows if r[0]}
+
+        # 直近 N ヶ月の連続した月キーを生成（データ無し月は0で埋める）
+        now = datetime.now(timezone.utc)
+        keys: list[str] = []
+        y, m = now.year, now.month
+        for _ in range(months):
+            keys.append(f"{y}-{m:02d}")
+            m -= 1
+            if m == 0:
+                y, m = y - 1, 12
+        keys.reverse()
+
+        out = [{
+            "month": k,
+            "tournaments": t_map.get(k, 0),
+            "new_teams": team_map.get(k, 0),
+            "new_users": user_map.get(k, 0),
+        } for k in keys]
+        await self._cache.set(cache_key, out, ttl=TTL)
         return out

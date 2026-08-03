@@ -76,6 +76,60 @@ async def daily_s3_export(ctx: dict) -> dict[str, Any]:
     return {"exported": count}
 
 
+async def weekly_ranking_snapshot(ctx: dict) -> dict[str, Any]:
+    """ランキングを週次でスナップショット（順位変動▲▼の基準点）。
+
+    team/player × all/current の4ボードを保存。同日再実行は delete-and-reinsert で冪等。
+    90日より古いスナップショットは削除する。
+    """
+    import uuid as _uuid
+
+    from app.models.ranking_snapshot import RankingSnapshot
+    from app.rankings.aggregator import RankingAggregator
+
+    today = datetime.now(timezone.utc).date()
+    logger.info("weekly_ranking_snapshot: capturing %s", today)
+
+    total = 0
+    async with AsyncSessionLocal() as db:
+        agg = RankingAggregator(db, ctx["redis_cache"])
+        for scope, season in (("team", "all"), ("team", "current"), ("player", "all"), ("player", "current")):
+            if scope == "team":
+                board = await agg._compute(game=None, season=season)
+            else:
+                board = await agg._compute_players(game=None, season=season)
+            await db.execute(
+                delete(RankingSnapshot).where(
+                    and_(
+                        RankingSnapshot.scope == scope,
+                        RankingSnapshot.season == season,
+                        RankingSnapshot.captured_at == today,
+                    )
+                )
+            )
+            for e in board:
+                db.add(
+                    RankingSnapshot(
+                        id=_uuid.uuid4(),
+                        scope=scope,
+                        season=season,
+                        entity_id=_uuid.UUID(e["team_id" if scope == "team" else "player_id"]),
+                        rank=e["rank"],
+                        rp=e["rp"],
+                        captured_at=today,
+                    )
+                )
+            total += len(board)
+        # 90日より古いものは削除
+        await db.execute(
+            delete(RankingSnapshot).where(RankingSnapshot.captured_at < today - timedelta(days=90))
+        )
+        await db.commit()
+
+    logger.info("weekly_ranking_snapshot complete: %d entries", total)
+    return {"date": str(today), "entries": total}
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Internal: full rebuild logic
 # ─────────────────────────────────────────────────────────────────────────────
@@ -176,11 +230,12 @@ class WorkerSettings:
         database=settings.REDIS_DB,
     )
 
-    functions = [daily_aggregation, daily_s3_export]
+    functions = [daily_aggregation, daily_s3_export, weekly_ranking_snapshot]
 
     cron_jobs = [
         cron(daily_aggregation, hour=2, minute=0),  # 02:00 UTC
         cron(daily_s3_export,   hour=3, minute=0),  # 03:00 UTC
+        cron(weekly_ranking_snapshot, weekday=0, hour=1, minute=0),  # 月曜 01:00 UTC
     ]
 
     on_startup = startup

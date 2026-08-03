@@ -52,6 +52,7 @@ from app.models.scout import ScoutProfile, RecruitmentPost, RecruitmentApplicati
 from app.models.discord import DiscordServer, DiscordChannel, DiscordLink
 from app.models.bot_ops import CommandMetric, BotErrorLog, MatchDispute, MatchEvidence
 from app.models.riot import RiotProfile, RiotMatch
+from app.models.ranking_snapshot import RankingSnapshot
 
 __all__ = [
     "ScoutProfile",

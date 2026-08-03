@@ -34,6 +34,8 @@ class Team(UUIDMixin, TimestampMixin, Base):
     country: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     region: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     twitter_handle: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    # 傾向分析（第2層: マップ別勝率・構成等）の公開設定。大会結果・ランキング（第1層）は常に公開。
+    stats_public: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     # Relationships
     owner: Mapped["User"] = relationship(

@@ -98,4 +98,33 @@ export const analyticsApi = {
     if (params.tournamentId) qs.set("tournament_id", params.tournamentId);
     return apiClient.get(`/api/v1/analytics/heatmap?${qs.toString()}`);
   },
+
+  /** マップ BAN/PICK 率（大会限定メタ） */
+  veto: (params: {
+    game: GameType;
+    tournamentId?: string;
+  }): Promise<ListResponse<MapVetoStat>> => {
+    const qs = new URLSearchParams({ game: params.game });
+    if (params.tournamentId) qs.set("tournament_id", params.tournamentId);
+    return apiClient.get(`/api/v1/analytics/veto?${qs.toString()}`);
+  },
+
+  /** 月次成長推移（完了大会 / 新規チーム / 新規ユーザー） */
+  growth: (months = 12): Promise<ListResponse<GrowthPoint>> =>
+    apiClient.get(`/api/v1/analytics/growth?months=${months}`),
 };
+
+export interface MapVetoStat {
+  map_name: string;
+  bans: number;
+  picks: number;
+  ban_rate: number;
+  pick_rate: number;
+}
+
+export interface GrowthPoint {
+  month: string; // "YYYY-MM"
+  tournaments: number;
+  new_teams: number;
+  new_users: number;
+}

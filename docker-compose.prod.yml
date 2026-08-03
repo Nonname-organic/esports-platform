@@ -16,6 +16,11 @@ services:
     image: ghcr.io/${IMAGE_ORG}/esports-platform-worker:${IMAGE_TAG:-latest}
     build: null
 
+  # scheduler は api と同一イメージ（production ターゲット）を使う
+  scheduler:
+    image: ghcr.io/${IMAGE_ORG}/esports-platform-api:${IMAGE_TAG:-latest}
+    build: null
+
   frontend:
     image: ghcr.io/${IMAGE_ORG}/esports-platform-frontend:${IMAGE_TAG:-latest}
     build: null

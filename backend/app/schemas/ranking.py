@@ -37,6 +37,9 @@ class LeaderboardEntry(BaseModel):
     wins: int
     losses: int
     win_rate: float
+    last_ended_at: Optional[str] = None
+    # 前回スナップショット比の順位変動（正=上昇 / None=新規 or スナップショット未取得）
+    rank_change: Optional[int] = None
 
 
 class SeasonRankItem(BaseModel):
@@ -97,6 +100,7 @@ class PlayerLeaderboardEntry(BaseModel):
     tier_color: str
     progress: float
     mvps: int = 0
+    rank_change: Optional[int] = None
 
 
 class PlayerRankCard(BaseModel):

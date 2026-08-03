@@ -27,6 +27,8 @@ export interface TeamUpdateInput {
   logo_url?: string;
   banner_url?: string;
   twitter_handle?: string;
+  /** 傾向分析（第2層）の公開設定。結果・ランキングは常に公開。 */
+  stats_public?: boolean;
 }
 
 export interface AddMemberInput {

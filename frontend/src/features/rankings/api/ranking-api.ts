@@ -46,6 +46,9 @@ export interface LeaderboardEntry {
   wins: number;
   losses: number;
   win_rate: number;
+  last_ended_at?: string | null;
+  /** 前回スナップショット比の順位変動（正=上昇 / null=新規 or 未取得） */
+  rank_change?: number | null;
 }
 
 export interface PlayerLeaderboardEntry {
@@ -59,6 +62,8 @@ export interface PlayerLeaderboardEntry {
   tier_color: string;
   progress: number;
   mvps: number;
+  /** 前回スナップショット比の順位変動（正=上昇 / null=新規 or 未取得） */
+  rank_change?: number | null;
 }
 
 export interface RankHistoryItem {

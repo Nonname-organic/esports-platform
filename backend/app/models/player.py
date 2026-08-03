@@ -1,7 +1,7 @@
 import uuid
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy import Boolean, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -48,6 +48,10 @@ class Player(UUIDMixin, TimestampMixin, Base):
 
     # ── Discord 連携 ────────────────────────────────────────────────────────────
     discord_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+
+    # 個人詳細スタッツ（第2層: KDA・エージェント別成績等）の公開設定。
+    # MVP・大会成績など「事実の記録」（第1層）は常に公開。チーム設定とは独立。
+    stats_public: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     # Relationships
     user: Mapped[Optional["User"]] = relationship("User", back_populates="player")

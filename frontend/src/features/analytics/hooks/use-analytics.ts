@@ -16,6 +16,8 @@ export const analyticsKeys = {
   agents: (params: object) => [...analyticsKeys.all, "agents", params] as const,
   playerRankings: (params: object) => [...analyticsKeys.all, "players", params] as const,
   heatmap: (params: object) => [...analyticsKeys.all, "heatmap", params] as const,
+  veto: (params: object) => [...analyticsKeys.all, "veto", params] as const,
+  growth: (months: number) => [...analyticsKeys.all, "growth", months] as const,
 };
 
 // ── 既存フック ───────────────────────────────────────────────────────────────
@@ -111,6 +113,24 @@ export function useAnalyticsHeatmap(params: {
   return useQuery({
     queryKey: analyticsKeys.heatmap(params),
     queryFn: () => analyticsApi.heatmap(params),
+    select: (res) => res.data,
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
+export function useAnalyticsVeto(params: { game: GameType; tournamentId?: string }) {
+  return useQuery({
+    queryKey: analyticsKeys.veto(params),
+    queryFn: () => analyticsApi.veto(params),
+    select: (res) => res.data,
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
+export function useAnalyticsGrowth(months = 12) {
+  return useQuery({
+    queryKey: analyticsKeys.growth(months),
+    queryFn: () => analyticsApi.growth(months),
     select: (res) => res.data,
     staleTime: 10 * 60 * 1000,
   });

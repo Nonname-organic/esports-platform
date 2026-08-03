@@ -73,7 +73,7 @@ function TeamBoard({ rows }: { rows: LeaderboardEntry[] }) {
       </div>
       <ul className="space-y-1.5">
         {rows.map((e) => (
-          <Row key={e.team_id} href={`/teams/${e.team_id}`} rank={e.rank} tier={tier(e)}
+          <Row key={e.team_id} href={`/teams/${e.team_id}`} rank={e.rank} change={e.rank_change} tier={tier(e)}
             logo={e.team_logo_url} tag={e.team_tag} name={e.team_name} game={e.game} rp={e.rp}
             c1={String(e.championships)} c2={`${(e.win_rate * 100).toFixed(0)}%`} />
         ))}
@@ -100,7 +100,7 @@ function PlayerBoard({ rows }: { rows: PlayerLeaderboardEntry[] }) {
       </div>
       <ul className="space-y-1.5">
         {rows.map((e) => (
-          <Row key={e.player_id} href={`/players/${e.player_id}`} rank={e.rank} tier={tier(e)}
+          <Row key={e.player_id} href={`/players/${e.player_id}`} rank={e.rank} change={e.rank_change} tier={tier(e)}
             logo={null} tag={e.in_game_name} name={e.in_game_name} game={e.game} rp={e.rp} c1={`⭐ ${e.mvps}`} narrow />
         ))}
       </ul>
@@ -114,10 +114,22 @@ function tier(e: { tier_key: string; tier_label: string; tier_color: string }): 
   return { key: e.tier_key, label: e.tier_label, color: e.tier_color };
 }
 
+/** 前回比の順位変動（▲上昇 / ▼下降 / −変動なし / 未取得は非表示） */
+function RankChange({ change }: { change?: number | null }) {
+  if (change == null) return null;
+  if (change === 0) return <span className="text-[10px] font-bold text-slate-600">−</span>;
+  const up = change > 0;
+  return (
+    <span className={cn("text-[10px] font-black tabular-nums", up ? "text-emerald-400" : "text-red-400")}>
+      {up ? "▲" : "▼"}{Math.abs(change)}
+    </span>
+  );
+}
+
 function Row({
-  href, rank, tier, logo, tag, name, game, rp, c1, c2, narrow,
+  href, rank, change, tier, logo, tag, name, game, rp, c1, c2, narrow,
 }: {
-  href: string; rank: number; tier: Tier; logo: string | null; tag: string; name: string; game: string;
+  href: string; rank: number; change?: number | null; tier: Tier; logo: string | null; tag: string; name: string; game: string;
   rp: number; c1: string; c2?: string; narrow?: boolean;
 }) {
   return (
@@ -131,7 +143,10 @@ function Row({
           narrow ? "sm:grid-cols-[3rem_1fr_9rem_6rem_4rem]" : "sm:grid-cols-[3rem_1fr_9rem_6rem_4rem_4rem]",
         )}
       >
-        <span className={cn("text-lg font-black tabular-nums", rank <= 3 ? "text-yellow-400" : "text-slate-500")}>{rank}</span>
+        <span className="flex flex-col items-start leading-none">
+          <span className={cn("text-lg font-black tabular-nums", rank <= 3 ? "text-yellow-400" : "text-slate-500")}>{rank}</span>
+          <RankChange change={change} />
+        </span>
         <span className="flex min-w-0 items-center gap-2.5">
           <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-slate-800">
             {logo ? <img src={logo} alt="" className="h-full w-full object-contain" /> : <span className="text-[10px] text-slate-500">{tag.slice(0, 2)}</span>}
