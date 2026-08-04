@@ -52,6 +52,9 @@ class AnalyticsDashboardService:
         if df:
             conds.append(occurred >= df)
         if dt:
+            # 日付のみの上限（"YYYY-MM-DD"）は「その日を含む」= 翌日0時未満として扱う
+            if date_to and len(date_to) == 10:
+                dt = dt + timedelta(days=1)
             conds.append(occurred < dt)
         return conds
 
@@ -435,103 +438,3 @@ class AnalyticsDashboardService:
         await self._cache.set(cache_key, out, ttl=TTL)
         return out
 
-    # ── ジャイアントキリング（番狂わせ）統計 — ブラケット結果 × RPランキングの掛け合わせ ──
-    # RP下位チームがRP上位チームを撃破した試合を「番狂わせ」として集計する。
-    # 強さの基準は現在RP（試合時点ではなく近似）。大会主催プラットフォームにしか作れない統計。
-    async def upsets(self, game: Optional[GameType] = None, limit: int = 10) -> dict:
-        cache_key = f"analytics:upsets:{game.value if game else 'all'}"
-        cached = await self._cache.get(cache_key)
-        if cached is not None:
-            return cached  # type: ignore[return-value]
-
-        from app.rankings.aggregator import FULL_LIMIT, RankingAggregator
-
-        board = await RankingAggregator(self._db, self._cache).global_team_leaderboard(
-            season="all", limit=FULL_LIMIT
-        )
-        rp_map = {e["team_id"]: e["rp"] for e in board}
-
-        conds = [Match.status == MatchStatus.COMPLETED, Match.winner_id.isnot(None),
-                 Match.team1_id.isnot(None), Match.team2_id.isnot(None)]
-        if game:
-            conds.append(Tournament.game == game)
-        rows = (await self._db.execute(
-            select(
-                Match.team1_id, Match.team2_id, Match.winner_id,
-                Tournament.name, func.coalesce(Match.ended_at, Match.created_at),
-            )
-            .select_from(Match)
-            .join(Tournament, Match.tournament_id == Tournament.id)
-            .where(*conds)
-        )).all()
-
-        ranked_matches = 0
-        upset_list: list[dict] = []
-        killer_agg: dict[str, dict] = {}
-        for t1, t2, winner, t_name, at in rows:
-            w = str(winner)
-            l = str(t2) if w == str(t1) else str(t1)
-            w_rp, l_rp = rp_map.get(w), rp_map.get(l)
-            if w_rp is None or l_rp is None:
-                continue  # 両チームがランキング掲載済みの試合のみ対象
-            ranked_matches += 1
-            if w_rp >= l_rp:
-                continue
-            gap = l_rp - w_rp
-            upset_list.append({
-                "winner_id": w, "loser_id": l, "rp_gap": gap,
-                "tournament_name": t_name, "at": at.isoformat() if at else None,
-            })
-            k = killer_agg.setdefault(w, {"upsets": 0, "biggest_gap": 0, "biggest_victim_id": None})
-            k["upsets"] += 1
-            if gap > k["biggest_gap"]:
-                k["biggest_gap"] = gap
-                k["biggest_victim_id"] = l
-
-        # チーム名解決
-        ids = {uuid.UUID(t) for u in upset_list for t in (u["winner_id"], u["loser_id"])}
-        info: dict[str, dict] = {}
-        if ids:
-            trows = (await self._db.execute(
-                select(Team.id, Team.name, Team.tag, Team.logo_url).where(Team.id.in_(list(ids)))
-            )).all()
-            info = {str(r.id): {"name": r.name, "tag": r.tag, "logo_url": r.logo_url} for r in trows}
-
-        giant_killers = sorted(
-            (
-                {
-                    "team_id": tid,
-                    "team_name": info.get(tid, {}).get("name", "?"),
-                    "team_tag": info.get(tid, {}).get("tag", ""),
-                    "rp": rp_map.get(tid, 0),
-                    "upsets": k["upsets"],
-                    "biggest_gap": k["biggest_gap"],
-                    "biggest_victim_name": info.get(k["biggest_victim_id"] or "", {}).get("name"),
-                }
-                for tid, k in killer_agg.items()
-            ),
-            key=lambda x: (x["upsets"], x["biggest_gap"]),
-            reverse=True,
-        )[:limit]
-
-        upset_list.sort(key=lambda u: u["at"] or "", reverse=True)
-        recent = [
-            {
-                "winner_name": info.get(u["winner_id"], {}).get("name", "?"),
-                "loser_name": info.get(u["loser_id"], {}).get("name", "?"),
-                "rp_gap": u["rp_gap"],
-                "tournament_name": u["tournament_name"],
-                "at": u["at"],
-            }
-            for u in upset_list[:limit]
-        ]
-
-        out = {
-            "ranked_matches": ranked_matches,
-            "upsets": len(upset_list),
-            "upset_rate": round(len(upset_list) / ranked_matches, 4) if ranked_matches else 0.0,
-            "giant_killers": giant_killers,
-            "recent_upsets": recent,
-        }
-        await self._cache.set(cache_key, out, ttl=TTL)
-        return out

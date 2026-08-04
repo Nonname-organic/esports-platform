@@ -22,7 +22,8 @@ export function FilterBar() {
     setGame, setTournamentId, setDateFrom, setDateTo, setPeriod, reset,
   } = useAnalyticsFilterStore();
 
-  const { data: tournamentsData } = useTournaments();
+  // 統計が存在するのは完了済み大会のみ。シリーズ大会(vol.1,2,3等)を個別に選んで大会別統計を見る。
+  const { data: tournamentsData } = useTournaments({ game, status: "completed" });
   const tournaments = tournamentsData?.pages.flatMap((p) => p.data) ?? [];
   const filteredTournaments = tournaments.filter((t) => t.game === game);
 
@@ -85,7 +86,7 @@ export function FilterBar() {
           />
         </div>
 
-        {/* 大会 */}
+        {/* 大会別統計（全大会 or 完了済み大会から個別選択） */}
         <select
           value={tournamentId}
           onChange={(e) => setTournamentId(e.target.value)}

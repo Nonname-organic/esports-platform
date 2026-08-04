@@ -4,10 +4,7 @@ import { Ban } from "lucide-react";
 import { useAnalyticsVeto } from "@/features/analytics/hooks/use-analytics";
 import { useAnalyticsFilterStore } from "@/store/analytics-filter-store";
 
-/**
- * マップ BAN/PICK 率 — 大会の ban_picks に基づく AXELIA 限定メタ
- * （ランクマッチ統計サイトには存在しない、大会主催プラットフォームだけのデータ）。
- */
+/** マップ BAN/PICK 率 — 大会の ban_picks に基づく集計。 */
 export function VetoSection() {
   const { game, tournamentId } = useAnalyticsFilterStore();
   const { data, isLoading } = useAnalyticsVeto({ game, tournamentId: tournamentId || undefined });
@@ -23,7 +20,7 @@ export function VetoSection() {
         </div>
         <div>
           <h2 className="text-sm font-bold text-white">マップ BAN / PICK 率</h2>
-          <p className="text-xs text-slate-500">大会のBAN/PICKフェーズ集計 — AXELIA大会限定メタ</p>
+          <p className="text-xs text-slate-500">大会のBAN/PICKフェーズ集計</p>
         </div>
       </div>
 
