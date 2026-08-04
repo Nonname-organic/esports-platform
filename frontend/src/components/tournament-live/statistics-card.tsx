@@ -1,12 +1,12 @@
 "use client";
 
-import { Users, Swords, PieChart, Coins } from "lucide-react";
+import { Users, Swords, Coins } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatPrize } from "@/lib/utils";
 import { useTournamentStatistics } from "@/features/tournament-live/hooks/use-tournament-live";
 import { AnimatedNumber } from "@/components/live/animated-number";
 
-/** Statistics カード: 参加数 / 試合数 / 消化率 / 賞金（CountUp）。 */
+/** Statistics カード: 参加数 / 試合数 / 賞金（CountUp）。 */
 export function TournamentStatisticsCard({ tournamentId }: { tournamentId: string }) {
   const { data } = useTournamentStatistics(tournamentId);
   if (!data) return null;
@@ -14,11 +14,10 @@ export function TournamentStatisticsCard({ tournamentId }: { tournamentId: strin
   const tiles = [
     { icon: Users, color: "text-brand-400", bg: "bg-brand-500/10", label: "参加チーム", value: data.participants, suffix: `/${data.max_teams}` },
     { icon: Swords, color: "text-red-400", bg: "bg-red-500/10", label: "試合数", value: data.matches },
-    { icon: PieChart, color: "text-green-400", bg: "bg-green-500/10", label: "消化率", value: Math.round(data.completion_rate * 100), suffix: "%" },
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <div className="grid grid-cols-3 gap-3">
       {tiles.map((t) => (
         <div key={t.label} className="rounded-2xl border border-white/10 bg-slate-900 p-4">
           <div className={cn("mb-2 inline-flex rounded-xl p-2", t.bg)}>

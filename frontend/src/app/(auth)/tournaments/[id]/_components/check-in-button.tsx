@@ -44,27 +44,30 @@ export function CheckInButton({ tournamentId }: { tournamentId: string }) {
   };
 
   return (
-    <div className="mb-6 flex items-center gap-3 rounded-xl border border-white/10 bg-slate-900 px-4 py-3">
+    <div className="rounded-xl border border-white/10 bg-slate-900 p-5">
       {state.checked_in ? (
-        <>
+        <div className="flex items-center gap-2">
           <Check className="h-5 w-5 text-green-400" />
           <span className="text-sm font-semibold text-green-400">チェックイン済み</span>
-        </>
+        </div>
       ) : (
         <>
-          <LogIn className="h-5 w-5 text-brand-400" />
-          <span className="text-sm text-slate-300">この大会へのチェックインが必要です</span>
+          <h3 className="mb-1 flex items-center gap-2 font-bold text-white">
+            <LogIn className="h-4 w-4 text-brand-400" />
+            チェックイン
+          </h3>
+          <p className="mb-3 text-xs text-slate-400">この大会への参加にはチェックインが必要です</p>
           <button
             onClick={handleCheckIn}
             disabled={loading || state.approved === false}
-            className="ml-auto flex items-center gap-1.5 rounded-lg bg-brand-500 px-4 py-2 text-sm font-bold text-white hover:bg-brand-600 disabled:opacity-50"
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-600 disabled:opacity-50 transition-colors"
           >
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-            {state.approved === false ? "登録承認待ち" : "チェックイン"}
+            {state.approved === false ? "登録承認待ち" : "チェックインする"}
           </button>
         </>
       )}
-      {error && <span className="text-xs text-red-400">{error}</span>}
+      {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
     </div>
   );
 }

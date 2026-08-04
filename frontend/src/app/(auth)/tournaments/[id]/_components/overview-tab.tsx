@@ -2,6 +2,7 @@ import { Calendar, Users, Shield, Info, FileText } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import type { TournamentDetail } from "@/types/tournament";
 import { TournamentImmersion } from "@/components/tournament-live/tournament-immersion";
+import { CheckInButton } from "./check-in-button";
 
 const FORMAT_LABEL: Record<string, string> = {
   single_elimination: "シングルエリミネーション",
@@ -251,6 +252,31 @@ export function OverviewTab({ tournament }: OverviewTabProps) {
             残り {Math.max(tournament.max_teams - tournament.registered_teams, 0)} 枠
           </p>
         </div>
+
+        {/* 開催日程（開始・終了を大きく見やすく） */}
+        <div className="rounded-xl border border-white/10 bg-slate-900 p-5">
+          <h3 className="mb-4 flex items-center gap-2 font-bold text-white">
+            <Calendar className="h-4 w-4 text-brand-400" />
+            開催日程
+          </h3>
+          <div className="space-y-3">
+            <div>
+              <p className="text-xs font-medium text-slate-500">大会開始</p>
+              <p className="mt-0.5 text-lg font-bold text-white">
+                {tournament.start_at ? formatDate(tournament.start_at) : "未定"}
+              </p>
+            </div>
+            <div className="border-t border-white/5 pt-3">
+              <p className="text-xs font-medium text-slate-500">大会終了</p>
+              <p className="mt-0.5 text-lg font-bold text-white">
+                {tournament.end_at ? formatDate(tournament.end_at) : "未定"}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* チェックイン（要チェックイン大会のみ・ログイン済み登録チームに表示） */}
+        {tournament.require_check_in && <CheckInButton tournamentId={String(tournament.id)} />}
 
         {/* 作成日 */}
         <div className="rounded-xl border border-white/10 bg-slate-900 p-5">
