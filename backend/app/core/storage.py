@@ -22,8 +22,18 @@ PRESIGN_MAX_EXPIRES = 7 * 24 * 3600
 def _client():
     global _s3_client
     if _s3_client is None:
-        _s3_client = boto3.client("s3", region_name=settings.AWS_REGION)
+        # S3_ENDPOINT_URL 設定時は Cloudflare R2 等のS3互換ストレージへ接続（$0構成）
+        _s3_client = boto3.client(
+            "s3",
+            region_name=settings.AWS_REGION,
+            endpoint_url=settings.S3_ENDPOINT_URL or None,
+        )
     return _s3_client
+
+
+def storage_client():
+    """S3/R2 クライアント（endpoint_url 対応の共有クライアント / 公開API）。"""
+    return _client()
 
 
 def sign_url(key: str, expires: int = PRESIGN_MAX_EXPIRES) -> str:

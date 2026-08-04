@@ -17,7 +17,9 @@ FROM deps AS production
 COPY . .
 
 # 非rootユーザーで実行（セキュリティ）
-RUN addgroup --system app && adduser --system --group app
+# /app/uploads: S3/R2未設定時のローカルアップロード保存先（named volume の初期所有権にもなる）
+RUN addgroup --system app && adduser --system --group app \
+    && mkdir -p /app/uploads && chown app:app /app/uploads
 USER app
 
 EXPOSE 8000

@@ -68,6 +68,9 @@ services:
     environment:
       - REDIS_HOST=redis
       - DB_HOST=postgres
+    volumes:
+      # S3/R2未設定時のローカルアップロード保存先（永続化）
+      - uploads_data:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -170,6 +173,7 @@ services:
 
 volumes:
   postgres_prod_data:
+  uploads_data:
 
 # ===== ローカル開発用 =====
 # docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
