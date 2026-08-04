@@ -75,9 +75,6 @@ export default function LFTDetailPage({ params }: { params: Promise<{ id: string
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className={cn("rounded-full border px-2.5 py-0.5 text-xs font-bold", st.cls)}>{st.label}</span>
-              <Link href={`/players/${post.player_id}`} className="text-xs text-slate-400 hover:text-white transition-colors">
-                プロフィールを見る
-              </Link>
             </div>
             <h1 className="mt-1 text-xl font-black text-white">{post.in_game_name}</h1>
             <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-500">
@@ -91,12 +88,19 @@ export default function LFTDetailPage({ params }: { params: Promise<{ id: string
               {post.deadline && <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />期限 {post.deadline}</span>}
             </div>
           </div>
-          {isOwner && (
-            <Link href="/scout/lft/me"
-              className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-400 hover:text-white transition-colors flex-shrink-0">
-              <Edit2 className="h-3.5 w-3.5" /> 編集
+          <div className="flex flex-shrink-0 flex-col items-end gap-2">
+            {/* 主要導線: プレイヤープロフィールへ（見落とし防止のためボタン化） */}
+            <Link href={`/players/${post.player_id}`}
+              className="flex items-center gap-1.5 rounded-lg bg-brand-500 px-3.5 py-2 text-xs font-bold text-white hover:bg-brand-600 transition-colors">
+              <User2 className="h-3.5 w-3.5" /> プロフィールを見る
             </Link>
-          )}
+            {isOwner && (
+              <Link href="/scout/lft/me"
+                className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-400 hover:text-white transition-colors">
+                <Edit2 className="h-3.5 w-3.5" /> 編集
+              </Link>
+            )}
+          </div>
         </div>
       </div>
 

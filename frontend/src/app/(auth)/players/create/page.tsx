@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useRequireAuth } from "@/hooks/use-require-auth";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { User2, AlertCircle, Gamepad2, Info, Trash2, ExternalLink, Loader2, UserSearch } from "lucide-react";
+import { User2, AlertCircle, Check, Gamepad2, Info, Trash2, ExternalLink, Loader2, Users, UserSearch } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { cn, getGameColor } from "@/lib/utils";
 import type { GameType } from "@/types/tournament";
@@ -57,6 +57,27 @@ export default function PlayerPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["players", "me"] });
       setConfirmDelete(false);
+    },
+  });
+
+  // 登録済みビューのインライン編集（Riot ID / Discord）
+  const [editRiotId, setEditRiotId] = useState("");
+  const [editDiscord, setEditDiscord] = useState("");
+  useEffect(() => {
+    if (myPlayer) {
+      setEditRiotId(myPlayer.riot_id ?? "");
+      setEditDiscord(myPlayer.discord_id ?? "");
+    }
+  }, [myPlayer?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const update = useMutation({
+    mutationFn: () =>
+      apiClient.patch(`/api/v1/players/${myPlayer.id}`, {
+        riot_id: editRiotId.trim(),
+        discord_id: editDiscord.trim(),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["players", "me"] });
     },
   });
 
@@ -113,18 +134,42 @@ export default function PlayerPage() {
             </a>
           </div>
 
+          {/* Riot ID / Discord（インライン編集可能） */}
           <div className="space-y-3">
             <div>
-              <p className="text-xs text-slate-500 mb-1">Riot ID</p>
-              <p className="text-sm font-semibold text-white">{myPlayer.riot_id}</p>
+              <label className="mb-1 block text-xs text-slate-500">Riot ID</label>
+              <input
+                value={editRiotId}
+                onChange={(e) => setEditRiotId(e.target.value)}
+                className={inputCls()}
+                placeholder="例: PlayerName#JP1"
+                maxLength={111}
+              />
             </div>
-            {myPlayer.discord_id && (
-              <div>
-                <p className="text-xs text-slate-500 mb-1">Discord</p>
-                <p className="text-sm text-white">{myPlayer.discord_id}</p>
-              </div>
-            )}
             <div>
+              <label className="mb-1 block text-xs text-slate-500">Discord</label>
+              <input
+                value={editDiscord}
+                onChange={(e) => setEditDiscord(e.target.value)}
+                className={inputCls()}
+                placeholder="Discordユーザー名（任意）"
+                maxLength={100}
+              />
+            </div>
+            <button
+              onClick={() => update.mutate()}
+              disabled={update.isPending || !editRiotId.trim()}
+              className="flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-bold text-white hover:bg-brand-600 disabled:opacity-40 transition-colors"
+            >
+              {update.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : update.isSuccess ? <Check className="h-4 w-4" /> : null}
+              {update.isSuccess && !update.isPending ? "保存しました" : "変更を保存"}
+            </button>
+            {update.isError && (
+              <p className="text-xs text-red-400">
+                {update.error instanceof Error ? update.error.message : "保存に失敗しました"}
+              </p>
+            )}
+            <div className="border-t border-white/5 pt-3">
               <p className="text-xs text-slate-500 mb-1">登録日</p>
               <p className="text-sm text-white">
                 {new Date(myPlayer.created_at).toLocaleDateString("ja-JP")}
@@ -133,7 +178,7 @@ export default function PlayerPage() {
           </div>
         </div>
 
-        {/* チームを探す (LFT) */}
+        {/* チームを探す (LFT) — 自分のLFT掲載の作成・編集 */}
         <a
           href="/scout/lft/me"
           className="mt-4 flex items-center justify-between rounded-2xl border border-purple-500/20 bg-purple-500/5 p-5 hover:bg-purple-500/10 transition-colors"
@@ -144,7 +189,24 @@ export default function PlayerPage() {
             </div>
             <div>
               <p className="text-sm font-bold text-white">チームを探す (LFT)</p>
-              <p className="text-xs text-slate-500">プロフィールを使ってチーム募集をアピール</p>
+              <p className="text-xs text-slate-500">自分のLFT掲載を作成・編集する</p>
+            </div>
+          </div>
+          <ExternalLink className="h-4 w-4 text-slate-500" />
+        </a>
+
+        {/* メンバー募集 (LFP) — 自分のチームの募集の作成・編集 */}
+        <a
+          href="/scout/lfp"
+          className="mt-3 flex items-center justify-between rounded-2xl border border-brand-500/20 bg-brand-500/5 p-5 hover:bg-brand-500/10 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl bg-brand-500/10 p-2.5">
+              <Users className="h-5 w-5 text-brand-400" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-white">メンバー募集 (LFP)</p>
+              <p className="text-xs text-slate-500">チームの募集を作成・編集する（自分の募集は詳細ページから編集）</p>
             </div>
           </div>
           <ExternalLink className="h-4 w-4 text-slate-500" />
