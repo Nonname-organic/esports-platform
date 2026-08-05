@@ -135,15 +135,25 @@ async function request<T>(
 }
 
 /** FormData（ファイルアップロード）用 - Content-Typeを自動設定させる */
-async function uploadRequest<T>(path: string, formData: FormData, retry = true): Promise<T> {
+async function uploadRequest<T>(
+  path: string, formData: FormData, retry = true, networkRetry = true,
+): Promise<T> {
   const token = getAccessToken();
   const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
 
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: "POST",
-    body: formData,
-    headers,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      method: "POST",
+      body: formData,
+      headers,
+    });
+  } catch {
+    // Keep-Alive切断競合等でボディ送信中に接続が落ちると "Failed to fetch" になる。
+    // ChromeはボディありPOSTを自動再試行しないため、新規接続で1回だけ再試行する。
+    if (networkRetry) return uploadRequest<T>(path, formData, retry, false);
+    throw new ApiError(0, "network", "ネットワークエラーが発生しました。もう一度お試しください");
+  }
 
   if (res.status === 401 && retry) {
     const newToken = await tryRefreshToken();
