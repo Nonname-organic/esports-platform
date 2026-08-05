@@ -1,7 +1,6 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import Link from "next/link";
 import { ChevronRight, Loader2 } from "lucide-react";
 import { serverFetch } from "@/lib/api-client";
 import type { Team, TeamStats } from "@/types/team";
@@ -90,16 +89,14 @@ export default async function TeamDetailPage({ params, searchParams }: Props) {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
-      {/* パンくずリスト */}
+      {/* パンくずリスト（チームの階層: チーム名 > 公開ページ） */}
       <nav
         aria-label="パンくずリスト"
         className="mb-6 flex items-center gap-2 text-sm text-slate-400"
       >
-        <Link href="/tournaments" className="hover:text-white transition-colors">
-          大会一覧
-        </Link>
-        <ChevronRight className="h-3.5 w-3.5 text-slate-600" />
         <span className="truncate text-white">{team.name}</span>
+        <ChevronRight className="h-3.5 w-3.5 text-slate-600" />
+        <span className="text-slate-400">公開ページ</span>
       </nav>
 
       {/* ヘッダー */}

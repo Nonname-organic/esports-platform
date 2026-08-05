@@ -3,13 +3,14 @@
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Settings, AlertCircle, Loader2, Tag as TagIcon, Award } from "lucide-react";
 import { useTeam, useUpdateTeam, useDeleteTeam } from "@/features/teams/hooks/use-teams";
 import { TagEditor } from "@/components/tag-editor";
 import { SponsorEditor } from "@/components/sponsor-editor";
+import { ImageUpload } from "@/components/image-upload";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth-store";
 
@@ -18,8 +19,9 @@ const schema = z.object({
   tag: z.string().min(2).max(10).regex(/^[A-Za-z0-9]+$/),
   description: z.string().max(1000).optional(),
   country: z.string().max(100).optional(),
-  logo_url: z.string().url().optional().or(z.literal("")),
-  banner_url: z.string().url().optional().or(z.literal("")),
+  // 絶対URL または アップロードで得た相対パス（/api/v1/upload/local/…）の両方を許可
+  logo_url: z.string().optional(),
+  banner_url: z.string().optional(),
   twitter_handle: z.string().max(50).optional(),
   stats_public: z.boolean().optional(),
 });
@@ -38,6 +40,7 @@ export default function TeamEditPage({ params }: { params: Promise<{ id: string 
     register,
     handleSubmit,
     reset,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({ resolver: zodResolver(schema) });
 
@@ -141,13 +144,27 @@ export default function TeamEditPage({ params }: { params: Promise<{ id: string 
 
         <div className="rounded-xl border border-white/10 bg-slate-900 p-5 space-y-4">
           <h2 className="text-sm font-bold text-white">ブランディング</h2>
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-slate-500">ロゴURL</label>
-            <input {...register("logo_url")} className={inputClass(!!errors.logo_url)} />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-slate-500">バナーURL</label>
-            <input {...register("banner_url")} className={inputClass(!!errors.banner_url)} />
+          {/* ファイルアップロード + URL指定の両対応（作成画面と同じImageUpload） */}
+          <div className="flex gap-5">
+            <Controller name="logo_url" control={control} render={({ field }) => (
+              <ImageUpload
+                value={field.value ?? ""}
+                onChange={field.onChange}
+                purpose="team_logo"
+                label="チームロゴ"
+                aspectRatio="square"
+              />
+            )} />
+            <Controller name="banner_url" control={control} render={({ field }) => (
+              <ImageUpload
+                value={field.value ?? ""}
+                onChange={field.onChange}
+                purpose="team_banner"
+                label="バナー画像"
+                aspectRatio="banner"
+                className="flex-1"
+              />
+            )} />
           </div>
           <div>
             <label className="mb-1.5 block text-xs font-medium text-slate-500">Twitter</label>

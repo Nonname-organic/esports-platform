@@ -18,7 +18,7 @@ function AdminAuditSection() {
   return (
     <section className="rounded-2xl border border-white/10 bg-slate-900 p-5">
       <h2 className="mb-4 flex items-center gap-2 text-sm font-bold text-white">
-        <History className="h-4 w-4 text-brand-400" /> 監査ログ（全体）
+        <History className="h-4 w-4 text-brand-400" /> ログ（全体）
       </h2>
       <AuditLogTable items={items} isLoading={isLoading} />
     </section>

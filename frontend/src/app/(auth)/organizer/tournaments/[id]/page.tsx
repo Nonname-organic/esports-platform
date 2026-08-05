@@ -361,7 +361,7 @@ export default function TournamentManagePage({ params }: { params: Promise<{ id:
           { id: "registrations", label: `参加申請${pendingCount > 0 ? ` (${pendingCount})` : ""}`, icon: Users },
           { id: "bracket", label: "ブラケット", icon: Shield },
           { id: "rules", label: "ルール", icon: ScrollText },
-          { id: "audit", label: "監査ログ", icon: History },
+          { id: "audit", label: "ログ", icon: History },
           { id: "settings", label: "設定", icon: Settings },
         ].map(({ id: tabId, label, icon: Icon }) => (
           <button

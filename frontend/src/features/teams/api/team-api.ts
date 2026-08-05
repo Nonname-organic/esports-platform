@@ -34,7 +34,6 @@ export interface TeamUpdateInput {
 export interface AddMemberInput {
   username: string;
   role?: string;
-  jersey_number?: number;
 }
 
 export const teamApi = {

@@ -37,7 +37,6 @@ const ROLE_LABEL: Record<string, string> = {
 const addSchema = z.object({
   username: z.string().min(1, "ユーザー名を入力"),
   role: z.enum(["captain", "player", "substitute", "coach", "analyst"] as const),
-  jersey_number: z.coerce.number().int().min(1).max(99).optional().or(z.literal("")),
 });
 
 type AddFormValues = z.infer<typeof addSchema>;
@@ -66,7 +65,6 @@ export default function TeamMembersPage({ params }: { params: Promise<{ id: stri
     await addMember.mutateAsync({
       username: values.username,
       role: values.role,
-      jersey_number: values.jersey_number ? Number(values.jersey_number) : undefined,
     });
     reset();
     setShowAddForm(false);
@@ -146,7 +144,7 @@ export default function TeamMembersPage({ params }: { params: Promise<{ id: stri
               </div>
             )}
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label className="mb-1 block text-xs text-slate-500">ユーザー名</label>
                 <input
@@ -162,18 +160,6 @@ export default function TeamMembersPage({ params }: { params: Promise<{ id: stri
                 <select {...register("role")} className="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white outline-none focus:border-brand-500">
                   {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
                 </select>
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs text-slate-500">背番号（任意）</label>
-                <input
-                  type="number"
-                  {...register("jersey_number")}
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-brand-500"
-                  placeholder="1-99"
-                  min={1}
-                  max={99}
-                />
               </div>
             </div>
 
@@ -228,7 +214,7 @@ function TeamAuditSection({ teamId }: { teamId: string }) {
   return (
     <section className="mt-8">
       <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-white">
-        <History className="h-4 w-4 text-brand-400" /> 監査ログ
+        <History className="h-4 w-4 text-brand-400" /> ログ
       </h2>
       <AuditLogTable items={items} isLoading={isLoading} />
     </section>
@@ -264,9 +250,6 @@ function MemberRow({
         )}
       </div>
 
-      {(member as any).jersey_number && (
-        <span className="text-xs text-slate-500">#{(member as any).jersey_number}</span>
-      )}
 
       <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-semibold", ROLE_STYLE[role] ?? "bg-slate-500/10 text-slate-400")}>
         {ROLE_LABEL[role] ?? role}
