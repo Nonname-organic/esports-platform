@@ -49,6 +49,26 @@ def _build_detail(tournament, count: int) -> TournamentDetail:
         require_check_in=tournament.require_check_in,
         created_at=tournament.created_at,
         updated_at=tournament.updated_at,
+        # 編集フォームの初期値として読み戻す項目（作成フォームと対応）
+        subtitle=tournament.subtitle,
+        thumbnail_url=resign_stored_url(tournament.thumbnail_url),
+        season=tournament.season,
+        split=tournament.split,
+        tier=tournament.tier,
+        visibility=tournament.visibility,
+        seeding_type=tournament.seeding_type,
+        min_teams=tournament.min_teams,
+        prize_currency=tournament.prize_currency,
+        require_team_membership=tournament.require_team_membership,
+        approval_mode=tournament.approval_mode,
+        age_restriction=tournament.age_restriction,
+        region_restriction=tournament.region_restriction,
+        rank_restriction=tournament.rank_restriction,
+        discord_webhook_url=tournament.discord_webhook_url,
+        analytics_enabled=tournament.analytics_enabled,
+        player_stats_enabled=tournament.player_stats_enabled,
+        ranking_enabled=tournament.ranking_enabled,
+        is_public=tournament.is_public,
     )
 
 
@@ -309,13 +329,19 @@ async def update_registration(
     )
 
 
-@router.post("/{tournament_id}/register", status_code=204)
+@router.post("/{tournament_id}/register", response_model=Response[dict], status_code=201)
 async def register_team(
     tournament_id: uuid.UUID, data: RegistrationRequest,
     db: DBSession, cache: Cache, current_user: CurrentUser,
 ):
+    """チームの参加申請。
+
+    自動承認の大会では即時 approved、定員超過なら waitlisted になるため、
+    確定したステータスを返してフロントで結果を出し分けられるようにする。
+    """
     service = TournamentService(db, cache)
-    await service.register_team(tournament_id, uuid.UUID(data.team_id), data.notes)
+    status = await service.register_team(tournament_id, uuid.UUID(data.team_id), data.notes)
+    return Response(data={"status": status.value}, meta=None)
 
 
 async def _user_registration(db, tournament_id: uuid.UUID, user):

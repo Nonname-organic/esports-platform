@@ -93,6 +93,28 @@ class Tournament(UUIDMixin, TimestampMixin, Base):
     # 主催者が手動でステータスを変更したら True。以降は日程による自動更新の対象外。
     status_locked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
+    # ── 作成フォームの拡張項目（migration 005 で追加済みのカラム）──────────────
+    subtitle: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    thumbnail_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    season: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    split: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    tier: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, default="community")
+    visibility: Mapped[str] = mapped_column(String(20), nullable=False, default="public")
+    invite_code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    seeding_type: Mapped[str] = mapped_column(String(20), nullable=False, default="auto")
+    age_restriction: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    region_restriction: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    rank_restriction: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    require_team_membership: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # 参加申請の承認方式:
+    #   "manual"  … 主催者が個別に承認/却下
+    #   "auto"    … 先着順で即時承認（定員超過分は補欠）
+    #   "lottery" … 抽選。受付終了時に無作為抽選で当落を決める
+    approval_mode: Mapped[str] = mapped_column(String(20), nullable=False, default="manual")
+    analytics_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    player_stats_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    ranking_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
     # Relationships
     organizer: Mapped["User"] = relationship("User", back_populates="organized_tournaments")
     registrations: Mapped[list["TournamentRegistration"]] = relationship(

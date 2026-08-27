@@ -25,6 +25,8 @@ class TournamentCreate(BaseModel):
     attachments: list[dict] | None = None
     is_public: bool = True
     require_check_in: bool = False
+    # 参加申請の承認方式: manual（主催者が個別承認）/ auto（先着順で自動承認）
+    approval_mode: str = Field(default="manual", pattern="^(manual|auto|lottery)$")
 
     @model_validator(mode="after")
     def validate_dates(self) -> "TournamentCreate":
@@ -46,19 +48,47 @@ class TournamentCreate(BaseModel):
 
 
 class TournamentUpdate(BaseModel):
+    """大会情報の更新。作成フォームで設定した項目を後から全て編集できるようにする。
+
+    作成時に rules(JSON) へ格納している拡張項目（賞金内訳・配信・Discord・スポンサー・
+    連絡先・分析設定など）は、rules をまるごと差し替えることで更新する。
+    """
+
     name: str | None = Field(default=None, min_length=2, max_length=200)
     status: TournamentStatus | None = None
+    format: TournamentFormat | None = None
     max_teams: int | None = Field(default=None, ge=2, le=256)
+    min_teams: int | None = Field(default=None, ge=2)
     registration_start_at: datetime | None = None
     registration_end_at: datetime | None = None
+    check_in_start_at: datetime | None = None
     start_at: datetime | None = None
     end_at: datetime | None = None
     rules: dict | None = None
     prize_pool: Decimal | None = None
+    prize_currency: str | None = Field(default=None, max_length=3)
     discord_webhook_url: str | None = None
     description: str | None = None
     attachments: list[dict] | None = None
     is_public: bool | None = None
+    require_check_in: bool | None = None
+    require_team_membership: bool | None = None
+    approval_mode: str | None = Field(default=None, pattern="^(manual|auto|lottery)$")
+    # 作成フォームの拡張項目のうち、tournaments テーブルに実カラムがあるもの
+    subtitle: str | None = Field(default=None, max_length=200)
+    banner_url: str | None = None
+    thumbnail_url: str | None = None
+    season: str | None = Field(default=None, max_length=50)
+    split: str | None = Field(default=None, max_length=50)
+    tier: str | None = Field(default=None, max_length=20)
+    visibility: str | None = Field(default=None, max_length=20)
+    seeding_type: str | None = Field(default=None, max_length=20)
+    age_restriction: dict | None = None
+    region_restriction: dict | None = None
+    rank_restriction: dict | None = None
+    analytics_enabled: bool | None = None
+    player_stats_enabled: bool | None = None
+    ranking_enabled: bool | None = None
 
 
 class TournamentSummary(BaseModel):
@@ -91,6 +121,26 @@ class TournamentDetail(TournamentSummary):
     require_check_in: bool
     created_at: datetime
     updated_at: datetime
+    # 編集フォームで初期値として読み戻すための項目（作成フォームと対応）
+    subtitle: str | None = None
+    thumbnail_url: str | None = None
+    season: str | None = None
+    split: str | None = None
+    tier: str | None = None
+    visibility: str | None = None
+    seeding_type: str | None = None
+    min_teams: int | None = None
+    prize_currency: str | None = None
+    require_team_membership: bool | None = None
+    approval_mode: str | None = Field(default=None, pattern="^(manual|auto|lottery)$")
+    age_restriction: dict | None = None
+    region_restriction: dict | None = None
+    rank_restriction: dict | None = None
+    discord_webhook_url: str | None = None
+    analytics_enabled: bool | None = None
+    player_stats_enabled: bool | None = None
+    ranking_enabled: bool | None = None
+    is_public: bool | None = None
 
     model_config = {"from_attributes": True}
 

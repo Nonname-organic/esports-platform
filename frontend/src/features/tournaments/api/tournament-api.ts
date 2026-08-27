@@ -67,6 +67,8 @@ export const tournamentApi = {
     end_at?: string;
     require_check_in?: boolean;
     is_public?: boolean;
+    /** manual=主催者が個別承認 / auto=先着順で自動承認 */
+    approval_mode?: string;
     rules?: Record<string, unknown>;
     attachments?: TournamentAttachment[];
   }): Promise<ApiResponse<TournamentDetail>> =>
@@ -78,6 +80,7 @@ export const tournamentApi = {
     return apiClient.upload("/api/v1/upload/file?purpose=tournament_attachment", fd);
   },
 
+  /** 大会情報の更新。作成フォームで設定した項目をすべて後から編集できる。 */
   update: (
     id: string,
     data: Partial<{
@@ -85,13 +88,37 @@ export const tournamentApi = {
       status: TournamentStatus;
       description: string;
       prize_pool: number;
+      prize_currency: string;
       max_teams: number;
+      min_teams: number;
+      format: string;
       registration_start_at: string;
       registration_end_at: string;
+      check_in_start_at: string;
       start_at: string;
       end_at: string;
       is_public: boolean;
+      require_check_in: boolean;
+      require_team_membership: boolean;
+      approval_mode: string;
       attachments: TournamentAttachment[];
+      subtitle: string;
+      banner_url: string;
+      thumbnail_url: string;
+      season: string;
+      split: string;
+      tier: string;
+      visibility: string;
+      seeding_type: string;
+      discord_webhook_url: string;
+      age_restriction: Record<string, unknown>;
+      region_restriction: Record<string, unknown>;
+      rank_restriction: Record<string, unknown>;
+      analytics_enabled: boolean;
+      player_stats_enabled: boolean;
+      ranking_enabled: boolean;
+      /** 賞金内訳・配信・Discord・スポンサー・連絡先などの拡張項目（丸ごと差し替え） */
+      rules: Record<string, unknown>;
     }>,
   ): Promise<ApiResponse<TournamentDetail>> =>
     apiClient.patch(`/api/v1/tournaments/${id}`, data),
@@ -102,7 +129,8 @@ export const tournamentApi = {
   delete: (id: string): Promise<void> =>
     apiClient.delete(`/api/v1/tournaments/${id}`),
 
-  register: (id: string, teamId: string, notes?: string): Promise<void> =>
+  /** 参加申請。自動承認の大会では approved / 定員超過時は waitlisted が返る。 */
+  register: (id: string, teamId: string, notes?: string): Promise<ApiResponse<{ status: string }>> =>
     apiClient.post(`/api/v1/tournaments/${id}/register`, { team_id: teamId, notes }),
 
   listRegistrations: (id: string): Promise<ApiResponse<RegistrationInfo[]>> =>
