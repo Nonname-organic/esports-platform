@@ -95,8 +95,8 @@ export interface ScoreboardParseRow {
   deaths: number | null;
   assists: number | null;
   first_bloods: number | null;
-  /** OCR自体の信頼度 0〜1 */
-  ocr_confidence: number;
+  /** 読み取れなかった項目名（画面で強調する） */
+  missing: string[];
 }
 
 export interface ScoreboardParseTeam {

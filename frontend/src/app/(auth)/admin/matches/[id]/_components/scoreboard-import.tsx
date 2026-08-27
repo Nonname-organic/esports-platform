@@ -29,7 +29,18 @@ interface EditableRow {
   assists: string;
   firstBloods: string;
   matchConfidence: number;
+  /** 読み取れなかった項目（入力欄を強調する） */
+  missing: string[];
 }
+
+/** 数値入力欄と、バックエンドが返す未読取ラベルの対応 */
+const STAT_FIELDS: { field: keyof EditableRow & string; label: string }[] = [
+  { field: "acs", label: "ACS" },
+  { field: "kills", label: "K" },
+  { field: "deaths", label: "D" },
+  { field: "assists", label: "A" },
+  { field: "firstBloods", label: "FB" },
+];
 
 function toEditable(row: ScoreboardParseRow, index: number): EditableRow {
   const num = (v: number | null) => (v == null ? "" : String(v));
@@ -44,6 +55,7 @@ function toEditable(row: ScoreboardParseRow, index: number): EditableRow {
     assists: num(row.assists),
     firstBloods: num(row.first_bloods),
     matchConfidence: row.match_confidence,
+    missing: row.missing ?? [],
   };
 }
 
@@ -315,7 +327,10 @@ export function ScoreboardImport({ match }: ScoreboardImportProps) {
                         <select
                           value={row.agent}
                           onChange={(e) => update(row.key, "agent", e.target.value)}
-                          className="h-8 w-32 rounded-lg border border-white/10 bg-slate-900 px-2 text-xs text-white"
+                          className={cn(
+                            "h-8 w-32 rounded-lg border bg-slate-900 px-2 text-xs text-white",
+                            row.agent ? "border-white/10" : "border-yellow-500/60",
+                          )}
                         >
                           <option value="">未設定</option>
                           {ALL_VALORANT_AGENTS.map((a) => (
@@ -325,20 +340,28 @@ export function ScoreboardImport({ match }: ScoreboardImportProps) {
                           ))}
                         </select>
                       </td>
-                      {(["acs", "kills", "deaths", "assists", "firstBloods"] as const).map(
-                        (field) => (
-                          <td key={field} className="px-2 py-2">
-                            <input
-                              value={row[field]}
-                              onChange={(e) =>
-                                update(row.key, field, e.target.value.replace(/\D/g, ""))
-                              }
-                              inputMode="numeric"
-                              className="h-8 w-14 rounded-lg border border-white/10 bg-slate-900 px-2 text-center text-xs text-white"
-                            />
-                          </td>
-                        ),
-                      )}
+                      {STAT_FIELDS.map(({ field, label }) => (
+                        <td key={field} className="px-2 py-2">
+                          <input
+                            value={row[field]}
+                            onChange={(e) =>
+                              update(row.key, field, e.target.value.replace(/\D/g, ""))
+                            }
+                            inputMode="numeric"
+                            title={
+                              row.missing.includes(label)
+                                ? "読み取れませんでした。入力してください"
+                                : undefined
+                            }
+                            className={cn(
+                              "h-8 w-14 rounded-lg border bg-slate-900 px-2 text-center text-xs text-white",
+                              row.missing.includes(label)
+                                ? "border-yellow-500/60"
+                                : "border-white/10",
+                            )}
+                          />
+                        </td>
+                      ))}
                     </tr>
                   ))}
                 </tbody>
