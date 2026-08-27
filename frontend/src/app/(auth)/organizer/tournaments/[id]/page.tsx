@@ -15,6 +15,7 @@ import { useTournamentAudit } from "@/features/audit/hooks/use-audit";
 import { AuditLogTable } from "@/components/audit-log-table";
 import { RulesEditor } from "@/components/rules-editor";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { BracketView } from "@/features/tournaments/components/bracket/bracket-view";
 import { cn, formatDate, getGameColor, getStatusLabel } from "@/lib/utils";
 import type { TournamentDetail, TournamentStatus } from "@/types/tournament";
 
@@ -195,8 +196,8 @@ export default function TournamentManagePage({ params }: { params: Promise<{ id:
     queryKey: ["tournament-registrations", id],
     queryFn: () => tournamentApi.listRegistrations(id),
     select: (res) => res.data,
-    // 受付終了で当落が変わるため、確認ダイアログの表示にも申請数が必要
-    enabled: activeTab === "registrations" || confirmStatus === "registration_closed",
+    // 申請数は確認ダイアログ・ブラケットタブの承認数表示にも必要
+    enabled: activeTab === "registrations" || activeTab === "bracket" || confirmStatus != null,
   });
 
   const { data: auditItems, isLoading: auditLoading } = useTournamentAudit(id, activeTab === "audit");
@@ -221,8 +222,9 @@ export default function TournamentManagePage({ params }: { params: Promise<{ id:
     mutationFn: () => tournamentApi.generateBracket(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["tournament", id] });
-      // 生成後はブラケット表示へ遷移して結果をすぐ確認できるようにする
-      router.push(`/tournaments/${id}/bracket`);
+      // 生成後はページ遷移せず、この画面のブラケットタブに切り替えて結果を見せる
+      qc.invalidateQueries({ queryKey: ["bracket", id] });
+      setActiveTab("bracket");
     },
   });
 
@@ -504,6 +506,9 @@ export default function TournamentManagePage({ params }: { params: Promise<{ id:
               </p>
             )}
           </div>
+
+          {/* 生成済みブラケットはこの画面内に表示する（別ページへ飛ばさない） */}
+          <OrganizerBracket tournamentId={id} />
         </div>
       )}
 
@@ -586,6 +591,27 @@ export default function TournamentManagePage({ params }: { params: Promise<{ id:
       />
     </div>
   );
+}
+
+/** 主催者画面内に生成済みブラケットを表示する（未生成なら何も出さない）。 */
+function OrganizerBracket({ tournamentId }: { tournamentId: string }) {
+  const { data: bracket, isLoading } = useQuery({
+    queryKey: ["bracket", tournamentId],
+    queryFn: () => tournamentApi.getBracket(tournamentId),
+    select: (res) => res.data,
+    retry: false,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-slate-900 py-10 text-sm text-slate-500">
+        <Loader2 className="h-4 w-4 animate-spin" /> ブラケットを読み込み中...
+      </div>
+    );
+  }
+  if (!bracket || Object.keys(bracket.rounds ?? {}).length === 0) return null;
+
+  return <BracketView bracket={bracket} />;
 }
 
 /** 受付終了（＝当落確定）と、その巻き戻しに対する確認ダイアログ。 */

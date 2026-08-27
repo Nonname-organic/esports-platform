@@ -31,6 +31,12 @@ const STATUSES: Array<{
     active: "border-green-400/40 bg-green-500/20 text-green-300",
   },
   {
+    value: "registration_closed",
+    label: "受付終了",
+    dot: "bg-yellow-400",
+    active: "border-yellow-400/40 bg-yellow-500/20 text-yellow-300",
+  },
+  {
     value: "ongoing",
     label: "開催中",
     dot: "bg-red-400 animate-pulse",

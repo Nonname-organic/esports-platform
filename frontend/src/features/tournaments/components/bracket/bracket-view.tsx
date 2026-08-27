@@ -1,16 +1,24 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
 import { ZoomIn, ZoomOut, RotateCcw, Calendar, Radio, X, ExternalLink } from "lucide-react";
+import { matchApi } from "@/features/matches/api/match-api";
+import { MatchOverviewTab } from "@/features/matches/components/match-overview-tab";
 import { cn, formatDate } from "@/lib/utils";
 import type { BracketMatch, BracketResponse, BracketSide } from "@/types/tournament";
 
 // ── レイアウト定数 ─────────────────────────────────────────────────────────────
+// CARD_H はカード側にも height として適用する（ここだけ変えると配置とズレるため）。
 const CARD_W = 220;
-const CARD_H = 80;
-const SLOT_H = CARD_H + 12;
+const CARD_H = 116;        // ヘッダー(34) + チーム行(40×2) + 区切り線
+const SLOT_GAP = 16;       // カード間の垂直ギャップ
+const SLOT_H = CARD_H + SLOT_GAP;
 const COL_GAP = 48;        // ラウンド間の水平ギャップ
 const COL_W = CARD_W + COL_GAP;
+// ラウンドラベル(24) + 下マージン(12)。カードとコネクタ線を同じだけ下げる。
+const ROUND_LABEL_H = 36;
 
 const MIN_ZOOM = 0.4;
 const MAX_ZOOM = 2.0;
@@ -56,7 +64,7 @@ function buildLayout(rounds: { roundNum: number; matches: BracketMatch[] }[]): {
   totalHeight: number;
 } {
   const firstRoundCount = rounds[0]?.matches.length ?? 1;
-  const totalHeight = firstRoundCount * SLOT_H + CARD_H;
+  const totalHeight = firstRoundCount * SLOT_H + ROUND_LABEL_H;
   const layoutRounds: RoundData[] = [];
 
   rounds.forEach(({ roundNum, matches }, ri) => {
@@ -261,13 +269,14 @@ interface BracketGridProps {
 function BracketGrid({ rounds, totalRounds, onSelect, selected }: BracketGridProps) {
   if (rounds.length === 0) return null;
   const firstRoundCount = rounds[0]?.matches.length ?? 1;
-  const gridH = firstRoundCount * SLOT_H + CARD_H;
+  const gridH = firstRoundCount * SLOT_H + ROUND_LABEL_H;
 
   return (
     <div className="relative" style={{ height: gridH, width: totalRounds * COL_W }}>
-      {/* SVGコネクター */}
+      {/* SVGコネクター。カードはラウンドラベル分だけ下にあるので、線も同じだけ下げる */}
       <svg
-        className="pointer-events-none absolute inset-0"
+        className="pointer-events-none absolute inset-x-0"
+        style={{ top: ROUND_LABEL_H }}
         width={totalRounds * COL_W}
         height={gridH}
       >
@@ -336,7 +345,7 @@ function BracketGrid({ rounds, totalRounds, onSelect, selected }: BracketGridPro
             <div
               key={match.id}
               className="absolute"
-              style={{ top: y + 28, width: CARD_W }}
+              style={{ top: y + ROUND_LABEL_H, width: CARD_W }}
             >
               <BracketMatchCard
                 match={match}
@@ -365,8 +374,10 @@ function BracketMatchCard({ match, isSelected, onClick }: BracketMatchCardProps)
   return (
     <button
       onClick={onClick}
+      // 高さを CARD_H で固定し、レイアウト計算（配置・コネクタ線）とのズレを防ぐ
+      style={{ height: CARD_H }}
       className={cn(
-        "w-full overflow-hidden rounded-lg border bg-slate-900 text-left transition-all duration-150 will-change-transform",
+        "flex w-full flex-col overflow-hidden rounded-lg border bg-slate-900 text-left transition-all duration-150 will-change-transform",
         "hover:-translate-y-0.5 hover:border-brand-500/50 hover:shadow-md hover:shadow-brand-500/10",
         "focus:outline-none focus:ring-2 focus:ring-brand-500/50",
         isSelected && "border-brand-500/70 shadow-md shadow-brand-500/10",
@@ -379,13 +390,13 @@ function BracketMatchCard({ match, isSelected, onClick }: BracketMatchCardProps)
     >
       {/* ステータスバー */}
       {isOngoing && (
-        <div className="flex items-center gap-1.5 border-b border-red-500/20 bg-red-500/10 px-2.5 py-1">
+        <div className="flex shrink-0 items-center gap-1.5 border-b border-red-500/20 bg-red-500/10 px-2.5 py-1">
           <span className="h-1.5 w-1.5 animate-live-blink rounded-full bg-red-400" />
           <span className="text-[10px] font-semibold uppercase tracking-wider text-red-400">Live</span>
         </div>
       )}
       {!isOngoing && (
-        <div className="border-b border-white/5 px-2.5 py-1">
+        <div className="shrink-0 border-b border-white/5 px-2.5 py-1">
           <span className="text-[10px] text-slate-600">
             M{match.match_number}
             {match.scheduled_at && (
@@ -427,7 +438,7 @@ function TeamRow({ team, seed, isWinner, isLoser }: TeamRowProps) {
   return (
     <div
       className={cn(
-        "flex items-center gap-2 px-2.5 py-2 transition-colors",
+        "flex flex-1 items-center gap-2 px-2.5 py-2 transition-colors",
         isWinner && "bg-brand-500/8",
         isLoser && "opacity-35",
         !team && "opacity-25",
@@ -584,8 +595,11 @@ function MatchDetailPanel({ match, onClose }: MatchDetailPanelProps) {
         />
       </div>
 
+      {/* 試合内容（マップ別スコア・統計など。マッチ詳細ページと同じ表示） */}
+      <MatchDetailBody matchId={match.id} />
+
       {/* メタ情報 */}
-      <div className="border-t border-white/10 px-5 py-3 space-y-1.5">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-white/10 px-5 py-3">
         {match.scheduled_at && (
           <div className="flex items-center gap-2 text-xs text-slate-500">
             <Calendar className="h-3.5 w-3.5" />
@@ -598,7 +612,44 @@ function MatchDetailPanel({ match, onClose }: MatchDetailPanelProps) {
              match.bracket_side === "losers" ? "Losers Bracket" : "Grand Finals"}
           </p>
         )}
+        <Link
+          href={`/matches/${match.id}`}
+          className="ml-auto flex items-center gap-1 text-xs text-brand-400 hover:text-brand-300 transition-colors"
+        >
+          試合ページを開く <ExternalLink className="h-3 w-3" />
+        </Link>
       </div>
+    </div>
+  );
+}
+
+/**
+ * ブラケットから開いた試合の中身。
+ * マッチ詳細ページ（Upcomingのリンク先）と同じ Overview を出す。
+ * ブラケットAPIは対戦カードしか持たないため、ここで試合本体を取得する。
+ */
+function MatchDetailBody({ matchId }: { matchId: string }) {
+  const { data: match, isLoading, isError } = useQuery({
+    queryKey: ["matches", "detail", matchId],
+    queryFn: () => matchApi.get(matchId),
+    select: (res) => res.data,
+    staleTime: 30 * 1000,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center gap-2 border-t border-white/10 py-6 text-xs text-slate-500">
+        <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
+        試合情報を読み込み中...
+      </div>
+    );
+  }
+  // 取得できなくても対戦カード表示は残す（ブラケットの閲覧を妨げない）
+  if (isError || !match) return null;
+
+  return (
+    <div className="border-t border-white/10 px-5 pb-4">
+      <MatchOverviewTab match={match} />
     </div>
   );
 }
