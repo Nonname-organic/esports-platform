@@ -16,6 +16,7 @@ import { tournamentApi } from "@/features/tournaments/api/tournament-api";
 import { ImageUpload } from "@/components/image-upload";
 import { AttachmentUpload } from "@/components/attachment-upload";
 import { cn } from "@/lib/utils";
+import { SELECTABLE_GAMES } from "@/types/tournament";
 import {
   DEFAULT_FORM_VALUES, FORM_STEPS, SUPPORTED_GAMES,
   type TournamentCreateForm, type SupportedGame, type FormStepId,
@@ -49,6 +50,7 @@ const schema = z.object({
   min_teams: z.number().int().min(2),
   require_team_membership: z.boolean(),
   require_check_in: z.boolean(),
+  approval_mode: z.enum(["manual", "auto", "lottery"]),
   format: z.string().min(1),
   bo_format: z.string().min(1),
   seeding_type: z.enum(["auto", "manual"]),
@@ -167,7 +169,9 @@ const FORMAT_OPTIONS = [
 
 function Step1Basic({ control, register, errors, watch }: any) {
   const game = watch("game") as SupportedGame;
-  const games = Object.entries(SUPPORTED_GAMES) as [SupportedGame, typeof SUPPORTED_GAMES[SupportedGame]][];
+  // 選択可能タイトルのみ提示する（SUPPORTED_GAMES には将来用の定義も含まれる）
+  const games = (Object.entries(SUPPORTED_GAMES) as [SupportedGame, typeof SUPPORTED_GAMES[SupportedGame]][])
+    .filter(([key]) => SELECTABLE_GAMES.some((g) => g.value === key));
 
   return (
     <div className="space-y-5">
@@ -292,6 +296,7 @@ function Step3Entry({ register, control, watch, errors }: any) {
   const game = watch("game") as SupportedGame;
   const gameData = SUPPORTED_GAMES[game] || SUPPORTED_GAMES.VALORANT;
   const ranks = gameData.ranks as unknown as string[];
+  const approvalMode = watch("approval_mode") as string;
 
   return (
     <div className="space-y-5">
@@ -343,6 +348,29 @@ function Step3Entry({ register, control, watch, errors }: any) {
             <option value="current">現在ランク</option>
             <option value="peak">最高ランク</option>
           </select>
+        </div>
+      </SectionCard>
+
+      <SectionCard title="参加承認" subtitle="申請を受けた時の扱いを選択します">
+        <div className="space-y-2">
+          {[
+            { value: "manual", label: "手動承認", desc: "申請ごとに主催者が承認・却下する" },
+            { value: "auto", label: "自動承認（先着順）", desc: "申請時に即時承認。定員に達した後の申請は補欠になる" },
+            { value: "lottery", label: "自動承認（抽選）", desc: "受付終了時に申請チームから無作為に定員分を当選させる" },
+          ].map((o) => (
+            <label key={o.value} className={cn(
+              "flex cursor-pointer items-center gap-3 rounded-xl border p-3.5 transition-colors",
+              approvalMode === o.value ? "border-brand-500/50 bg-brand-500/5" : "border-white/8 hover:border-white/15",
+            )}>
+              <input type="radio" {...register("approval_mode")} value={o.value} className="sr-only" />
+              <div className={cn("h-3 w-3 flex-shrink-0 rounded-full border-2 transition-colors",
+                approvalMode === o.value ? "border-brand-400 bg-brand-400" : "border-slate-600")} />
+              <div>
+                <p className={cn("text-sm font-semibold", approvalMode === o.value ? "text-brand-400" : "text-white")}>{o.label}</p>
+                <p className="text-xs text-slate-500">{o.desc}</p>
+              </div>
+            </label>
+          ))}
         </div>
       </SectionCard>
 
@@ -858,6 +886,7 @@ export default function TournamentCreatePage() {
         start_at: toIso(values.start_at),
         end_at: toIso(values.end_at),
         require_check_in: values.require_check_in,
+        approval_mode: values.approval_mode,
         is_public: values.is_public,
         rules: {
           bo_format: values.bo_format,

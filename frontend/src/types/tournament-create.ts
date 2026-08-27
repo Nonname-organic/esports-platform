@@ -141,6 +141,8 @@ export interface TournamentCreateForm {
   rank_restriction?: { min_rank?: string; max_rank?: string; rank_type?: "current" | "peak" };
   require_team_membership: boolean;
   require_check_in: boolean;
+  /** 参加申請の承認方式: manual=主催者が個別承認 / auto=先着順で自動承認 */
+  approval_mode: "manual" | "auto" | "lottery";
 
   // Section 4: 大会形式
   format: TournamentFormat;
@@ -202,6 +204,7 @@ export const DEFAULT_FORM_VALUES: TournamentCreateForm = {
   min_teams: 2,
   require_team_membership: false,
   require_check_in: false,
+  approval_mode: "manual",
   format: "single_elimination",
   bo_format: "BO3",
   seeding_type: "auto",

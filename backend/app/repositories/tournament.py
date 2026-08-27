@@ -92,12 +92,16 @@ class TournamentRepository(BaseRepository[Tournament]):
         return result.scalar_one_or_none()
 
     async def create_registration(
-        self, tournament_id: uuid.UUID, team_id: uuid.UUID, notes: str | None = None
+        self,
+        tournament_id: uuid.UUID,
+        team_id: uuid.UUID,
+        notes: str | None = None,
+        status: RegistrationStatus = RegistrationStatus.PENDING,
     ) -> TournamentRegistration:
         reg = TournamentRegistration(
             tournament_id=tournament_id,
             team_id=team_id,
-            status=RegistrationStatus.PENDING,
+            status=status,
             notes=notes,
             registered_at=datetime.now(timezone.utc),
             updated_at=datetime.now(timezone.utc),

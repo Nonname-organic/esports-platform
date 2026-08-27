@@ -27,6 +27,7 @@ from app.schemas.tournament import (
 )
 from app.core.storage import resign_stored_url
 from app.events import Ev, EventEnvelope, EventService
+from app.services.registration_lottery import APPROVAL_MODE_LOTTERY, run_registration_lottery
 
 
 def _is_scalar(v) -> bool:
@@ -114,6 +115,13 @@ class TournamentService:
         await self._emit(Ev.TOURNAMENT_UPDATED, tournament.id, before=before, after=after,
                          metadata={"fields": list(update_data.keys())})
 
+        # 受付終了後に抽選へ切り替えた場合はその場で抽選する。
+        # 抽選は「受付終了へ遷移した瞬間」に走るため、既に受付終了済みの大会を
+        # 後から抽選に変えても実行される機会が無くなってしまうのを防ぐ。
+        if (tournament.approval_mode == APPROVAL_MODE_LOTTERY
+                and tournament.status == TournamentStatus.REGISTRATION_CLOSED):
+            await run_registration_lottery(self._db, tournament)
+
         await self._cache.delete(
             CacheKeys.TOURNAMENT_DETAIL.replace("{id}", str(tournament_id))
         )
@@ -122,7 +130,14 @@ class TournamentService:
 
     async def register_team(
         self, tournament_id: uuid.UUID, team_id: uuid.UUID, notes: str | None
-    ) -> None:
+    ) -> RegistrationStatus:
+        """チームの参加申請。確定した申請ステータスを返す。
+
+        approval_mode:
+          manual  : 審査中(pending)で溜め、主催者が個別に承認/却下する
+          auto    : 先着順で即時承認。定員に達した後は補欠(waitlisted)で受け付ける
+          lottery : 抽選。受付中は審査中のままで、受付終了時に無作為抽選する
+        """
         tournament = await self._repo.get_by_id(tournament_id)
         if not tournament:
             raise NotFoundError("大会", str(tournament_id))
@@ -130,15 +145,33 @@ class TournamentService:
         if tournament.status != TournamentStatus.REGISTRATION_OPEN:
             raise BusinessRuleError("現在参加申請を受け付けていません")
 
-        registered_count = await self._repo.get_registered_teams_count(tournament_id)
-        if registered_count >= tournament.max_teams:
-            raise BusinessRuleError("参加チームが上限に達しています")
-
         existing = await self._repo.get_registration(tournament_id, team_id)
         if existing:
             raise BusinessRuleError("既に参加申請済みです")
 
-        await self._repo.create_registration(tournament_id, team_id, notes)
+        registered_count = await self._repo.get_registered_teams_count(tournament_id)
+        is_full = registered_count >= tournament.max_teams
+
+        if tournament.approval_mode == "auto":
+            status = RegistrationStatus.WAITLISTED if is_full else RegistrationStatus.APPROVED
+        elif tournament.approval_mode == APPROVAL_MODE_LOTTERY:
+            # 抽選は受付終了時にまとめて行うため、受付中は定員で締め切らない
+            status = RegistrationStatus.PENDING
+        else:
+            # 手動承認: 承認済みが定員に達していたら新規申請を受け付けない（従来動作）
+            if is_full:
+                raise BusinessRuleError("参加チームが上限に達しています")
+            status = RegistrationStatus.PENDING
+
+        reg = await self._repo.create_registration(tournament_id, team_id, notes, status=status)
+
+        if status == RegistrationStatus.APPROVED:
+            # 手動承認時と同じイベントを発火し、通知経路を共通化する
+            await self._emit(
+                Ev.TOURNAMENT_REGISTRATION_APPROVED, tournament_id,
+                after={"registration_id": str(reg.id), "team_id": str(team_id), "auto_approved": True},
+            )
+        return status
 
     async def generate_bracket(
         self, tournament_id: uuid.UUID, current_user: User
@@ -384,6 +417,10 @@ class TournamentService:
         tournament = await self._repo.update(
             tournament, status=new_status, status_locked=True
         )
+
+        # 受付終了に入ったら、抽選大会の当落をここで確定する
+        if new_status == TournamentStatus.REGISTRATION_CLOSED:
+            await run_registration_lottery(self._db, tournament)
 
         # 遷移先に応じて1イベントを発火（ADR-0008: 1操作=1イベント）
         if new_status == TournamentStatus.COMPLETED:

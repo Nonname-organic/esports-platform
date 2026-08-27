@@ -223,6 +223,12 @@ async def tournament_status_loop() -> None:
                     if new_status and new_status != t.status:
                         t.status = new_status
                         changed += 1
+                        # 受付終了に入った抽選大会は、ここで当落を確定する
+                        if new_status == TournamentStatus.REGISTRATION_CLOSED:
+                            from app.services.registration_lottery import run_registration_lottery
+                            won = await run_registration_lottery(db, t)
+                            if won:
+                                logger.info(f"registration lottery: {won} teams approved ({t.id})")
                 if changed:
                     await db.commit()
                     logger.info(f"tournament status auto-update: {changed} changed")

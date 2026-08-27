@@ -14,8 +14,9 @@ import { useTeamMembers } from "@/features/teams/hooks/use-teams";
 import { useTournamentAudit } from "@/features/audit/hooks/use-audit";
 import { AuditLogTable } from "@/components/audit-log-table";
 import { RulesEditor } from "@/components/rules-editor";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { cn, formatDate, getGameColor, getStatusLabel } from "@/lib/utils";
-import type { TournamentStatus } from "@/types/tournament";
+import type { TournamentDetail, TournamentStatus } from "@/types/tournament";
 
 // ── ステータスフロー ───────────────────────────────────────────────────────────
 const STATUS_FLOW: { status: TournamentStatus; label: string; icon: React.ElementType; color: string }[] = [
@@ -137,13 +138,14 @@ function RegistrationRow({
         <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-semibold", statusColor)}>
           {statusLabel}
         </span>
-        {reg.status === "pending" && (
+        {/* 審査中に加え、補欠（自動承認の定員超過分）も繰り上げ承認できる */}
+        {(reg.status === "pending" || reg.status === "waitlisted") && (
           <div className="flex gap-1.5">
             <button
               onClick={() => onApprove(reg.id)}
               disabled={isPending}
               className="rounded-lg bg-green-500/10 p-1.5 text-green-400 hover:bg-green-500/20 transition-colors disabled:opacity-50"
-              title="承認"
+              title={reg.status === "waitlisted" ? "繰り上げ承認" : "承認"}
             >
               <CheckCircle2 className="h-4 w-4" />
             </button>
@@ -180,6 +182,8 @@ export default function TournamentManagePage({ params }: { params: Promise<{ id:
   const qc = useQueryClient();
   const [activeTab, setActiveTab] = useState<"overview" | "registrations" | "bracket" | "rules" | "audit" | "settings">("overview");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  /** 確認ダイアログで保留中のステータス変更（null = 非表示） */
+  const [confirmStatus, setConfirmStatus] = useState<TournamentStatus | null>(null);
 
   const { data: tournamentRes, isLoading, refetch } = useQuery({
     queryKey: ["tournament", id],
@@ -191,14 +195,20 @@ export default function TournamentManagePage({ params }: { params: Promise<{ id:
     queryKey: ["tournament-registrations", id],
     queryFn: () => tournamentApi.listRegistrations(id),
     select: (res) => res.data,
-    enabled: activeTab === "registrations",
+    // 受付終了で当落が変わるため、確認ダイアログの表示にも申請数が必要
+    enabled: activeTab === "registrations" || confirmStatus === "registration_closed",
   });
 
   const { data: auditItems, isLoading: auditLoading } = useTournamentAudit(id, activeTab === "audit");
 
   const changeStatus = useMutation({
     mutationFn: (status: TournamentStatus) => tournamentApi.changeStatus(id, status),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["tournament", id] }); refetch(); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tournament", id] });
+      qc.invalidateQueries({ queryKey: ["tournament-registrations", id] });
+      refetch();
+      setConfirmStatus(null);
+    },
   });
 
   const updateReg = useMutation({
@@ -315,7 +325,15 @@ export default function TournamentManagePage({ params }: { params: Promise<{ id:
             return (
               <button
                 key={s.status}
-                onClick={() => { if (!isCurrent) changeStatus.mutate(s.status); }}
+                onClick={() => {
+                  if (isCurrent) return;
+                  // 当落が確定する/巻き戻す操作は確認してから実行する
+                  if (s.status === "registration_closed" || tournament.status === "registration_closed") {
+                    setConfirmStatus(s.status);
+                  } else {
+                    changeStatus.mutate(s.status);
+                  }
+                }}
                 disabled={changeStatus.isPending || isCurrent}
                 className={cn(
                   "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors",
@@ -556,6 +574,98 @@ export default function TournamentManagePage({ params }: { params: Promise<{ id:
           </div>
         </div>
       )}
+
+      {/* ステータス変更の確認（当落が確定する / 確定後に巻き戻す操作） */}
+      <StatusChangeConfirm
+        target={confirmStatus}
+        tournament={tournament}
+        registrations={registrations}
+        busy={changeStatus.isPending}
+        onConfirm={() => confirmStatus && changeStatus.mutate(confirmStatus)}
+        onCancel={() => setConfirmStatus(null)}
+      />
     </div>
+  );
+}
+
+/** 受付終了（＝当落確定）と、その巻き戻しに対する確認ダイアログ。 */
+function StatusChangeConfirm({
+  target, tournament, registrations, busy, onConfirm, onCancel,
+}: {
+  target: TournamentStatus | null;
+  tournament: TournamentDetail;
+  registrations: RegistrationInfo[];
+  busy: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  if (!target) return null;
+
+  const mode = tournament.approval_mode ?? "manual";
+  const pending = registrations.filter((r) => r.status === "pending").length;
+  const approved = registrations.filter((r) => r.status === "approved").length;
+  const slots = Math.max(tournament.max_teams - approved, 0);
+
+  // 受付終了へ進む場合
+  if (target === "registration_closed") {
+    const notes: React.ReactNode[] = [];
+    let description: React.ReactNode;
+
+    if (mode === "lottery") {
+      description = (
+        <>
+          受付を終了すると<span className="font-bold text-white">抽選が実行され、参加チームが自動で決まります</span>。
+          この操作で当落が確定します。
+        </>
+      );
+      notes.push(<>申請中の <span className="font-bold text-white">{pending}</span> チームから、
+        残り <span className="font-bold text-white">{slots}</span> 枠を無作為に選びます</>);
+      notes.push("落選したチームは補欠になります（辞退が出たら繰り上げ承認できます）");
+      notes.push("受付中に戻すことはできますが、一度確定した当落は取り消されません");
+    } else if (mode === "auto") {
+      description = <>受付を終了すると、新しい参加申請を受け付けなくなります。</>;
+      notes.push("先着順のため、既に申請済みのチームの当落は決定済みです");
+      notes.push("受付中に戻せば、再び申請を受け付けられます");
+    } else {
+      description = <>受付を終了すると、新しい参加申請を受け付けなくなります。</>;
+      if (pending > 0) {
+        notes.push(<>審査中の <span className="font-bold text-white">{pending}</span> チームは
+          そのまま残ります。参加チームを確定するには個別に承認してください</>);
+      }
+      notes.push("受付中に戻せば、再び申請を受け付けられます");
+    }
+
+    return (
+      <ConfirmDialog
+        open
+        title="参加受付を終了しますか？"
+        description={description}
+        notes={notes}
+        confirmLabel={mode === "lottery" ? "抽選して受付終了" : "受付を終了する"}
+        busy={busy}
+        onConfirm={onConfirm}
+        onCancel={onCancel}
+      />
+    );
+  }
+
+  // 受付終了から巻き戻す場合
+  return (
+    <ConfirmDialog
+      open
+      title="受付終了を取り消しますか？"
+      description={<>ステータスを「{STATUS_FLOW.find((s) => s.status === target)?.label}」に戻します。</>}
+      notes={[
+        <>確定済みの当落（承認済み {approved} チーム）はそのまま維持されます</>,
+        "受付中に戻した場合、新たな申請を受け付けられます",
+        mode === "lottery"
+          ? "再度受付終了にすると、新しく申請されたチームだけを対象に抽選します"
+          : "既に決定済みのチームが取り消されることはありません",
+      ]}
+      confirmLabel="ステータスを戻す"
+      busy={busy}
+      onConfirm={onConfirm}
+      onCancel={onCancel}
+    />
   );
 }
