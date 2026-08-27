@@ -1,4 +1,5 @@
 from fastapi import Request, Response
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.config import settings
@@ -26,7 +27,23 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             await redis.expire(key, settings.RATE_LIMIT_WINDOW_SECONDS)
 
         if count > settings.RATE_LIMIT_REQUESTS:
-            raise RateLimitError()
+            # BaseHTTPMiddleware 内で raise した例外は FastAPI の exception handler を
+            # 通らず 500 になる。app_exception_handler と同じ形式で 429 を直接返す。
+            exc = RateLimitError()
+            return JSONResponse(
+                status_code=exc.status_code,
+                content={
+                    "type": exc.error_type,
+                    "title": exc.detail,
+                    "status": exc.status_code,
+                    "detail": exc.detail,
+                },
+                headers={
+                    "X-RateLimit-Limit": str(settings.RATE_LIMIT_REQUESTS),
+                    "X-RateLimit-Remaining": "0",
+                    "Retry-After": str(settings.RATE_LIMIT_WINDOW_SECONDS),
+                },
+            )
 
         response = await call_next(request)
         response.headers["X-RateLimit-Limit"] = str(settings.RATE_LIMIT_REQUESTS)

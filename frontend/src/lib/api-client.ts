@@ -34,6 +34,35 @@ function getRefreshToken(): string | null {
   return null;
 }
 
+/**
+ * 認証セッションを完全に破棄する。
+ * access_token だけを消すと persist ストア(esports-auth)の isAuthenticated が true のまま残り、
+ * 再読み込み後も認証前提のフェッチが走って 401 → リダイレクト を繰り返す（無限リロード）。
+ */
+function clearAuthSession(): void {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem("access_token");
+  localStorage.removeItem("esports-auth");
+  // メモリ上のストアも即座に未認証へ（リダイレクトしない場合の再フェッチ防止）。
+  // api-client は server component からも読まれるため動的 import で client 限定にする。
+  import("@/store/auth-store")
+    .then(({ useAuthStore }) => useAuthStore.getState().logout())
+    .catch(() => { /* ignore */ });
+}
+
+/** 多重 401 で何度も遷移しないよう、リダイレクトは1回だけ実行する。 */
+let redirectingToLogin = false;
+
+function redirectToLogin(): void {
+  if (typeof window === "undefined") return;
+  const path = window.location.pathname;
+  clearAuthSession();
+  // 既に /login・/register にいる場合は遷移しない（同一URLへの再遷移＝リロードループになる）
+  if (path === "/login" || path === "/register" || redirectingToLogin) return;
+  redirectingToLogin = true;
+  window.location.href = `/login?next=${encodeURIComponent(path)}`;
+}
+
 let isRefreshing = false;
 let refreshQueue: Array<(token: string | null) => void> = [];
 
@@ -112,12 +141,7 @@ async function request<T>(
       const failQueue = refreshQueue;
       refreshQueue = [];
       failQueue.forEach((cb) => cb(null));
-      localStorage.removeItem("access_token");
-      const loginPath = typeof window !== "undefined" ? window.location.pathname : "";
-      const safePath = loginPath === "/login" || loginPath === "/register" ? "/dashboard" : loginPath;
-      if (typeof window !== "undefined") {
-        window.location.href = `/login?next=${encodeURIComponent(safePath)}`;
-      }
+      redirectToLogin();
     }
   }
 
@@ -158,10 +182,7 @@ async function uploadRequest<T>(
   if (res.status === 401 && retry) {
     const newToken = await tryRefreshToken();
     if (newToken) return uploadRequest<T>(path, formData, false);
-    localStorage.removeItem("access_token");
-    if (typeof window !== "undefined") {
-      window.location.href = `/login?next=${encodeURIComponent(window.location.pathname)}`;
-    }
+    redirectToLogin();
   }
 
   if (!res.ok) {
