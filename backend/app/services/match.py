@@ -14,6 +14,7 @@ from app.repositories.match import MatchRepository
 from app.repositories.tournament import TournamentRepository
 from app.schemas.match import (
     BanPickCreate,
+    GamePlayerStatsUpdate,
     MatchDetail,
     MatchResultCreate,
     ScoreUpdate,
@@ -107,6 +108,65 @@ class MatchService:
                 "team2_score": data.team2_score,
             },
         )
+        await self._invalidate_match_cache(match_id)
+
+    async def save_game_player_stats(
+        self,
+        match_id: uuid.UUID,
+        game_number: int,
+        data: GamePlayerStatsUpdate,
+        current_user: User,
+    ) -> None:
+        """
+        1マップ分のスコアと選手成績を保存する（スコアボード取り込みの保存先）。
+
+        試合を完了させずマップ単位で確定できるようにしてある。撮り直しや修正に
+        備えて、同一ゲームの選手成績は追記ではなく毎回置き換える。
+        """
+        match = await self._repo.get_by_id(match_id)
+        if not match:
+            raise NotFoundError("試合", str(match_id))
+
+        if match.status not in (MatchStatus.ONGOING, MatchStatus.COMPLETED):
+            raise BusinessRuleError("進行中または完了した試合にのみ成績を登録できます")
+
+        winner_id = None
+        if data.team1_score != data.team2_score:
+            winner_id = (
+                match.team1_id
+                if data.team1_score > data.team2_score
+                else match.team2_id
+            )
+
+        game = await self._repo.upsert_game_score(
+            match_id=match_id,
+            game_number=game_number,
+            map_id=uuid.UUID(data.map_id) if data.map_id else None,
+            team1_score=data.team1_score,
+            team2_score=data.team2_score,
+            winner_id=winner_id,
+            duration_seconds=data.duration_seconds,
+        )
+
+        await self._repo.replace_player_stats(
+            game.id,
+            [
+                {
+                    "match_game_id": game.id,
+                    "player_id": uuid.UUID(ps.player_id),
+                    "team_id": uuid.UUID(ps.team_id),
+                    "agent": ps.agent,
+                    "kills": ps.kills,
+                    "deaths": ps.deaths,
+                    "assists": ps.assists,
+                    "score": ps.score,
+                    "first_bloods": ps.first_bloods,
+                    "custom_stats": ps.custom_stats,
+                }
+                for ps in data.player_stats
+            ],
+        )
+
         await self._invalidate_match_cache(match_id)
 
     async def register_ban_pick(

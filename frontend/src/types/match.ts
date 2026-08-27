@@ -78,6 +78,41 @@ export interface MatchSummary {
   stream_url: string | null;
 }
 
+// ── スコアボードOCR取り込み ───────────────────────────────────────────────────
+
+/** OCRが読み取った1行。保存前に運営が確認・修正する前提の値 */
+export interface ScoreboardParseRow {
+  /** 画像から読み取れた名前（そのまま表示して照合ミスに気付けるようにする） */
+  ocr_name: string;
+  player_id: string | null;
+  player_name: string | null;
+  team_id: string | null;
+  /** 名前照合の一致度 0〜1 */
+  match_confidence: number;
+  agent: string | null;
+  acs: number | null;
+  kills: number | null;
+  deaths: number | null;
+  assists: number | null;
+  first_bloods: number | null;
+  /** OCR自体の信頼度 0〜1 */
+  ocr_confidence: number;
+}
+
+export interface ScoreboardParseTeam {
+  id: string;
+  name: string;
+  players: { id: string; name: string }[];
+}
+
+export interface ScoreboardParseResult {
+  rows: ScoreboardParseRow[];
+  warnings: string[];
+  /** 読み取れた場合のラウンドスコア [team1, team2] */
+  detected_score: [number, number] | null;
+  teams: ScoreboardParseTeam[];
+}
+
 // WebSocket メッセージ
 export type WSMessage =
   | { type: "score_update"; match_id: string; game_number: number; team1_score: number; team2_score: number }

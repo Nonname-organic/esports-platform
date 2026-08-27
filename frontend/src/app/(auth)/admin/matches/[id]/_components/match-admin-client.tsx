@@ -9,6 +9,7 @@ import { MatchHeader } from "./match-header";
 import { StatusControls } from "./status-controls";
 import { GameManager } from "./game-manager";
 import { BanPickPanel } from "./banpick-panel";
+import { ScoreboardImport } from "./scoreboard-import";
 import { WsIndicator } from "./ws-indicator";
 
 interface MatchAdminClientProps {
@@ -71,6 +72,9 @@ export function MatchAdminClient({ matchId, initialMatch, game }: MatchAdminClie
         {/* Ban/Pick */}
         <BanPickPanel match={match} game={game} registerBanPick={registerBanPick} />
       </div>
+
+      {/* スコアボード画像から選手成績を一括登録 */}
+      <ScoreboardImport match={match} />
     </div>
   );
 }

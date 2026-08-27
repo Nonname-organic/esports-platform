@@ -37,6 +37,16 @@ class PlayerStatsCreate(BaseModel):
     custom_stats: dict | None = None
 
 
+class GamePlayerStatsUpdate(BaseModel):
+    """スコアボード取り込み用: 1マップ分のスコアと選手成績をまとめて保存する。"""
+
+    map_id: str | None = None
+    team1_score: int = Field(..., ge=0)
+    team2_score: int = Field(..., ge=0)
+    duration_seconds: int | None = Field(default=None, ge=0)
+    player_stats: list[PlayerStatsCreate]
+
+
 class GameStatsCreate(BaseModel):
     game_number: int = Field(..., ge=1, le=5)
     map_id: str

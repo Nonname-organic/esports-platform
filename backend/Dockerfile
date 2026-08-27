@@ -7,6 +7,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
+# スコアボードOCR用のネイティブ依存
+#   tesseract-ocr      : OCR本体（eng のみでスコアボードの英数字は足りる）
+#   libgl1/libglib2.0-0: opencv-python-headless の実行時依存
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        tesseract-ocr libgl1 libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
 # 依存関係のみ先にインストール（レイヤーキャッシュ最適化）
 FROM base AS deps
 COPY requirements.txt .

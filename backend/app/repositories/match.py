@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -157,6 +157,25 @@ class MatchRepository(BaseRepository[Match]):
         self._db.add_all(stats)
         await self._db.flush()
         return stats
+
+    async def replace_player_stats(
+        self, match_game_id: uuid.UUID, stats_list: list[dict]
+    ) -> list[PlayerMatchStats]:
+        """
+        1ゲーム分の選手成績を入れ替える。
+
+        スコアボードの取り込みは撮り直し・修正のやり直しが前提のため、
+        追記ではなく毎回そのゲームの既存レコードを置き換える。
+        """
+        await self._db.execute(
+            delete(PlayerMatchStats).where(
+                PlayerMatchStats.match_game_id == match_game_id
+            )
+        )
+        if not stats_list:
+            await self._db.flush()
+            return []
+        return await self.bulk_create_player_stats(stats_list)
 
     async def get_match_count_by_status(
         self, tournament_id: uuid.UUID

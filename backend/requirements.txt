@@ -46,6 +46,11 @@ Pillow==11.0.0
 python-dateutil==2.9.0.post0
 pytz==2024.2
 
+# Scoreboard OCR（VALORANTスコアボードのスクリーンショット取り込み）
+# tesseract-ocr 本体と libgl1 は Dockerfile 側で apt install している
+pytesseract==0.3.13
+opencv-python-headless==4.10.0.84
+
 # Observability
 opentelemetry-api==1.28.2
 opentelemetry-sdk==1.28.2
