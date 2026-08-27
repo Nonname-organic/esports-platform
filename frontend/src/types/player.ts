@@ -32,7 +32,6 @@ export interface PlayerCareerStats {
   avg_assists: number;
   avg_kda: number;
   avg_score: number;
-  headshot_rate: number;
   first_blood_rate: number;
   most_played_agent: string | null;
   most_played_agent_games: number;
@@ -85,7 +84,6 @@ export interface PlayerMatchHistory {
   assists: number;
   kda: number;
   score: number;
-  headshots: number;
   map_name: string | null;
   played_at: string | null;
 }

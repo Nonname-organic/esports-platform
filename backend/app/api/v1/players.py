@@ -107,7 +107,7 @@ async def get_player_stats(player_id: uuid.UUID, db: DBSession, cache: Cache):
         "avg_assists": c.get("avg_assists", 0.0),
         "avg_kda": c.get("avg_kda", 0.0),
         "avg_score": c.get("avg_acs", 0.0),
-        "headshot_rate": 0.0,
+        # HS% はゲーム内スコアボードから取得できないため提供しない
         "first_blood_rate": 0.0,
         "most_played_agent": (top or {}).get("agent"),
         "most_played_agent_games": (top or {}).get("games", 0),

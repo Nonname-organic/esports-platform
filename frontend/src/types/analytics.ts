@@ -117,7 +117,6 @@ export interface PlayerRankingEntry {
   avg_kills: number;
   avg_deaths: number;
   avg_assists: number;
-  headshot_rate: number;
   most_played_agent: string | null;
 }
 

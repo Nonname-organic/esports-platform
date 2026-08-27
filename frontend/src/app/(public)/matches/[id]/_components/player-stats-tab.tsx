@@ -8,12 +8,15 @@ interface PlayerStatsTabProps {
   match: MatchDetail;
 }
 
+/**
+ * スコアボードから取得できる項目のみを扱う。
+ * HS% / KAST / ADR はゲーム内スコアボードに出ないため保持しない。
+ */
 interface AggStat extends PlayerStat {
   acs: number;
   kpr: number;
   dpr: number;
   apr: number;
-  hsRate: number;
   fbRate: number;
   kda: number;
   rounds: number;
@@ -36,7 +39,7 @@ function aggregatePlayerStats(match: MatchDetail): AggStat[] {
         ex.first_bloods += p.first_bloods;
         ex.rounds += rounds;
       } else {
-        map.set(p.player_id, { ...p, acs: 0, kpr: 0, dpr: 0, apr: 0, hsRate: 0, fbRate: 0, kda: 0, rounds });
+        map.set(p.player_id, { ...p, acs: 0, kpr: 0, dpr: 0, apr: 0, fbRate: 0, kda: 0, rounds });
       }
     }
   }
@@ -50,20 +53,18 @@ function aggregatePlayerStats(match: MatchDetail): AggStat[] {
       kpr: Math.round((p.kills / rounds) * 100) / 100,
       dpr: Math.round((p.deaths / rounds) * 100) / 100,
       apr: Math.round((p.assists / rounds) * 100) / 100,
-      hsRate: Math.random() * 30 + 15,  // TODO: 実データから計算
       fbRate: Math.round((p.first_bloods / rounds) * 100),
       kda: Math.round(kda * 100) / 100,
     };
   });
 }
 
-type SortKey = "acs" | "kills" | "kda" | "hsRate" | "fbRate" | "first_bloods";
+type SortKey = "acs" | "kills" | "kda" | "fbRate" | "first_bloods";
 
 const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: "acs", label: "ACS" },
   { key: "kills", label: "Kills" },
   { key: "kda", label: "KDA" },
-  { key: "hsRate", label: "HS%" },
   { key: "fbRate", label: "FB%" },
 ];
 
@@ -90,9 +91,8 @@ export function PlayerStatsTab({ match }: PlayerStatsTabProps) {
             <th className="px-3 py-2.5 text-center font-medium">D</th>
             <th className="px-3 py-2.5 text-center font-medium">A</th>
             <th className="px-3 py-2.5 text-center font-medium">KDA</th>
-            <th className="px-3 py-2.5 text-center font-medium">HS%</th>
+            <th className="px-3 py-2.5 text-center font-medium">FB</th>
             <th className="px-3 py-2.5 text-center font-medium">FB%</th>
-            <th className="px-3 py-2.5 text-center font-medium">KAST</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-white/5">
@@ -123,9 +123,8 @@ export function PlayerStatsTab({ match }: PlayerStatsTabProps) {
                 <td className={cn("px-3 py-3 text-center font-bold", p.kda >= 3 ? "text-green-400" : p.kda >= 1.5 ? "text-white" : "text-red-400")}>
                   {p.kda.toFixed(2)}
                 </td>
-                <td className="px-3 py-3 text-center text-slate-300">{p.hsRate.toFixed(1)}%</td>
+                <td className="px-3 py-3 text-center font-semibold text-orange-400">{p.first_bloods}</td>
                 <td className="px-3 py-3 text-center text-slate-300">{p.fbRate}%</td>
-                <td className="px-3 py-3 text-center text-slate-400">—</td>
               </tr>
             );
           })}

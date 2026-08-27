@@ -82,7 +82,7 @@ export default async function PlayerDetailPage({ params, searchParams }: Props) 
   const EMPTY_STATS: PlayerCareerStats = {
     total_matches: 0, wins: 0, losses: 0, win_rate: 0, total_games: 0,
     avg_kills: 0, avg_deaths: 0, avg_assists: 0, avg_kda: 0, avg_score: 0,
-    headshot_rate: 0, first_blood_rate: 0, most_played_agent: null, most_played_agent_games: 0,
+    first_blood_rate: 0, most_played_agent: null, most_played_agent_games: 0,
   };
   let stats: PlayerCareerStats = EMPTY_STATS;
   try {

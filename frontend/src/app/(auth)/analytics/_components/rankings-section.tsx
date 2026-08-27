@@ -113,7 +113,6 @@ function PlayerRankingTable({ data }: { data: PlayerRankingEntry[] }) {
             <th className="pb-2.5 text-center w-12">KDA</th>
             <th className="pb-2.5 text-center w-12">K/D</th>
             <th className="pb-2.5 text-center w-10">勝率</th>
-            <th className="pb-2.5 text-center w-10">HS%</th>
             <th className="pb-2.5 w-8" />
           </tr>
         </thead>
@@ -152,9 +151,6 @@ function PlayerRankingTable({ data }: { data: PlayerRankingEntry[] }) {
               </td>
               <td className="py-2.5 text-center text-xs text-slate-400">
                 {(entry.win_rate * 100).toFixed(0)}%
-              </td>
-              <td className="py-2.5 text-center text-xs text-slate-400">
-                {(entry.headshot_rate * 100).toFixed(0)}%
               </td>
               <td className="py-2.5">
                 <Link

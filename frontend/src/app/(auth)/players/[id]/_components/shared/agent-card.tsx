@@ -9,7 +9,6 @@ export interface AgentCardData {
   acs: number | null;
   kd: number | null;
   kda: number | null;
-  hs_rate?: number | null;
   mvp_rate?: number | null;
   avg_placement?: number | null;
 }
@@ -36,11 +35,10 @@ export function AgentCard({ data, onClick }: { data: AgentCardData; onClick?: ()
           {fmtPct(data.win_rate, 0)}
         </span>
       </div>
-      <div className="grid grid-cols-4 gap-1.5 text-center">
+      <div className="grid grid-cols-3 gap-1.5 text-center">
         <Mini label="ACS" value={fmtNum(data.acs, 0)} />
         <Mini label="KD" value={fmtNum(data.kd, 2)} />
         <Mini label="KDA" value={fmtNum(data.kda, 2)} />
-        <Mini label="HS%" value={data.hs_rate != null ? fmtPct(data.hs_rate, 0) : "—"} />
       </div>
     </button>
   );

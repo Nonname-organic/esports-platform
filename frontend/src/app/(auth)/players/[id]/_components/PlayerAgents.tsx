@@ -10,7 +10,7 @@ export function PlayerAgents({ playerId }: { playerId: string }) {
 
   const agents: AgentCardData[] = (career?.agent_usage ?? []).map((a) => ({
     agent: a.agent, games: a.games, win_rate: a.win_rate, pick_rate: null,
-    acs: null, kd: null, kda: a.avg_kda, hs_rate: null,
+    acs: null, kd: null, kda: a.avg_kda,
   }));
 
   return (

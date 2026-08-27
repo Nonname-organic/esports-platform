@@ -359,7 +359,7 @@ class AnalyticsDashboardService:
                 "avg_kills": round(float(r.k), 1) if r.k is not None else 0.0,
                 "avg_deaths": round(float(r.d), 1) if r.d is not None else 0.0,
                 "avg_assists": round(float(r.a), 1) if r.a is not None else 0.0,
-                "headshot_rate": 0.0,
+                # HS% はゲーム内スコアボードから取得できないため提供しない
                 "most_played_agent": None,
             })
         return out

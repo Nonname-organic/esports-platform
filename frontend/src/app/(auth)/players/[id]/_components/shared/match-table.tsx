@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { fmtNum, fmtPct, DASH } from "./stat-format";
+import { fmtNum, DASH } from "./stat-format";
 
 export interface MatchRow {
   id: string;
@@ -13,8 +13,6 @@ export interface MatchRow {
   kd: number | null;
   kda: number | null;
   acs: number | null;
-  adr?: number | null;
-  hs_rate?: number | null;
   played_at: string | null;
   onClick?: () => void;
 }
@@ -33,7 +31,6 @@ export function MatchTable({ rows }: { rows: MatchRow[] }) {
             <th className="px-3 py-3 text-center font-medium">KD</th>
             <th className="px-3 py-3 text-center font-medium">KDA</th>
             <th className="px-3 py-3 text-center font-medium">ACS</th>
-            <th className="px-3 py-3 text-center font-medium">HS%</th>
             <th className="px-4 py-3 text-right font-medium">日時</th>
           </tr>
         </thead>
@@ -68,9 +65,6 @@ export function MatchTable({ rows }: { rows: MatchRow[] }) {
               <td className="px-3 py-3 text-center tabular-nums text-slate-300">{fmtNum(m.kd, 2)}</td>
               <td className="px-3 py-3 text-center tabular-nums font-semibold text-white">{fmtNum(m.kda, 2)}</td>
               <td className="px-3 py-3 text-center tabular-nums font-bold text-white">{fmtNum(m.acs, 0)}</td>
-              <td className="px-3 py-3 text-center tabular-nums text-slate-400">
-                {m.hs_rate != null ? fmtPct(m.hs_rate, 0) : DASH}
-              </td>
               <td className="px-4 py-3 text-right text-slate-500">
                 {m.played_at ? new Date(m.played_at).toLocaleDateString("ja-JP", { month: "short", day: "numeric" }) : DASH}
               </td>

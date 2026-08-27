@@ -24,7 +24,7 @@ export function PlayerMatches({ playerId }: { playerId: string }) {
       won: m.result === "win" ? true : m.result === "loss" ? false : null,
       kills: m.kills, deaths: m.deaths, assists: m.assists,
       kd: m.deaths ? m.kills / m.deaths : m.kills, kda: m.kda, acs: m.score,
-      adr: null, hs_rate: null, played_at: m.played_at,
+      played_at: m.played_at,
     })), [history]);
 
   const mapOptions = useMemo(() => Array.from(new Set(rawRows.map((r) => r.map_name).filter(Boolean))) as string[], [rawRows]);
