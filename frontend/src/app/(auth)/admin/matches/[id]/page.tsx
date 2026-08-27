@@ -21,10 +21,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     );
     const m = res.data;
     return {
-      title: `[管理] ${m.team1?.name ?? "TBD"} vs ${m.team2?.name ?? "TBD"} | EsportsPlatform`,
+      title: `[管理] ${m.team1?.name ?? "TBD"} vs ${m.team2?.name ?? "TBD"}`,
     };
   } catch {
-    return { title: "試合管理 | EsportsPlatform" };
+    return { title: "試合管理" };
   }
 }
 

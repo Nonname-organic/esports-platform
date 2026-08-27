@@ -208,9 +208,21 @@ class RankingRepository(BaseRepository[Ranking]):
         )
         return list(result.scalars().all())
 
+    # 1試合分の成績として渡され、既存値に足し込むべき項目
+    _RANKING_CUMULATIVE_FIELDS = frozenset(
+        {"points", "wins", "losses", "game_wins", "game_losses"}
+    )
+
     async def upsert_ranking(
         self, tournament_id: uuid.UUID, team_id: uuid.UUID, **stats
     ) -> Ranking:
+        """
+        1試合分の結果をチームの大会成績に反映する。
+
+        呼び出し側は「その試合で得た値」（勝ちなら wins=1, points=3）を渡すため、
+        既存レコードには代入ではなく加算する。代入すると何試合勝っても
+        wins=1 のままになる。
+        """
         existing = await self._db.execute(
             select(Ranking).where(
                 and_(
@@ -221,12 +233,19 @@ class RankingRepository(BaseRepository[Ranking]):
         )
         ranking = existing.scalar_one_or_none()
         if ranking:
-            for k, v in stats.items():
-                setattr(ranking, k, v)
+            for key, value in stats.items():
+                if key in self._RANKING_CUMULATIVE_FIELDS:
+                    setattr(ranking, key, (getattr(ranking, key) or 0) + value)
+                else:
+                    setattr(ranking, key, value)
+            ranking.updated_at = datetime.now(timezone.utc)
         else:
             ranking = Ranking(
                 tournament_id=tournament_id,
                 team_id=team_id,
+                # 順位は直後の recalculate_positions で確定する。
+                # NOT NULL 制約があるため仮の値を入れておく
+                rank_position=0,
                 **stats,
                 updated_at=datetime.now(timezone.utc),
             )

@@ -14,7 +14,7 @@ export function Header() {
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-3 px-4">
         <Link href="/" className="flex flex-shrink-0 items-center gap-2 font-bold text-white">
           <Trophy className="h-5 w-5 text-brand-500" />
-          <span className="hidden sm:block">EsportsPlatform</span>
+          <span className="hidden sm:block">AXELIA</span>
         </Link>
 
         {/* 主要ナビ */}

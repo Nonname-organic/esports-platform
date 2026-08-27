@@ -24,6 +24,10 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        # NEXT_PUBLIC_* はビルド時にJSへ埋め込まれるため build args で渡す。
+        # デモ環境では告知バナーを出す（本番では false / 未設定にする）
+        NEXT_PUBLIC_DEMO_MODE: "${NEXT_PUBLIC_DEMO_MODE:-true}"
     environment:
       - NEXT_PUBLIC_API_URL=http://api:8000
     restart: unless-stopped

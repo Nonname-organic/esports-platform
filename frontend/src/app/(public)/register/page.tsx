@@ -130,7 +130,7 @@ export default function RegisterPage() {
             <Trophy className="h-7 w-7 text-brand-400" />
           </div>
           <h1 className="text-2xl font-black text-white">アカウント作成</h1>
-          <p className="mt-1 text-sm text-slate-400">EsportsPlatform に参加する</p>
+          <p className="mt-1 text-sm text-slate-400">AXELIA に参加する</p>
         </div>
 
         {/* フォーム */}

@@ -39,7 +39,7 @@ export async function generateMetadata({
     );
     const t = res.data;
     return {
-      title: `${t.name} [${t.tag}] | EsportsPlatform`,
+      title: `${t.name} [${t.tag}]`,
       description: t.description ?? `${t.game} チーム`,
       openGraph: {
         title: `${t.name} [${t.tag}]`,
@@ -47,7 +47,7 @@ export async function generateMetadata({
       },
     };
   } catch {
-    return { title: "チーム詳細 | EsportsPlatform" };
+    return { title: "チーム詳細" };
   }
 }
 

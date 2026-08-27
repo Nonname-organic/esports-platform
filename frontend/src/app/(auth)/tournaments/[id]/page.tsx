@@ -35,7 +35,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     );
     const t = res.data;
     return {
-      title: `${t.name} | EsportsPlatform`,
+      title: `${t.name}`,
       description: t.description ?? `${t.game} ${t.format} tournament — ${t.registered_teams}/${t.max_teams} teams`,
       openGraph: {
         title: t.name,
@@ -44,7 +44,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
       },
     };
   } catch {
-    return { title: "大会詳細 | EsportsPlatform" };
+    return { title: "大会詳細" };
   }
 }
 

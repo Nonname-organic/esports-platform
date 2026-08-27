@@ -103,7 +103,7 @@ export default function AnalyticsDashboardPage() {
 
       {/* フッター */}
       <div className="mt-8 border-t border-white/5 pt-4 text-center text-xs text-slate-700">
-        EsportsPlatform Analytics · データは10分ごとにキャッシュ更新
+        AXELIA Analytics · データは10分ごとにキャッシュ更新
       </div>
     </div>
   );

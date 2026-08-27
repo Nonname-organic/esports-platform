@@ -4,7 +4,7 @@ import { TournamentsClient } from "./_components/tournaments-client";
 import { TournamentGridSkeleton } from "@/features/tournaments/components/tournament-skeleton";
 
 export const metadata: Metadata = {
-  title: "大会一覧 | EsportsPlatform",
+  title: "大会一覧",
   description: "参加・観戦できる e-スポーツ大会を探す",
 };
 

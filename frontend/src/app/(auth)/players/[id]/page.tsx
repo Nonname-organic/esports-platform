@@ -40,7 +40,7 @@ export async function generateMetadata({
     );
     const p = res.data;
     return {
-      title: `${p.display_name} | EsportsPlatform`,
+      title: `${p.display_name}`,
       description: p.bio ?? `${p.game} プレイヤー${p.team_name ? ` — ${p.team_name}` : ""}`,
       openGraph: {
         title: p.display_name,
@@ -48,7 +48,7 @@ export async function generateMetadata({
       },
     };
   } catch {
-    return { title: "プレイヤー詳細 | EsportsPlatform" };
+    return { title: "プレイヤー詳細" };
   }
 }
 

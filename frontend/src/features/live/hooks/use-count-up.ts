@@ -30,7 +30,19 @@ export function useCountUp(target: number, durationMs = 1000): number {
       }
     };
     rafRef.current = requestAnimationFrame(step);
-    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+
+    // 非表示タブでは requestAnimationFrame が発火しないため、そのままだと
+    // 初期値の 0 が表示され続ける。演出が終わっているはずの時刻に最終値を
+    // 確定させ、アニメーションが動いたかどうかに関係なく正しい数値を出す
+    const settle = setTimeout(() => {
+      fromRef.current = target;
+      setValue(target);
+    }, durationMs + 200);
+
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      clearTimeout(settle);
+    };
   }, [target, durationMs]);
 
   return value;
