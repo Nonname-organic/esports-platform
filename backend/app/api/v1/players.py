@@ -5,7 +5,13 @@ from fastapi import APIRouter, Query
 
 from app.core.dependencies import Cache, CurrentUser, DBSession
 from app.schemas.common import ListResponse, Meta, Response
-from app.schemas.player import GAME_ROLES, PlayerCreate, PlayerSchema, PlayerUpdate
+from app.schemas.player import (
+    GAME_ROLES,
+    PlayerCreate,
+    PlayerPublicSchema,
+    PlayerSchema,
+    PlayerUpdate,
+)
 from app.schemas.career import PlayerCareerSchema, AchievementItem, RatingPoint
 from app.schemas.ranking import PlayerRankCard
 from app.player_profile.dto import PlayerAnalysis, PlayerHistoryItem
@@ -121,7 +127,7 @@ async def get_game_roles():
     return {"data": GAME_ROLES}
 
 
-@router.get("", response_model=ListResponse[PlayerSchema])
+@router.get("", response_model=ListResponse[PlayerPublicSchema])
 async def list_players(
     db: DBSession,
     cache: Cache,
@@ -158,7 +164,7 @@ async def create_player(
     return Response(data=player, meta=None)
 
 
-@router.get("/{player_id}", response_model=Response[PlayerSchema])
+@router.get("/{player_id}", response_model=Response[PlayerPublicSchema])
 async def get_player(player_id: uuid.UUID, db: DBSession, cache: Cache):
     service = PlayerService(db, cache)
     player = await service.get_player(player_id)

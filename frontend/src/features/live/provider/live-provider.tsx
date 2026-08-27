@@ -13,7 +13,7 @@ export interface LiveTransport {
   start(onData: (data: StatsOverview | null) => void): () => void;
 }
 
-type LiveSource = "idle" | "live" | "mock";
+type LiveSource = "idle" | "live";
 
 interface LiveContextValue {
   live: LiveStats | null;
@@ -24,33 +24,9 @@ interface LiveContextValue {
 
 const LiveContext = createContext<LiveContextValue | null>(null);
 
-// ── Mock フォールバック（Backendが空/不通のとき賑わいを補完） ──────────────
-function jitter(v: number, amp: number): number {
-  return Math.max(0, Math.round(v + (Math.random() - 0.5) * amp));
-}
-// ── モック方針（仕様: 「以下のみモック許可 = 閲覧人数 / 参加人数」） ──────────
-// 大会・試合・優勝・MVP・賞金などの実体数は絶対にモックしない（実データ or 0）。
-// online_participants（閲覧人数）と entries_today/recent（参加人数）だけ、
-// 値が 0/未取得のとき賑わい下限をモックで補完する。
-function mockViewer(prev: number | undefined): number {
-  return jitter(prev && prev > 0 ? prev : 3200, 140);
-}
-function mockToday(prev: number | undefined): number {
-  return jitter(prev && prev > 0 ? prev : 90, 6);
-}
-function mockRecent(prev: number | undefined): number {
-  return jitter(prev && prev > 0 ? prev : 5, 3);
-}
-
-/** 実 live に対して、閲覧/参加のみ（0/未取得時に）モック下限を重ねる。他は実値のまま。 */
-function withLivelyViewers(realLive: LiveStats, prev: LiveStats | null): LiveStats {
-  return {
-    ...realLive,
-    online_participants: realLive.online_participants || mockViewer(prev?.online_participants),
-    entries_today: (realLive.entries_today ?? 0) || mockToday(prev?.entries_today),
-    entries_recent: (realLive.entries_recent ?? 0) || mockRecent(prev?.entries_recent),
-  };
-}
+// 表示する数値はすべてAPIの実測値。閲覧者数などを「賑わい演出」で
+// 生成していた実装があったが、公開サイトで実績を偽ることになるため撤去した。
+// 値が取れない場合は前回値を保持し、無ければ 0 を表示する。
 
 // ── Polling Transport（Visibility API 対応: 非表示中は停止） ─────────────────
 export function createPollingTransport(intervalMs = 60000): LiveTransport {
@@ -64,7 +40,7 @@ export function createPollingTransport(intervalMs = 60000): LiveTransport {
           const res = await liveApi.overview();
           onData(res.data);
         } catch {
-          onData(null); // 不通 → Provider が mock で補完
+          onData(null); // 不通 → Provider が前回値を保持
         }
       };
       const startTimer = () => { if (!timer) timer = setInterval(tick, intervalMs); };
@@ -110,32 +86,13 @@ export function LiveProvider({
 
   const handle = useCallback((data: StatsOverview | null) => {
     if (data) {
-      // 実データ: 大会/試合/累計は実値のまま。閲覧/参加のみ賑わい下限を補完。
-      const live = withLivelyViewers(data.live, liveRef.current);
-      liveRef.current = live;
-      setLive(live);
-      setTotals(data.totals);        // 累計は常に実データ（モックしない）
+      liveRef.current = data.live;
+      setLive(data.live);
+      setTotals(data.totals);
       setSource("live");
     } else {
-      // 不通: 累計/大会/試合は前回実値を保持（捏造しない）。閲覧/参加のみ動かす。
-      const base = liveRef.current;
-      const live: LiveStats = base
-        ? {
-            ...base,
-            online_participants: mockViewer(base.online_participants),
-            entries_today: mockToday(base.entries_today),
-            entries_recent: mockRecent(base.entries_recent),
-          }
-        : {
-            ongoing_tournaments: 0, registration_open_tournaments: 0, ongoing_matches: 0,
-            online_participants: mockViewer(undefined),
-            entries_today: mockToday(undefined), entries_recent: mockRecent(undefined),
-            updated_at: new Date().toISOString(),
-          };
-      liveRef.current = live;
-      setLive(live);
-      // totals は前回の実値を維持（無ければ null のまま → UI は 0 表示）
-      setSource("mock");
+      // 不通時は前回取得した実値を保持するだけ。値は作らない
+      setSource("idle");
     }
     setLastUpdated(Date.now());
   }, []);

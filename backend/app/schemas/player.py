@@ -112,3 +112,41 @@ class PlayerSchema(BaseModel):
     avatar_url: Optional[str] = None
     team_name: Optional[str] = None
     team_id: Optional[uuid.UUID] = None
+
+
+class PlayerPublicSchema(BaseModel):
+    """
+    未認証でも参照できるプレイヤー情報。
+
+    一覧・詳細は誰でも閲覧できるため、個人を特定・接触できる情報は含めない。
+    除外しているもの:
+      real_name  … 本名
+      discord_id … 直接コンタクトが可能になる
+      riot_puuid … Riot APIの内部識別子。外部に出す必要がない
+      user_id    … 内部のユーザーID
+    本人が自分の値を編集する画面では /players/me（要認証）を使う。
+    """
+
+    id: uuid.UUID
+    in_game_name: str
+    riot_id: Optional[str]
+    riot_gamename: Optional[str]
+    riot_tagline: Optional[str]
+    game: str
+    rank: Optional[str]
+    main_role: Optional[str]
+    sub_roles: Optional[list]
+    agent_pool: Optional[list]
+    region: Optional[str]
+    nationality: Optional[str]
+    bio: Optional[str]
+    twitter_handle: Optional[str]
+    twitch_handle: Optional[str]
+    stats_public: bool = True
+    created_at: datetime
+    updated_at: datetime
+
+    username: Optional[str] = None
+    avatar_url: Optional[str] = None
+    team_name: Optional[str] = None
+    team_id: Optional[uuid.UUID] = None

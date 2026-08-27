@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     APP_VERSION: str = "1.0.0"
     ENVIRONMENT: Literal["demo", "mvp", "prod"] = "demo"
     DEBUG: bool = False
+    # /docs・/redoc・/openapi.json を公開するか。インターネット公開時は
+    # 管理系を含む全エンドポイントが一覧できてしまうため既定で無効
+    EXPOSE_API_DOCS: bool = False
 
     # Security
     SECRET_KEY: str = Field(..., min_length=32)

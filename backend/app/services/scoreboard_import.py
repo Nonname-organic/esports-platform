@@ -16,6 +16,7 @@ from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.concurrency import run_in_threadpool
 
 from app.core.exceptions import NotFoundError
 from app.models.match import Match
@@ -178,7 +179,10 @@ class ScoreboardImportService:
         if not match:
             raise NotFoundError("試合", str(match_id))
 
-        parsed, _img = scoreboard_ocr.parse_scoreboard(image)
+        # OCRは1枚あたり10秒以上かかるCPU処理。await せずに直接呼ぶと
+        # イベントループを占有し、その間APIサーバー全体が応答しなくなるため
+        # 必ずスレッドプールへ逃がす
+        parsed, _img = await run_in_threadpool(scoreboard_ocr.parse_scoreboard, image)
         roster = await self._load_roster(match)
         warnings = list(parsed.warnings)
         if not roster:

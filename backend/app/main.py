@@ -35,12 +35,17 @@ async def lifespan(app: FastAPI):
     logger.info("shutdown")
 
 
+# APIドキュメントの公開可否。インターネットに出すデモでは管理系を含む
+# 全エンドポイントの一覧を晒すことになるため、既定で無効にしている。
+# 開発時は EXPOSE_API_DOCS=true で有効化する。
+_expose_docs = settings.EXPOSE_API_DOCS
+
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    docs_url="/docs" if settings.ENVIRONMENT != "prod" else None,
-    redoc_url="/redoc" if settings.ENVIRONMENT != "prod" else None,
-    openapi_url="/openapi.json" if settings.ENVIRONMENT != "prod" else None,
+    docs_url="/docs" if _expose_docs else None,
+    redoc_url="/redoc" if _expose_docs else None,
+    openapi_url="/openapi.json" if _expose_docs else None,
     lifespan=lifespan,
 )
 
