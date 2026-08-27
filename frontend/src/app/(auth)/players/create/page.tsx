@@ -10,18 +10,19 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { User2, AlertCircle, Check, Gamepad2, Info, Trash2, ExternalLink, Loader2, Users, UserSearch } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { cn, getGameColor } from "@/lib/utils";
-import type { GameType } from "@/types/tournament";
+import { SELECTABLE_GAMES, type GameType } from "@/types/tournament";
 
-const GAMES: { value: GameType; label: string; color: string }[] = [
-  { value: "VALORANT", label: "VALORANT", color: "border-red-500/50 text-red-400 bg-red-500/5" },
-  { value: "LOL", label: "League of Legends", color: "border-yellow-500/50 text-yellow-400 bg-yellow-500/5" },
-  { value: "APEX", label: "Apex Legends", color: "border-cyan-500/50 text-cyan-400 bg-cyan-500/5" },
-  { value: "CS2", label: "CS2", color: "border-orange-500/50 text-orange-400 bg-orange-500/5" },
-  { value: "OVERWATCH", label: "Overwatch 2", color: "border-blue-500/50 text-blue-400 bg-blue-500/5" },
-];
+// 選択可能タイトルは SELECTABLE_GAMES に一元化（現在は VALORANT のみ）
+const GAME_COLOR: Record<string, string> = {
+  VALORANT: "border-red-500/50 text-red-400 bg-red-500/5",
+};
+const GAMES: { value: GameType; label: string; color: string }[] = SELECTABLE_GAMES.map((g) => ({
+  ...g,
+  color: GAME_COLOR[g.value] ?? "border-brand-500/50 text-brand-400 bg-brand-500/5",
+}));
 
 const schema = z.object({
-  game: z.enum(["VALORANT", "LOL", "APEX", "CS2", "OVERWATCH"] as const),
+  game: z.enum(["VALORANT"] as const),
   riot_id: z.string().min(1, "Riot IDを入力してください").max(111),
   discord_id: z.string().max(100).optional(),
 });

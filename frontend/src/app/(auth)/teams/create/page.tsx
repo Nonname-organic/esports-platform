@@ -9,20 +9,15 @@ import { Shield, AlertCircle } from "lucide-react";
 import { useCreateTeam } from "@/features/teams/hooks/use-teams";
 import { ImageUpload } from "@/components/image-upload";
 import { cn } from "@/lib/utils";
-import type { GameType } from "@/types/tournament";
+import { SELECTABLE_GAMES } from "@/types/tournament";
 
-const GAMES: { value: GameType; label: string }[] = [
-  { value: "VALORANT", label: "VALORANT" },
-  { value: "LOL", label: "League of Legends" },
-  { value: "APEX", label: "Apex Legends" },
-  { value: "CS2", label: "CS2" },
-  { value: "OVERWATCH", label: "Overwatch 2" },
-];
+// 選択可能タイトルは SELECTABLE_GAMES に一元化（現在は VALORANT のみ）
+const GAMES = SELECTABLE_GAMES;
 
 const schema = z.object({
   name: z.string().min(2, "2文字以上").max(100, "100文字以内"),
   tag: z.string().min(2, "2文字以上").max(10, "10文字以内").regex(/^[A-Za-z0-9]+$/, "英数字のみ"),
-  game: z.enum(["VALORANT", "LOL", "APEX", "CS2", "OVERWATCH"] as const),
+  game: z.enum(["VALORANT"] as const),
   description: z.string().max(1000).optional(),
   country: z.string().max(100).optional(),
   logo_url: z.string().optional(),

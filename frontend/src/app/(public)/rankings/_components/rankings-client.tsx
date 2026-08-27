@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { SELECTABLE_GAMES } from "@/types/tournament";
 import Link from "next/link";
 import { Trophy, Crown, Loader2, Medal } from "lucide-react";
 import { cn, getGameColor } from "@/lib/utils";
@@ -9,7 +10,8 @@ import type { LeaderboardEntry, PlayerLeaderboardEntry, SeasonScope } from "@/fe
 import { RankBadge } from "@/components/rank-badge";
 import { AnimatedNumber } from "@/components/live/animated-number";
 
-const GAMES = ["VALORANT", "LOL", "APEX", "CS2", "OVERWATCH"];
+// 選択可能タイトルは SELECTABLE_GAMES に一元化（現在は VALORANT のみ）
+const GAMES = SELECTABLE_GAMES.map((g) => g.value);
 type Scope = "team" | "player";
 
 export function RankingsClient() {

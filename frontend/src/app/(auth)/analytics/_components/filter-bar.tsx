@@ -4,10 +4,11 @@ import { RotateCcw, Filter } from "lucide-react";
 import { useAnalyticsFilterStore } from "@/store/analytics-filter-store";
 import { useTournaments } from "@/features/tournaments/hooks/use-tournaments";
 import { cn, getGameColor } from "@/lib/utils";
-import type { GameType } from "@/types/tournament";
+import { SELECTABLE_GAMES, type GameType } from "@/types/tournament";
 import type { AnalyticsPeriod } from "@/types/analytics";
 
-const GAMES: GameType[] = ["VALORANT", "LOL", "APEX", "CS2", "OVERWATCH"];
+// 選択可能タイトルは SELECTABLE_GAMES に一元化（現在は VALORANT のみ）
+const GAMES: GameType[] = SELECTABLE_GAMES.map((g) => g.value);
 
 const PERIODS: { value: AnalyticsPeriod; label: string }[] = [
   { value: "7d", label: "7日" },

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { SELECTABLE_GAMES } from "@/types/tournament";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -15,7 +16,8 @@ import { useAuthStore } from "@/store/auth-store";
 import { cn, getGameColor, formatDate } from "@/lib/utils";
 import type { RecruitmentPost } from "@/features/scout/api/scout-api";
 
-const GAMES = ["VALORANT", "APEX", "CS2", "LOL", "OVERWATCH"];
+// 選択可能タイトルは SELECTABLE_GAMES に一元化（現在は VALORANT のみ）
+const GAMES = SELECTABLE_GAMES.map((g) => g.value);
 
 const createSchema = z.object({
   post_type: z.enum(["team_seeks", "player_seeks"]),

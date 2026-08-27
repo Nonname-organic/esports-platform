@@ -1,13 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import { SELECTABLE_GAMES } from "@/types/tournament";
 import Link from "next/link";
 import { Shield, Filter, ChevronRight, Trophy, Star } from "lucide-react";
 import { useScoutTeams } from "@/features/scout/hooks/use-scout";
 import { cn, getGameColor } from "@/lib/utils";
 import type { ScoutTeamCard } from "@/features/scout/api/scout-api";
 
-const GAMES = ["VALORANT", "APEX", "CS2", "LOL", "OVERWATCH"];
+// 選択可能タイトルは SELECTABLE_GAMES に一元化（現在は VALORANT のみ）
+const GAMES = SELECTABLE_GAMES.map((g) => g.value);
 
 const ROLES: Record<string, string[]> = {
   VALORANT: ["Duelist", "Sentinel", "Initiator", "Controller"],

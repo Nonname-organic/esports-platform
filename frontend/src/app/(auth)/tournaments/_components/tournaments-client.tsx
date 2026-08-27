@@ -7,16 +7,13 @@ import { TournamentCard } from "@/features/tournaments/components/tournament-car
 import { TournamentGridSkeleton } from "@/features/tournaments/components/tournament-skeleton";
 import { useTournamentList } from "@/features/tournaments/hooks/use-tournaments";
 import { cn } from "@/lib/utils";
-import type { GameType, TournamentStatus } from "@/types/tournament";
+import { SELECTABLE_GAMES, type GameType, type TournamentStatus } from "@/types/tournament";
 import type { TournamentSortOrder } from "@/features/tournaments/api/tournament-api";
 
+// 選択可能タイトルは SELECTABLE_GAMES に一元化（現在は VALORANT のみ）
 const GAMES: Array<{ value: GameType | "ALL"; label: string }> = [
   { value: "ALL", label: "すべて" },
-  { value: "VALORANT", label: "VALORANT" },
-  { value: "LOL", label: "LoL" },
-  { value: "APEX", label: "APEX" },
-  { value: "CS2", label: "CS2" },
-  { value: "OVERWATCH", label: "OW2" },
+  ...SELECTABLE_GAMES,
 ];
 
 // ステータスはカードバッジと同じ色系統で統一（受付中=緑 / 開催中=赤LIVE / 終了=グレー / 中止=ローズ）
