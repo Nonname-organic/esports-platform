@@ -22,7 +22,9 @@ from app.models.tournament import Tournament, TournamentRegistration
 APPROVAL_MODE_LOTTERY = "lottery"
 
 
-async def run_registration_lottery(db: AsyncSession, tournament: Tournament) -> int:
+async def run_registration_lottery(
+    db: AsyncSession, tournament: Tournament, cache=None
+) -> int:
     """抽選大会の当選チームを決定する。当選数を返す。
 
     - 対象は審査中(pending)の申請のみ。当選=approved / 落選=waitlisted。
@@ -67,6 +69,14 @@ async def run_registration_lottery(db: AsyncSession, tournament: Tournament) -> 
             producer="tournament",
             after={"registration_id": str(reg.id), "team_id": str(reg.team_id), "lottery": True},
         ))
+
+    # 当選チームのメンバーへ、Discord招待リンクを同封した通知を送る
+    if cache is not None:
+        from app.services.registration_notifier import notify_registration_approved
+        for reg in winners:
+            await notify_registration_approved(
+                db, cache, tournament, reg.team_id, by_lottery=True
+            )
 
     await db.flush()
     return len(winners)

@@ -226,7 +226,9 @@ async def tournament_status_loop() -> None:
                         # 受付終了に入った抽選大会は、ここで当落を確定する
                         if new_status == TournamentStatus.REGISTRATION_CLOSED:
                             from app.services.registration_lottery import run_registration_lottery
-                            won = await run_registration_lottery(db, t)
+                            won = await run_registration_lottery(
+                                db, t, RedisCache(await get_redis())
+                            )
                             if won:
                                 logger.info(f"registration lottery: {won} teams approved ({t.id})")
                 if changed:

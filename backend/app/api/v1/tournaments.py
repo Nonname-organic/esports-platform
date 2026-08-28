@@ -6,6 +6,7 @@ from typing import Optional
 from fastapi import APIRouter, Query
 from sqlalchemy import select
 
+from app.core.discord_invite import normalize_discord_invite
 from app.core.dependencies import Cache, CurrentUser, DBSession, OrganizerUser
 from app.core.exceptions import BusinessRuleError, NotFoundError
 from app.core.storage import sign_attachments, resign_stored_url
@@ -27,26 +28,6 @@ from app.services.tournament import TournamentService
 router = APIRouter(prefix="/tournaments", tags=["大会管理"])
 
 
-# Discord招待は「https://discord.gg/xxxx」でも招待コード「xxxx」だけでも
-# 入力されうる。コードのまま href に入れると相対URLとして解決され、
-# 存在しないページに飛んでネットワークエラーになるため正規化する。
-_DISCORD_INVITE_RE = re.compile(r"^[A-Za-z0-9-]{2,32}$")
-
-
-def _normalize_discord_invite(value):
-    if not isinstance(value, str):
-        return value
-    invite = value.strip()
-    if not invite:
-        return ""
-    if invite.startswith(("https://", "http://")):
-        return invite
-    if invite.startswith(("discord.gg/", "discord.com/invite/", "www.discord.gg/")):
-        return f"https://{invite}"
-    if _DISCORD_INVITE_RE.match(invite):
-        return f"https://discord.gg/{invite}"
-    # 判別できない文字列はリンクにしない（javascript: 等を弾く）
-    return ""
 
 
 def _public_rules(rules):
@@ -63,7 +44,7 @@ def _public_rules(rules):
     if isinstance(discord, dict):
         discord = dict(discord)
         discord.pop("webhook_url", None)
-        discord["invite_url"] = _normalize_discord_invite(discord.get("invite_url"))
+        discord["invite_url"] = normalize_discord_invite(discord.get("invite_url"))
         sanitized["discord"] = discord
     return sanitized
 

@@ -148,7 +148,7 @@ class TournamentService:
         # 後から抽選に変えても実行される機会が無くなってしまうのを防ぐ。
         if (tournament.approval_mode == APPROVAL_MODE_LOTTERY
                 and tournament.status == TournamentStatus.REGISTRATION_CLOSED):
-            await run_registration_lottery(self._db, tournament)
+            await run_registration_lottery(self._db, tournament, self._cache)
 
         await self._cache.delete(
             CacheKeys.TOURNAMENT_DETAIL.replace("{id}", str(tournament_id))
@@ -548,7 +548,7 @@ class TournamentService:
 
         # 受付終了に入ったら、抽選大会の当落をここで確定する
         if new_status == TournamentStatus.REGISTRATION_CLOSED:
-            await run_registration_lottery(self._db, tournament)
+            await run_registration_lottery(self._db, tournament, self._cache)
 
         # 遷移先に応じて1イベントを発火（ADR-0008: 1操作=1イベント）
         if new_status == TournamentStatus.COMPLETED:
@@ -652,6 +652,11 @@ class TournamentService:
         if status == RegistrationStatus.APPROVED:
             await self._emit(Ev.TOURNAMENT_REGISTRATION_APPROVED, tournament_id,
                              after={"registration_id": str(registration_id), "team_id": str(reg.team_id)})
+            # 承認チームのメンバーへ、Discord招待リンクを同封した通知を送る
+            from app.services.registration_notifier import notify_registration_approved
+            await notify_registration_approved(
+                self._db, self._cache, tournament, reg.team_id
+            )
         elif status == RegistrationStatus.REJECTED:
             await self._emit(Ev.TOURNAMENT_REGISTRATION_REJECTED, tournament_id,
                              after={"registration_id": str(registration_id), "team_id": str(reg.team_id)})
