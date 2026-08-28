@@ -1,0 +1,92 @@
+# Oracle Cloud Always Free (Ampere A1 / 2 OCPU / 12GB) 向けの運用設定。
+#
+# base の docker-compose.yml は t2.micro (1GB) 時代のメモリ上限のままで、
+# 12GB ある VM では frontend が 300M で頻繁に OOM 気味になる。ここで
+# 実機に合わせた上限へ引き上げ、あわせてログの肥大化を止める。
+#
+# 使い方:
+#   docker compose -f docker-compose.yml \
+#                  -f docker-compose.prod.yml \
+#                  -f docker-compose.tls.yml \
+#                  -f docker-compose.oracle.yml up -d
+version: "3.9"
+
+# Docker のログは既定で無制限に増え続け、ブートボリュームを食い潰す。
+# 全サービスに同じローテーション設定を当てる（1ファイル10MB × 3世代 = 最大30MB/コンテナ）。
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  nginx:
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  frontend:
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  api:
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          # スコアボードOCRは1枚あたり数百MBのピークを踏むため余裕を持たせる
+          memory: 2G
+
+  worker:
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+
+  scheduler:
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  postgres:
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    command:
+      # 12GB のうち 2GB を割り当てる前提でのチューニング
+      - "postgres"
+      - "-c"
+      - "shared_buffers=512MB"
+      - "-c"
+      - "effective_cache_size=1536MB"
+      - "-c"
+      - "max_connections=100"
+      # 遅いクエリだけログに出す（全文ログはディスクを食う）
+      - "-c"
+      - "log_min_duration_statement=1000"
+
+  redis:
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    command:
+      - "redis-server"
+      - "--maxmemory"
+      - "384mb"
+      # キャッシュは揮発してよいので、古いものから捨てる
+      - "--maxmemory-policy"
+      - "allkeys-lru"
+      - "--save"
+      - ""

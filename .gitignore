@@ -75,3 +75,6 @@ temp/
 # TLS/certbot (server-side only)
 certbot-www/
 nginx/ssl/
+
+# DBバックアップ（ローカル保存分）
+backups/

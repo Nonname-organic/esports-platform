@@ -311,3 +311,116 @@ Oracle が自動停止することがあります。PAYG へのアップグレ�
 ### ARM イメージ関連のエラー（`exec format error`）
 GHCR のイメージが arm64 を含んでいるか確認: `docker manifest inspect ghcr.io/<org>/esports-platform-api:latest`。
 `build.yml` の `platforms: linux/amd64,linux/arm64` が効いた後のビルドを pull していること。
+
+---
+
+## 運用（デプロイ後に必ず設定する）
+
+デプロイしただけでは、バックアップも障害検知も動きません。VM 上で以下を1度だけ実行します。
+
+### 1. 運用ジョブの登録
+
+```bash
+cd /opt/app
+sudo ./scripts/install-ops-cron.sh
+```
+
+登録されるもの:
+
+| ジョブ | 頻度 | 内容 |
+|---|---|---|
+| `backup-db.sh` | 毎日 03:15 UTC | pg_dump → gzip。14世代保持。R2設定があれば同時アップロード |
+| `healthcheck.sh` | 15分ごと | ディスク・コンテナ・API応答・証明書残日数・バックアップ鮮度を点検 |
+| `docker system prune` | 毎週日曜 04:00 UTC | 未使用イメージとビルドキャッシュを削除 |
+
+### 2. バックアップの保存先（推奨）
+
+VM 内だけに置くと、VM ごと失ったときに復旧できません。`backend/.env` に R2 を設定します。
+
+```bash
+BACKUP_S3_BUCKET=axelia-backups
+S3_ENDPOINT_URL=https://<account_id>.r2.cloudflarestorage.com
+BACKUP_KEEP_DAYS=14
+```
+
+`aws` CLI が必要です（`sudo apt install -y awscli`）。認証情報は `aws configure` で R2 のアクセスキーを設定します。
+
+### 3. 障害通知
+
+`backend/.env` の `HEALTHCHECK_WEBHOOK_URL` に Discord Webhook を設定すると、
+異常検知時にメッセージが飛びます。未設定でもログには残ります。
+
+```bash
+HEALTHCHECK_WEBHOOK_URL=https://discord.com/api/webhooks/...
+```
+
+### 4. リソース設定を実機に合わせる
+
+`docker-compose.yml` のメモリ上限は t2.micro (1GB) 時代のままです。
+Oracle の A1 (12GB) では `docker-compose.oracle.yml` を重ねてください。
+ログローテーション（1コンテナ最大30MB）もこのファイルで有効になります。
+
+```bash
+docker compose -f docker-compose.yml \
+               -f docker-compose.prod.yml \
+               -f docker-compose.tls.yml \
+               -f docker-compose.oracle.yml up -d
+```
+
+### 5. 証明書の自動更新を確認
+
+```bash
+systemctl list-timers | grep certbot   # タイマーが有効か
+sudo certbot renew --dry-run           # 更新が通るか
+```
+
+更新後に nginx を reload するフックは手順7で設定済みです。
+
+---
+
+## 復旧手順
+
+### DB を戻す
+
+```bash
+cd /opt/app
+./scripts/restore-db.sh --latest          # 最新のバックアップから
+./scripts/restore-db.sh backups/xxx.sql.gz  # 世代を指定
+```
+
+実行前に確認を求められます。api / worker / scheduler は自動で停止・再開されます。
+
+### R2 から取り寄せる
+
+```bash
+aws s3 ls s3://axelia-backups/db/ --endpoint-url "$S3_ENDPOINT_URL"
+aws s3 cp s3://axelia-backups/db/esports_db-YYYYMMDD-HHMMSS.sql.gz backups/ \
+  --endpoint-url "$S3_ENDPOINT_URL"
+./scripts/restore-db.sh backups/esports_db-YYYYMMDD-HHMMSS.sql.gz
+```
+
+### バックアップが復元できることの確認（定期的に実施）
+
+バックアップは「復元できて初めてバックアップ」です。本番を壊さずに検証できます。
+
+```bash
+docker compose exec -T postgres psql -U esports_user -d postgres \
+  -c "CREATE DATABASE restore_test;"
+gzip -dc backups/$(ls -1t backups | head -1) \
+  | docker compose exec -T postgres psql -U esports_user -d restore_test -v ON_ERROR_STOP=1
+docker compose exec -T postgres psql -U esports_user -d restore_test \
+  -c "SELECT count(*) FROM tournaments;"
+docker compose exec -T postgres psql -U esports_user -d postgres \
+  -c "DROP DATABASE restore_test;"
+```
+
+---
+
+## 無料枠で実際に起きること
+
+| 症状 | 原因 | 対処 |
+|---|---|---|
+| ある日ディスクが 100% になる | Docker のログとイメージの蓄積 | `docker-compose.oracle.yml` のログ上限 + 週次 prune で回避。`healthcheck.sh` が80%で警告 |
+| コンテナが落ちたまま気付かない | 監視なし | `healthcheck.sh` が15分ごとに検知して通知 |
+| 証明書が切れてサイトが開けない | certbot タイマー停止 | `healthcheck.sh` が残14日で警告 |
+| VM が勝手に停止された | Always Free のアイドル回収 | 手順9のトラブルシューティング参照。有料テナンシへの昇格（課金は発生しない）で回避可能 |
