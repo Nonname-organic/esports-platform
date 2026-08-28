@@ -1,6 +1,7 @@
 "use client";
 
 import { use } from "react";
+import { rankColor } from "@/lib/valorant";
 import Link from "next/link";
 import { ChevronRight, Shield, MapPin, Clock, Star, Users, Calendar, MessageSquare, Edit2, Trash2, Loader2 } from "lucide-react";
 import { useLFP, useDeleteLFP } from "@/features/lfp/hooks/use-lfp";
@@ -8,11 +9,6 @@ import { useAuthStore } from "@/store/auth-store";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 
-const RANK_COLOR: Record<string, string> = {
-  Iron: "text-slate-400", Bronze: "text-orange-700", Silver: "text-slate-300",
-  Gold: "text-yellow-400", Platinum: "text-cyan-400", Diamond: "text-blue-400",
-  Ascendant: "text-green-400", Immortal: "text-red-400", Radiant: "text-yellow-300",
-};
 
 const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
   open: { label: "募集中", cls: "bg-green-500/10 text-green-400 border-green-500/20" },
@@ -88,7 +84,7 @@ export default function LFPDetailPage({ params }: { params: Promise<{ id: string
             </div>
             <h1 className="mt-1 text-xl font-black text-white">{post.title}</h1>
             <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-500">
-              <span className={cn("font-bold", RANK_COLOR[post.min_rank] ?? "text-slate-400")}>{post.min_rank}〜</span>
+              <span className={cn("font-bold", rankColor(post.min_rank))}>{post.min_rank}〜</span>
               <span className="flex items-center gap-1"><Users className="h-3 w-3" />{post.headcount}名募集</span>
               {post.region && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{post.region}</span>}
               {post.deadline && <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />期限 {post.deadline}</span>}

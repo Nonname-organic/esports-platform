@@ -1,17 +1,13 @@
 "use client";
 
 import { use } from "react";
+import { rankColor } from "@/lib/valorant";
 import Link from "next/link";
 import { ChevronRight, MapPin, Clock, Trophy, Calendar, MessageSquare, Twitter, Edit2, User2 } from "lucide-react";
 import { useLFT } from "@/features/lft/hooks/use-lft";
 import { useAuthStore } from "@/store/auth-store";
 import { cn } from "@/lib/utils";
 
-const RANK_COLOR: Record<string, string> = {
-  Iron: "text-slate-400", Bronze: "text-orange-700", Silver: "text-slate-300",
-  Gold: "text-yellow-400", Platinum: "text-cyan-400", Diamond: "text-blue-400",
-  Ascendant: "text-green-400", Immortal: "text-red-400", Radiant: "text-yellow-300",
-};
 
 const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
   open:        { label: "募集中",   cls: "bg-green-500/10 text-green-400 border-green-500/20" },
@@ -79,10 +75,10 @@ export default function LFTDetailPage({ params }: { params: Promise<{ id: string
             <h1 className="mt-1 text-xl font-black text-white">{post.in_game_name}</h1>
             <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-500">
               <span className="flex items-center gap-1">
-                現在 <span className={cn("font-bold", RANK_COLOR[post.current_rank] ?? "text-slate-400")}>{post.current_rank}</span>
+                現在 <span className={cn("font-bold", rankColor(post.current_rank))}>{post.current_rank}</span>
               </span>
               <span className="flex items-center gap-1">
-                最高 <span className={cn("font-bold", RANK_COLOR[post.peak_rank] ?? "text-slate-400")}>{post.peak_rank}</span>
+                最高 <span className={cn("font-bold", rankColor(post.peak_rank))}>{post.peak_rank}</span>
               </span>
               {post.region && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{post.region}</span>}
               {post.deadline && <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />期限 {post.deadline}</span>}

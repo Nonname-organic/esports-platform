@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { rankColor } from "@/lib/valorant";
 import Link from "next/link";
 import { Users, ChevronRight, Plus, Shield, Clock, MapPin, Star } from "lucide-react";
 import { useLFPList } from "@/features/lfp/hooks/use-lfp";
@@ -13,11 +14,6 @@ const ROLES = ["Duelist", "Initiator", "Controller", "Sentinel", "Flex", "IGL"];
 const RANKS = ["Iron", "Bronze", "Silver", "Gold", "Platinum", "Diamond", "Ascendant", "Immortal", "Radiant"];
 const REGIONS = ["全国", "北海道", "東北", "関東", "中部", "関西", "中国", "四国", "九州", "海外", "オンラインのみ"];
 
-const RANK_COLOR: Record<string, string> = {
-  Iron: "text-slate-400", Bronze: "text-orange-700", Silver: "text-slate-300",
-  Gold: "text-yellow-400", Platinum: "text-cyan-400", Diamond: "text-blue-400",
-  Ascendant: "text-green-400", Immortal: "text-red-400", Radiant: "text-yellow-300",
-};
 
 const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
   open: { label: "募集中", cls: "bg-green-500/10 text-green-400" },
@@ -145,7 +141,7 @@ function LFPCard({ post }: { post: LFPPost }) {
               {(post.championships ?? 0) > 0 && (
                 <span className="text-[10px] font-bold text-yellow-400">🏆×{post.championships}</span>
               )}
-              <span className={cn("text-xs font-bold", RANK_COLOR[post.min_rank] ?? "text-slate-400")}>
+              <span className={cn("text-xs font-bold", rankColor(post.min_rank))}>
                 {post.min_rank}〜
               </span>
               <span className="text-xs text-slate-500">· {post.headcount}名募集</span>

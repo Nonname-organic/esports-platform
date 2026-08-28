@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { rankColor } from "@/lib/valorant";
 import Link from "next/link";
 import { Search, ChevronRight, Plus, Clock, MapPin } from "lucide-react";
 import { useLFTList } from "@/features/lft/hooks/use-lft";
@@ -10,11 +11,6 @@ import type { LFTPost } from "@/features/lft/api/lft-api";
 import { ROLES, RANKS, REGIONS } from "./_components/lft-form";
 import { ScoutFilterBar, type ScoutStatusOption } from "../_components/scout-filter-bar";
 
-const RANK_COLOR: Record<string, string> = {
-  Iron: "text-slate-400", Bronze: "text-orange-700", Silver: "text-slate-300",
-  Gold: "text-yellow-400", Platinum: "text-cyan-400", Diamond: "text-blue-400",
-  Ascendant: "text-green-400", Immortal: "text-red-400", Radiant: "text-yellow-300",
-};
 
 const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
   open:        { label: "募集中",   cls: "bg-green-500/10 text-green-400" },
@@ -144,11 +140,11 @@ function LFTCard({ post }: { post: LFTPost }) {
               {(post.mvps ?? 0) > 0 && (
                 <span className="text-[10px] font-bold text-yellow-400">⭐MVP×{post.mvps}</span>
               )}
-              <span className={cn("font-bold", RANK_COLOR[post.current_rank] ?? "text-slate-400")}>
+              <span className={cn("font-bold", rankColor(post.current_rank))}>
                 {post.current_rank}
               </span>
               {post.peak_rank !== post.current_rank && (
-                <span className="text-slate-600">/ 最高 <span className={cn("font-semibold", RANK_COLOR[post.peak_rank] ?? "text-slate-400")}>{post.peak_rank}</span></span>
+                <span className="text-slate-600">/ 最高 <span className={cn("font-semibold", rankColor(post.peak_rank))}>{post.peak_rank}</span></span>
               )}
             </div>
           </div>

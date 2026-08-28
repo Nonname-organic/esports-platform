@@ -1,6 +1,7 @@
 "use client";
 
 import { useForm, Controller } from "react-hook-form";
+import { VALORANT_RANKS } from "@/lib/valorant";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import Link from "next/link";
@@ -10,7 +11,7 @@ import type { LFPCreateInput, LFPPost } from "@/features/lfp/api/lfp-api";
 import type { Team } from "@/types/team";
 
 const ROLES = ["Duelist", "Initiator", "Controller", "Sentinel", "Flex", "IGL"];
-const RANKS = ["Iron", "Bronze", "Silver", "Gold", "Platinum", "Diamond", "Ascendant", "Immortal", "Radiant"];
+const RANKS = VALORANT_RANKS;
 const REGIONS = ["全国", "北海道", "東北", "関東", "中部", "関西", "中国", "四国", "九州", "海外", "オンラインのみ"];
 const ACTIVITY_TIMES = ["平日昼", "平日夜", "土日昼", "土日夜", "不定期"];
 const ACTIVITY_LEVELS = ["エンジョイ", "競技志向", "大会メイン", "Premierメイン"];

@@ -6,11 +6,12 @@ import { z } from "zod";
 import Link from "next/link";
 import { ChevronRight, AlertCircle, Loader2, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { VALORANT_AGENTS } from "@/lib/valorant";
+import { VALORANT_AGENTS, VALORANT_RANKS } from "@/lib/valorant";
 import type { LFTCreateInput, LFTPost } from "@/features/lft/api/lft-api";
 
 export const ROLES = ["Duelist", "Initiator", "Controller", "Sentinel", "Flex", "IGL"];
-export const RANKS = ["Iron", "Bronze", "Silver", "Gold", "Platinum", "Diamond", "Ascendant", "Immortal", "Radiant"];
+// ランクは division 付き25段階（lib/valorant.ts に集約）。既存 import 互換のため再エクスポート
+export const RANKS = VALORANT_RANKS;
 export const REGIONS = ["全国", "北海道", "東北", "関東", "中部", "関西", "中国", "四国", "九州", "海外", "オンラインのみ"];
 export const ACTIVITY_TIMES = ["平日昼", "平日夜", "土日昼", "土日夜", "不定期"];
 
