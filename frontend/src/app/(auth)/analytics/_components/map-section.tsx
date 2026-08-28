@@ -28,8 +28,8 @@ export function MapSection() {
           <Map className="h-4 w-4 text-orange-400" />
         </div>
         <div>
-          <h2 className="text-sm font-bold text-white">MAP別勝率</h2>
-          <p className="text-xs text-slate-500">攻撃側 / 守備側 勝率比較</p>
+          <h2 className="text-sm font-bold text-white">MAP別傾向</h2>
+          <p className="text-xs text-slate-500">試合数と競り合いの度合い</p>
         </div>
       </div>
 
@@ -50,8 +50,8 @@ export function MapSection() {
                   <tr className="border-b border-white/8 text-slate-500">
                     <th className="pb-2 text-left font-medium">MAP</th>
                     <th className="pb-2 text-center font-medium">試合数</th>
-                    <th className="pb-2 text-center font-medium">攻撃側勝率</th>
-                    <th className="pb-2 text-center font-medium">守備側勝率</th>
+                    <th className="pb-2 text-center font-medium">平均ラウンド差</th>
+                    <th className="pb-2 text-center font-medium">接戦率</th>
                     <th className="pb-2 text-center font-medium">平均時間</th>
                   </tr>
                 </thead>
@@ -59,8 +59,11 @@ export function MapSection() {
                   {[...mapData]
                     .sort((a, b) => b.total_games - a.total_games)
                     .map((m) => {
-                      const atkPct = Math.round(m.attack_win_rate * 100);
-                      const defPct = 100 - atkPct;
+                      // 攻撃/守備の勝率は開始サイドが記録されていないと出せない。
+                      // 以前はteam1/team2の勝数を攻撃/守備として表示していたが
+                      // 実態と一致しないため、サイドに依存しない指標に変更した
+                      const margin = m.avg_round_margin;
+                      const closePct = Math.round(m.close_game_rate * 100);
                       const dur = m.avg_duration_seconds
                         ? `${Math.floor(m.avg_duration_seconds / 60)}分`
                         : "—";
@@ -69,13 +72,13 @@ export function MapSection() {
                           <td className="py-2 font-semibold text-slate-300">{m.map_name || m.map_id}</td>
                           <td className="py-2 text-center text-slate-400">{m.total_games}</td>
                           <td className="py-2 text-center">
-                            <span className={atkPct >= 55 ? "text-red-400 font-semibold" : atkPct >= 45 ? "text-white" : "text-slate-400"}>
-                              {atkPct}%
+                            <span className={margin != null && margin <= 4 ? "text-brand-400 font-semibold" : "text-white"}>
+                              {margin != null ? margin.toFixed(1) : "—"}
                             </span>
                           </td>
                           <td className="py-2 text-center">
-                            <span className={defPct >= 55 ? "text-brand-400 font-semibold" : defPct >= 45 ? "text-white" : "text-slate-400"}>
-                              {defPct}%
+                            <span className={closePct >= 50 ? "text-brand-400 font-semibold" : "text-slate-400"}>
+                              {closePct}%
                             </span>
                           </td>
                           <td className="py-2 text-center text-slate-400">{dur}</td>

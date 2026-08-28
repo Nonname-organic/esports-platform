@@ -24,11 +24,15 @@ function CustomTooltip({ active, payload, label }: TooltipProps<number, string>)
         <div key={entry.dataKey} className="flex items-center gap-2 py-0.5">
           <span className="h-2 w-2 rounded-full" style={{ background: entry.color }} />
           <span className="text-slate-400">
-            {entry.dataKey === "matches" ? "試合数" : entry.dataKey === "win_rate_pct" ? "勝率" : "KDA"}:
+            {entry.dataKey === "matches"
+              ? "試合数"
+              : entry.dataKey === "avg_round_margin"
+              ? "平均ラウンド差"
+              : "KDA"}:
           </span>
           <span className="font-semibold text-white">
-            {entry.dataKey === "win_rate_pct"
-              ? `${(entry.value as number).toFixed(1)}%`
+            {entry.dataKey === "avg_round_margin"
+              ? (entry.value as number)?.toFixed(1)
               : entry.dataKey === "avg_kda"
               ? (entry.value as number).toFixed(2)
               : entry.value}
@@ -44,10 +48,9 @@ interface TrendChartProps {
 }
 
 export function TrendChart({ data }: TrendChartProps) {
-  const formatted = data.map((d) => ({
-    ...d,
-    win_rate_pct: parseFloat((d.win_rate * 100).toFixed(1)),
-  }));
+  // 勝率は team1 列基準にしかならず視点依存で意味を持たないため、
+  // 平均ラウンド差（試合の競り合い具合）を推移として描く
+  const formatted = data;
 
   return (
     <ResponsiveContainer width="100%" height={280}>
@@ -79,11 +82,10 @@ export function TrendChart({ data }: TrendChartProps) {
         <YAxis
           yAxisId="rate"
           orientation="right"
-          domain={[0, 100]}
+          domain={[0, "auto"]}
           tick={{ fill: "#64748b", fontSize: 11 }}
           axisLine={false}
           tickLine={false}
-          tickFormatter={(v) => `${v}%`}
           width={40}
         />
 
@@ -92,7 +94,11 @@ export function TrendChart({ data }: TrendChartProps) {
         <Legend
           wrapperStyle={{ fontSize: 11, color: "#64748b", paddingTop: 8 }}
           formatter={(v) =>
-            v === "matches" ? "試合数" : v === "win_rate_pct" ? "勝率" : "KDA"
+            v === "matches"
+              ? "試合数"
+              : v === "avg_round_margin"
+              ? "平均ラウンド差"
+              : "KDA"
           }
         />
 
@@ -105,11 +111,11 @@ export function TrendChart({ data }: TrendChartProps) {
           maxBarSize={32}
         />
 
-        {/* 勝率 Area */}
+        {/* 平均ラウンド差 Area */}
         <Area
           yAxisId="rate"
           type="monotone"
-          dataKey="win_rate_pct"
+          dataKey="avg_round_margin"
           stroke="#3b82f6"
           strokeWidth={2}
           fill="url(#trendWrGrad)"

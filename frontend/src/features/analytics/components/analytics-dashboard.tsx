@@ -15,19 +15,25 @@ interface MapWinRateChartProps {
   data: MapStats[];
 }
 
+/**
+ * MAP別の傾向。
+ *
+ * 以前は「攻撃側/守備側 勝率」を出していたが、開始サイド(side_first_team1)を
+ * 記録していないため実際には team1/team2 の勝数を並べていただけで、ラベルと
+ * 中身が一致していなかった。サイドに依存しない指標に置き換えている。
+ */
 export function MapWinRateChart({ data }: MapWinRateChartProps) {
   const chartData = data.map((m) => ({
     name: m.map_name || m.map_id.slice(0, 8),
-    attack: Math.round(m.attack_win_rate * 100),
-    defense: Math.round((1 - m.attack_win_rate) * 100),
+    close: Math.round(m.close_game_rate * 100),
     games: m.total_games,
   }));
 
   return (
     <div className="rounded-xl border border-white/10 bg-slate-900 p-5">
       <div className="mb-4">
-        <h3 className="font-bold text-white">マップ別 攻撃/守備 勝率</h3>
-        <p className="text-xs text-slate-500 mt-0.5">全試合集計</p>
+        <h3 className="font-bold text-white">マップ別 接戦率</h3>
+        <p className="text-xs text-slate-500 mt-0.5">2ラウンド差以内で決着した割合</p>
       </div>
       <ResponsiveContainer width="100%" height={260}>
         <BarChart data={chartData} margin={{ left: -10 }}>
@@ -38,15 +44,11 @@ export function MapWinRateChart({ data }: MapWinRateChartProps) {
             contentStyle={{ background: "#1e293b", border: "1px solid #ffffff20", borderRadius: 8 }}
             labelStyle={{ color: "#fff", fontWeight: "bold" }}
             itemStyle={{ color: "#94a3b8" }}
-            formatter={(val: number, name: string) => [
-              `${val}%`,
-              name === "attack" ? "攻撃側" : "守備側",
-            ]}
+            formatter={(val: number) => [`${val}%`, "接戦率"]}
           />
-          <Bar dataKey="attack" fill="#ef4444" name="attack" radius={[4, 4, 0, 0]} />
-          <Bar dataKey="defense" fill="#3b82f6" name="defense" radius={[4, 4, 0, 0]} />
+          <Bar dataKey="close" fill="#3b82f6" name="close" radius={[4, 4, 0, 0]} />
           <Legend
-            formatter={(value) => (value === "attack" ? "攻撃側" : "守備側")}
+            formatter={() => "接戦率"}
             wrapperStyle={{ color: "#94a3b8", fontSize: 12 }}
           />
         </BarChart>

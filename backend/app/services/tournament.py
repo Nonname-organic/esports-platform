@@ -96,6 +96,33 @@ class TournamentService:
             raise NotFoundError("大会", str(tournament_id))
         return tournament
 
+    @staticmethod
+    def _preserve_discord_webhook(tournament, update_data: dict) -> dict:
+        """
+        Webhook URL が空で送られてきた場合は既存の値を残す。
+
+        詳細APIはWebhookを返さない（秘密情報のため）ので、編集画面は空欄のまま
+        送信してくる。そのまま保存すると、他の項目を編集しただけで通知設定が
+        消えてしまう。明示的に新しい値が入っているときだけ差し替える。
+        """
+        incoming = (update_data.get("discord_webhook_url") or "").strip()
+        if not incoming:
+            update_data.pop("discord_webhook_url", None)
+
+        rules = update_data.get("rules")
+        if isinstance(rules, dict) and isinstance(rules.get("discord"), dict):
+            discord = dict(rules["discord"])
+            if not (discord.get("webhook_url") or "").strip():
+                previous = ((tournament.rules or {}).get("discord") or {}).get("webhook_url")
+                if previous:
+                    discord["webhook_url"] = previous
+                else:
+                    discord.pop("webhook_url", None)
+            rules = dict(rules)
+            rules["discord"] = discord
+            update_data["rules"] = rules
+        return update_data
+
     async def update(
         self, tournament_id: uuid.UUID, data: TournamentUpdate, current_user: User
     ) -> Tournament:
@@ -107,6 +134,7 @@ class TournamentService:
             raise ForbiddenError("この大会を編集する権限がありません")
 
         update_data = data.model_dump(exclude_none=True)
+        update_data = self._preserve_discord_webhook(tournament, update_data)
         # 変更対象フィールドのスカラー値のみ before に記録（差分・PII非対象 / ADR-0008）
         keys = [k for k in update_data if _is_scalar(getattr(tournament, k, None))]
         before = {k: _scalar(getattr(tournament, k, None)) for k in keys}

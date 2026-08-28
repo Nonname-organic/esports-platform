@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { Medal, Users, ExternalLink } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { useRankings, usePlayerRankings } from "@/features/analytics/hooks/use-analytics";
+import { rankingApi } from "@/features/rankings/api/ranking-api";
 import { useAnalyticsFilterStore } from "@/store/analytics-filter-store";
 import { cn } from "@/lib/utils";
 import type { RankingEntry, PlayerRankingEntry } from "@/types/analytics";
@@ -91,7 +93,7 @@ function TeamRankingTable({ data }: { data: RankingEntry[] }) {
           {data.length === 0 && (
             <tr>
               <td colSpan={6} className="py-8 text-center text-sm text-slate-500">
-                大会を選択してください
+                ランキングデータがありません
               </td>
             </tr>
           )}
@@ -180,6 +182,32 @@ export function RankingsSection() {
   const { game, tournamentId } = useAnalyticsFilterStore();
 
   const { data: teamRankings, isLoading: isLoadingTeams } = useRankings(tournamentId);
+
+  // 大会未選択（全大会）のときは大会別ランキングが引けないため、
+  // 全大会の成績を合算した総合ランキングの上位20チームを表示する
+  const { data: globalTeams, isLoading: isLoadingGlobal } = useQuery({
+    queryKey: ["analytics", "global-team-rankings", game],
+    queryFn: () => rankingApi.global({ game, limit: 20 }),
+    select: (res) =>
+      res.data.map<RankingEntry>((e) => ({
+        rank_position: e.rank,
+        team_id: e.team_id,
+        team_name: e.team_name,
+        team_tag: e.team_tag,
+        team_logo_url: e.team_logo_url,
+        points: e.rp,
+        wins: e.wins,
+        losses: e.losses,
+        game_wins: 0,
+        game_losses: 0,
+        win_rate: e.win_rate,
+      })),
+    enabled: !tournamentId,
+    staleTime: 60 * 1000,
+  });
+
+  const teamRows = tournamentId ? (teamRankings ?? []) : (globalTeams ?? []);
+  const teamsLoading = tournamentId ? isLoadingTeams : isLoadingGlobal;
   const { data: playerRankings, isLoading: isLoadingPlayers } = usePlayerRankings({
     game,
     tournamentId: tournamentId || undefined,
@@ -195,12 +223,12 @@ export function RankingsSection() {
             <Medal className="h-4 w-4 text-yellow-400" />
           </div>
           <h2 className="text-sm font-bold text-white">チームランキング</h2>
-          {!tournamentId && (
-            <span className="ml-auto text-[10px] text-slate-600">大会を選択してください</span>
-          )}
+          <span className="ml-auto text-[10px] text-slate-600">
+            {tournamentId ? "大会内の順位" : "全大会合算 · 上位20"}
+          </span>
         </div>
         <div className="px-5 py-4">
-          {isLoadingTeams ? <Skeleton /> : <TeamRankingTable data={teamRankings ?? []} />}
+          {teamsLoading ? <Skeleton /> : <TeamRankingTable data={teamRows} />}
         </div>
       </section>
 

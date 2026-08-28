@@ -105,6 +105,29 @@ class MatchTeam(BaseModel):
     logo_url: str | None
 
 
+class MatchSummary(BaseModel):
+    """大会の試合一覧用。詳細（games / ban_picks）は含めない軽量版。"""
+
+    id: str
+    tournament_id: str
+    format: BOFormat
+    status: MatchStatus
+    round_number: int
+    match_number: int
+    team1: MatchTeam | None
+    team2: MatchTeam | None
+    # マップ取得数（BO3以上で「2-1」のように表示するため）
+    team1_wins: int = 0
+    team2_wins: int = 0
+    winner_id: str | None
+    scheduled_at: datetime | None
+    started_at: datetime | None
+    ended_at: datetime | None
+    stream_url: str | None
+
+    model_config = {"from_attributes": True}
+
+
 class MatchDetail(BaseModel):
     id: str
     tournament_id: str

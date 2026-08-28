@@ -4,18 +4,36 @@ from fastapi import APIRouter, File, UploadFile
 
 from app.core.dependencies import Cache, CurrentUser, DBSession, OrganizerUser
 from app.core.exceptions import ValidationError
-from app.schemas.common import Response
+from app.models.enums import MatchStatus
+from app.schemas.common import ListResponse, Meta, Response
 from app.schemas.match import (
     BanPickCreate,
     GamePlayerStatsUpdate,
     MatchDetail,
     MatchResultCreate,
+    MatchSummary,
     ScoreUpdate,
 )
 from app.services.match import MatchService
 from app.services.scoreboard_import import ScoreboardImportService
 
 router = APIRouter(prefix="/matches", tags=["試合管理"])
+
+
+@router.get("", response_model=ListResponse[MatchSummary])
+async def list_matches(
+    tournament_id: uuid.UUID,
+    db: DBSession,
+    cache: Cache,
+    status: MatchStatus | None = None,
+):
+    """大会の試合一覧。試合タブとブラケット表示が使う。"""
+    service = MatchService(db, cache)
+    matches = await service.list_by_tournament(tournament_id, status)
+    return ListResponse(
+        data=matches,
+        meta=Meta(total=len(matches), cursor=None, has_next=False),
+    )
 
 
 @router.get("/{match_id}", response_model=Response[MatchDetail])

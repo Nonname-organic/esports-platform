@@ -28,7 +28,7 @@ export function TrendSection() {
           </div>
           <div>
             <h2 className="text-sm font-bold text-white">トレンド分析</h2>
-            <p className="text-xs text-slate-500">試合数・勝率・KDAの推移</p>
+            <p className="text-xs text-slate-500">試合数・平均ラウンド差・KDAの推移</p>
           </div>
         </div>
         <div className="flex items-center gap-3 text-xs text-slate-500">
@@ -36,7 +36,7 @@ export function TrendSection() {
             <span className="inline-block h-2 w-4 rounded bg-slate-700" />試合数
           </span>
           <span className="flex items-center gap-1">
-            <span className="inline-block h-0.5 w-4 rounded bg-brand-500" />勝率
+            <span className="inline-block h-0.5 w-4 rounded bg-brand-500" />平均ラウンド差
           </span>
           <span className="flex items-center gap-1">
             <span className="inline-block h-0.5 w-4 rounded bg-purple-400" />KDA

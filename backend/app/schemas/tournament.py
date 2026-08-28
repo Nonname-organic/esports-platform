@@ -136,7 +136,10 @@ class TournamentDetail(TournamentSummary):
     age_restriction: dict | None = None
     region_restriction: dict | None = None
     rank_restriction: dict | None = None
+    # Webhook URL は返却しない（実質的な認証情報のため常に None）。
+    # 編集画面が「設定済みかどうか」を判別できるようフラグだけ渡す
     discord_webhook_url: str | None = None
+    discord_webhook_configured: bool = False
     analytics_enabled: bool | None = None
     player_stats_enabled: bool | None = None
     ranking_enabled: bool | None = None

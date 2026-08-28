@@ -1,3 +1,4 @@
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
@@ -26,6 +27,47 @@ from app.services.tournament import TournamentService
 router = APIRouter(prefix="/tournaments", tags=["大会管理"])
 
 
+# Discord招待は「https://discord.gg/xxxx」でも招待コード「xxxx」だけでも
+# 入力されうる。コードのまま href に入れると相対URLとして解決され、
+# 存在しないページに飛んでネットワークエラーになるため正規化する。
+_DISCORD_INVITE_RE = re.compile(r"^[A-Za-z0-9-]{2,32}$")
+
+
+def _normalize_discord_invite(value):
+    if not isinstance(value, str):
+        return value
+    invite = value.strip()
+    if not invite:
+        return ""
+    if invite.startswith(("https://", "http://")):
+        return invite
+    if invite.startswith(("discord.gg/", "discord.com/invite/", "www.discord.gg/")):
+        return f"https://{invite}"
+    if _DISCORD_INVITE_RE.match(invite):
+        return f"https://discord.gg/{invite}"
+    # 判別できない文字列はリンクにしない（javascript: 等を弾く）
+    return ""
+
+
+def _public_rules(rules):
+    """
+    大会詳細は未認証でも取得できるため、rules から秘密情報を落とす。
+
+    Discord Webhook URL は、知られると誰でもそのチャンネルへ投稿できてしまう
+    実質的な認証情報。設定済みかどうかだけを別フィールドで伝える。
+    """
+    if not isinstance(rules, dict):
+        return rules
+    sanitized = dict(rules)
+    discord = sanitized.get("discord")
+    if isinstance(discord, dict):
+        discord = dict(discord)
+        discord.pop("webhook_url", None)
+        discord["invite_url"] = _normalize_discord_invite(discord.get("invite_url"))
+        sanitized["discord"] = discord
+    return sanitized
+
+
 def _build_detail(tournament, count: int) -> TournamentDetail:
     return TournamentDetail(
         id=str(tournament.id),
@@ -39,7 +81,7 @@ def _build_detail(tournament, count: int) -> TournamentDetail:
         prize_pool=tournament.prize_pool,
         banner_url=resign_stored_url(tournament.banner_url),
         description=tournament.description,
-        rules=tournament.rules,
+        rules=_public_rules(tournament.rules),
         attachments=sign_attachments(tournament.attachments),
         organizer_id=str(tournament.organizer_id),
         registration_start_at=tournament.registration_start_at,
@@ -64,7 +106,12 @@ def _build_detail(tournament, count: int) -> TournamentDetail:
         age_restriction=tournament.age_restriction,
         region_restriction=tournament.region_restriction,
         rank_restriction=tournament.rank_restriction,
-        discord_webhook_url=tournament.discord_webhook_url,
+        # Webhook URL自体は返さない（実質的な認証情報のため）
+        discord_webhook_url=None,
+        discord_webhook_configured=bool(
+            (tournament.discord_webhook_url or "").strip()
+            or ((tournament.rules or {}).get("discord") or {}).get("webhook_url")
+        ),
         analytics_enabled=tournament.analytics_enabled,
         player_stats_enabled=tournament.player_stats_enabled,
         ranking_enabled=tournament.ranking_enabled,

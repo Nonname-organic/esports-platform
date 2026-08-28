@@ -24,9 +24,10 @@ export interface MapStats {
   map_name: string;
   game: GameType;
   total_games: number;
-  attack_side_wins: number;
-  defense_side_wins: number;
-  attack_win_rate: number;
+  /** 平均ラウンド差（小さいほど競った試合が多いMAP） */
+  avg_round_margin: number | null;
+  /** 2ラウンド差以内で決着した割合 */
+  close_game_rate: number;
   avg_duration_seconds: number | null;
   round_distribution: Record<string, number> | null;
 }
@@ -73,7 +74,10 @@ export interface OverviewKpi {
   total_matches: number;
   total_games: number;
   total_tournaments: number;
-  overall_win_rate: number;
+  /** チームを指定したときのみ算出される。全体表示では null */
+  overall_win_rate: number | null;
+  /** 平均ラウンド差。閲覧者の視点に依存しない競り合いの指標 */
+  avg_round_margin: number | null;
   avg_match_duration_seconds: number | null;
   most_played_map: string | null;
   most_played_agent: string | null;
@@ -84,7 +88,8 @@ export interface OverviewKpi {
 export interface TrendPoint {
   date: string;
   matches: number;
-  win_rate: number;
+  /** 平均ラウンド差。勝率は視点依存で意味を持たないため置き換えた */
+  avg_round_margin: number | null;
   avg_kda: number;
   avg_duration_seconds: number | null;
 }

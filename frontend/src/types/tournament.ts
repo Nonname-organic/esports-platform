@@ -70,6 +70,8 @@ export interface TournamentDetail extends TournamentSummary {
   region_restriction?: Record<string, unknown> | null;
   rank_restriction?: Record<string, unknown> | null;
   discord_webhook_url?: string | null;
+  /** Webhookが設定済みか（URL本体はAPIから返さない） */
+  discord_webhook_configured?: boolean;
   analytics_enabled?: boolean | null;
   player_stats_enabled?: boolean | null;
   ranking_enabled?: boolean | null;

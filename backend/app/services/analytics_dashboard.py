@@ -92,7 +92,11 @@ class AnalyticsDashboardService:
             .join(Tournament, Match.tournament_id == Tournament.id).where(*c)
         )
 
-        # 全体勝率: team指定=そのチームのマッチ勝率 / 無指定=team1(先攻列基準)勝率の近似
+        # チーム指定時のみ「そのチームの勝率」を出す。
+        # 無指定の全体勝率は team1 列に入っているかどうかで数えるしかなく、
+        # ブラケットの並び順が変わるだけで数字が動く。閲覧者にとって意味を持たない
+        # ため出さず、代わりに視点に依存しない「平均ラウンド差」を返す。
+        overall_win_rate = None
         if team_id:
             wins = await self._db.scalar(
                 select(func.count()).select_from(Match)
@@ -100,13 +104,14 @@ class AnalyticsDashboardService:
                 .where(*c, Match.winner_id == team_id)
             ) or 0
             overall_win_rate = round(wins / total_matches, 4) if total_matches else 0.0
-        else:
-            t1_wins = await self._db.scalar(
-                select(func.count()).select_from(Match)
-                .join(Tournament, Match.tournament_id == Tournament.id)
-                .where(*c, Match.winner_id == Match.team1_id)
-            ) or 0
-            overall_win_rate = round(t1_wins / total_matches, 4) if total_matches else 0.0
+
+        # 平均ラウンド差: 試合がどれだけ競っていたかを表す（大きいほど一方的）
+        avg_margin = await self._db.scalar(
+            select(func.avg(func.abs(MatchGame.team1_score - MatchGame.team2_score)))
+            .select_from(MatchGame)
+            .join(Match, MatchGame.match_id == Match.id)
+            .join(Tournament, Match.tournament_id == Tournament.id).where(*c)
+        )
 
         # 人気MAP
         top_map = (await self._db.execute(
@@ -147,6 +152,7 @@ class AnalyticsDashboardService:
             "total_games": int(total_games),
             "total_tournaments": int(total_tournaments),
             "overall_win_rate": overall_win_rate,
+            "avg_round_margin": round(float(avg_margin), 2) if avg_margin is not None else None,
             "avg_match_duration_seconds": float(avg_dur) if avg_dur is not None else None,
             "most_played_map": top_map[0] if top_map else None,
             "most_played_agent": top_agent[0] if top_agent else None,
@@ -164,8 +170,10 @@ class AnalyticsDashboardService:
             select(
                 Map.id, Map.display_name,
                 func.count().label("total_games"),
-                func.sum(case((MatchGame.winner_id == Match.team1_id, 1), else_=0)).label("t1"),
-                func.sum(case((MatchGame.winner_id == Match.team2_id, 1), else_=0)).label("t2"),
+                func.avg(func.abs(MatchGame.team1_score - MatchGame.team2_score)).label("margin"),
+                func.sum(
+                    case((func.abs(MatchGame.team1_score - MatchGame.team2_score) <= 2, 1), else_=0)
+                ).label("close_games"),
                 func.avg(MatchGame.duration_seconds).label("avg_dur"),
             )
             .select_from(MatchGame)
@@ -176,17 +184,21 @@ class AnalyticsDashboardService:
             .group_by(Map.id, Map.display_name)
             .order_by(func.count().desc())
         )).all()
+        # 攻撃側/守備側の勝率は side_first_team1（開始サイド）が記録されていないと
+        # 算出できない。以前は team1/team2 の勝数をそのまま攻撃/守備として出して
+        # いたが、実態と一致しないため廃止し、サイドに依存しない指標に置き換えた。
         out = []
-        for map_id, name, total, t1, t2, avg_dur in rows:
+        for map_id, name, total, margin, close_games, avg_dur in rows:
             total = int(total or 0)
             out.append({
                 "map_id": str(map_id),
                 "map_name": name,
                 "game": game.value,
                 "total_games": total,
-                "attack_side_wins": int(t1 or 0),
-                "defense_side_wins": int(t2 or 0),
-                "attack_win_rate": round((t1 or 0) / total, 4) if total else 0.0,
+                # 平均ラウンド差（小さいほど competitive なMAP）
+                "avg_round_margin": round(float(margin), 2) if margin is not None else None,
+                # 2ラウンド差以内で決着した割合
+                "close_game_rate": round(int(close_games or 0) / total, 4) if total else 0.0,
                 "avg_duration_seconds": float(avg_dur) if avg_dur is not None else None,
                 "round_distribution": None,
             })
@@ -261,12 +273,14 @@ class AnalyticsDashboardService:
         occurred = func.coalesce(Match.started_at, Match.created_at)
         day = func.date(occurred)
 
-        # 試合数 / 先攻勝率 / 平均試合時間（by day, MatchGame 基準）
+        # 試合数 / 平均ラウンド差 / 平均試合時間（by day, MatchGame 基準）
         grows = (await self._db.execute(
             select(
                 day.label("d"),
                 func.count(func.distinct(Match.id)).label("matches"),
-                func.sum(case((MatchGame.winner_id == Match.team1_id, 1), else_=0)).label("t1"),
+                func.avg(
+                    func.abs(MatchGame.team1_score - MatchGame.team2_score)
+                ).label("margin"),
                 func.count().label("games"),
                 func.avg(MatchGame.duration_seconds).label("dur"),
             )
@@ -296,7 +310,9 @@ class AnalyticsDashboardService:
             out.append({
                 "date": str(r.d),
                 "matches": int(r.matches or 0),
-                "win_rate": round((r.t1 or 0) / games, 4) if games else 0.0,
+                # 勝率は team1 列基準にしかならず視点依存で意味を持たないため、
+                # 日ごとの平均ラウンド差に置き換えている
+                "avg_round_margin": round(float(r.margin), 2) if r.margin is not None else None,
                 "avg_kda": round(kda_by_day.get(str(r.d), 0.0), 2),
                 "avg_duration_seconds": float(r.dur) if r.dur is not None else None,
             })

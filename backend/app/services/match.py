@@ -3,12 +3,14 @@ import uuid
 from datetime import datetime, timezone
 
 import boto3
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.exceptions import BusinessRuleError, ConflictError, NotFoundError
 from app.core.redis import CacheKeys, RedisCache
 from app.models.enums import MatchStatus
+from app.models.match import MatchGame
 from app.models.user import User
 from app.repositories.match import MatchRepository
 from app.repositories.tournament import TournamentRepository
@@ -350,6 +352,58 @@ class MatchService:
         await self._cache.delete(
             CacheKeys.MATCH_DETAIL.replace("{id}", str(match_id))
         )
+
+    async def list_by_tournament(
+        self, tournament_id: uuid.UUID, status: MatchStatus | None = None
+    ) -> list["MatchSummary"]:
+        """大会の試合一覧。ブラケット表示・試合タブが使う。"""
+        from app.schemas.match import MatchSummary, MatchTeam
+
+        matches = await self._repo.get_tournament_matches(tournament_id, status)
+
+        # マップ取得数は match_games から数える。1クエリでまとめて取得する
+        game_wins: dict[uuid.UUID, dict[uuid.UUID, int]] = {}
+        if matches:
+            rows = (await self._db.execute(
+                select(MatchGame.match_id, MatchGame.winner_id, func.count())
+                .where(
+                    MatchGame.match_id.in_([m.id for m in matches]),
+                    MatchGame.winner_id.is_not(None),
+                )
+                .group_by(MatchGame.match_id, MatchGame.winner_id)
+            )).all()
+            for match_id, winner_id, count in rows:
+                game_wins.setdefault(match_id, {})[winner_id] = count
+
+        def team(t):
+            if not t:
+                return None
+            return MatchTeam(
+                id=str(t.id), name=t.name, tag=t.tag,
+                logo_url=resign_stored_url(t.logo_url),
+            )
+
+        summaries: list[MatchSummary] = []
+        for m in matches:
+            wins = game_wins.get(m.id, {})
+            summaries.append(MatchSummary(
+                id=str(m.id),
+                tournament_id=str(m.tournament_id),
+                format=m.format,
+                status=m.status,
+                round_number=m.round_number,
+                match_number=m.match_number,
+                team1=team(m.team1),
+                team2=team(m.team2),
+                team1_wins=wins.get(m.team1_id, 0),
+                team2_wins=wins.get(m.team2_id, 0),
+                winner_id=str(m.winner_id) if m.winner_id else None,
+                scheduled_at=m.scheduled_at,
+                started_at=m.started_at,
+                ended_at=m.ended_at,
+                stream_url=m.stream_url,
+            ))
+        return summaries
 
     def _to_detail(self, match) -> MatchDetail:
         from app.schemas.match import (

@@ -76,12 +76,16 @@ export function KpiCards() {
 
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
+      {/* 全体勝率は「どちらのチームがteam1列にいたか」でしか数えられず、
+          閲覧者の視点によって意味が変わるため表示しない。代わりに視点に
+          依存しない平均ラウンド差（試合の競り合い具合）を出す */}
       <KpiCard
         icon={TrendingUp}
         iconBg="bg-brand-500/10"
         iconColor="text-brand-400"
-        label="全体勝率"
-        value={`${(kpi.overall_win_rate * 100).toFixed(1)}%`}
+        label="平均ラウンド差"
+        value={kpi.avg_round_margin != null ? kpi.avg_round_margin.toFixed(1) : "—"}
+        sub="小さいほど接戦"
         highlight
       />
       <KpiCard

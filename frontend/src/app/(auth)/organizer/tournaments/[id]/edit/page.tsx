@@ -191,7 +191,8 @@ export default function TournamentEditPage({ params }: { params: Promise<{ id: s
       twitch_url: orEmpty(stream.twitch_url),
       youtube_url: orEmpty(stream.youtube_url),
       discord_invite_url: orEmpty(discord.invite_url),
-      discord_webhook_url: orEmpty(t.discord_webhook_url ?? discord.webhook_url),
+      // Webhookは読み戻さない（APIが返さない）。空欄のまま保存すれば維持される
+      discord_webhook_url: "",
       notify_entry: discord.notify_entry ?? true,
       notify_checkin: discord.notify_checkin ?? true,
       notify_match_start: discord.notify_match_start ?? true,
@@ -527,7 +528,22 @@ export default function TournamentEditPage({ params }: { params: Promise<{ id: s
             <input {...register("discord_invite_url")} className={inputCls} placeholder="https://discord.gg/..." />
           </Field>
           <Field label="Webhook URL（通知送信先）">
-            <input {...register("discord_webhook_url")} className={inputCls} placeholder="https://discord.com/api/webhooks/..." />
+            {/* Webhookは秘密情報のためAPIから返さない。設定済みかどうかだけ表示し、
+                変更したいときだけ新しい値を入力してもらう */}
+            <input
+              {...register("discord_webhook_url")}
+              className={inputCls}
+              placeholder={
+                t?.discord_webhook_configured
+                  ? "設定済み（変更する場合のみ入力）"
+                  : "https://discord.com/api/webhooks/..."
+              }
+            />
+            {t?.discord_webhook_configured && (
+              <p className="mt-1 text-[11px] text-slate-500">
+                空欄のまま保存すると現在の設定が維持されます
+              </p>
+            )}
           </Field>
           <div className="grid grid-cols-2 gap-2">
             <Check {...register("notify_entry")} label="エントリー通知" />

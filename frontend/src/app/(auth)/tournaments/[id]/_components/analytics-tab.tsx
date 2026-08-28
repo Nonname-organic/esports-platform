@@ -97,7 +97,7 @@ export function AnalyticsTab({ tournament }: AnalyticsTabProps) {
         <section className="rounded-xl border border-white/10 bg-slate-900 p-5">
           <h3 className="mb-4 flex items-center gap-2 font-bold text-white">
             <Map className="h-4 w-4 text-brand-400" />
-            {tournament.game} マップ勝率
+            {tournament.game} マップ傾向
           </h3>
           {mapsLoading ? (
             <div className="space-y-2">
@@ -109,8 +109,10 @@ export function AnalyticsTab({ tournament }: AnalyticsTabProps) {
             <p className="py-8 text-center text-sm text-slate-500">データなし</p>
           ) : (
             <ol className="space-y-3">
+              {/* 攻撃/守備の勝率は開始サイドを記録していないと出せないため、
+                  サイドに依存しない「接戦率」を表示している */}
               {topMaps.map((map) => {
-                const atkRate = (map.attack_win_rate * 100).toFixed(0);
+                const closeRate = Math.round(map.close_game_rate * 100);
 
                 return (
                   <li key={map.map_id}>
@@ -118,21 +120,19 @@ export function AnalyticsTab({ tournament }: AnalyticsTabProps) {
                       <span className="font-semibold text-white">{map.map_name}</span>
                       <span className="text-xs text-slate-500">{map.total_games} ゲーム</span>
                     </div>
-                    <div className="mt-1 flex h-2 overflow-hidden rounded-full bg-white/10">
+                    <div className="mt-1 h-2 overflow-hidden rounded-full bg-white/10">
                       <div
-                        className="bg-blue-500/60"
-                        style={{ width: `${atkRate}%` }}
-                        title={`ATK ${atkRate}%`}
-                      />
-                      <div
-                        className="bg-orange-500/60"
-                        style={{ width: `${100 - Number(atkRate)}%` }}
-                        title={`DEF ${100 - Number(atkRate)}%`}
+                        className="h-full bg-blue-500/60"
+                        style={{ width: `${closeRate}%` }}
+                        title={`接戦率 ${closeRate}%`}
                       />
                     </div>
                     <div className="mt-0.5 flex justify-between text-xs text-slate-600">
-                      <span>ATK {atkRate}%</span>
-                      <span>DEF {100 - Number(atkRate)}%</span>
+                      <span>接戦率 {closeRate}%</span>
+                      <span>
+                        平均ラウンド差{" "}
+                        {map.avg_round_margin != null ? map.avg_round_margin.toFixed(1) : "—"}
+                      </span>
                     </div>
                   </li>
                 );
@@ -147,7 +147,7 @@ export function AnalyticsTab({ tournament }: AnalyticsTabProps) {
           <BarChart2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-brand-400" />
           <p className="text-sm text-slate-400">
             詳細な分析データは
-            <a href="/dashboard/analytics" className="ml-1 text-brand-400 hover:text-brand-300 underline">
+            <a href="/analytics" className="ml-1 text-brand-400 hover:text-brand-300 underline">
               アナリティクスダッシュボード
             </a>
             でご確認いただけます。
