@@ -18,6 +18,9 @@ const STATUS_CONFIG: Record<MatchStatus, { label: string; className: string }> =
 
 function getRoundLabel(roundNum: number, totalRounds: number, format: TournamentFormat): string {
   if (format === "round_robin" || format === "swiss") return `第 ${roundNum} ラウンド`;
+  // ダブルエリミは Winners/Losers/GF が通し番号になるため、
+  // 末尾からの逆算ラベル（決勝・準決勝）が実態と合わない
+  if (format === "double_elimination") return `Round ${roundNum}`;
   const fromEnd = totalRounds - roundNum;
   if (fromEnd === 0) return "決勝";
   if (fromEnd === 1) return "準決勝";

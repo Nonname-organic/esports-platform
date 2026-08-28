@@ -101,7 +101,12 @@ function LoginForm() {
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-400">パスワード</label>
+            <div className="mb-1.5 flex items-center justify-between">
+              <label className="block text-sm font-medium text-slate-400">パスワード</label>
+              <Link href="/forgot-password" className="text-xs text-brand-400 hover:text-brand-300">
+                お忘れですか？
+              </Link>
+            </div>
             <div className="relative">
               <input
                 type={showPassword ? "text" : "password"}

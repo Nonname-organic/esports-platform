@@ -37,10 +37,11 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     return {
       title: `${t.name}`,
       description: t.description ?? `${t.game} ${t.format} tournament — ${t.registered_teams}/${t.max_teams} teams`,
+      // og:image は opengraph-image.tsx（動的生成カード）に一本化する。
+      // ここで images を指定するとファイル規約より優先されてしまう
       openGraph: {
         title: t.name,
         description: t.description ?? undefined,
-        images: t.banner_url ? [{ url: t.banner_url }] : [],
       },
     };
   } catch {

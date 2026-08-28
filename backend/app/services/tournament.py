@@ -236,6 +236,8 @@ class TournamentService:
 
         if tournament.format == TournamentFormat.SINGLE_ELIMINATION:
             result = await self._generate_single_elimination(tournament, registrations)
+        elif tournament.format == TournamentFormat.DOUBLE_ELIMINATION:
+            result = await self._generate_double_elimination(tournament, registrations)
         elif tournament.format == TournamentFormat.ROUND_ROBIN:
             result = await self._generate_round_robin(tournament, registrations)
         else:
@@ -363,6 +365,104 @@ class TournamentService:
             format=tournament.format,
             rounds=rounds,
         )
+
+    async def _generate_double_elimination(
+        self, tournament: Tournament, registrations: list
+    ) -> BracketResponse:
+        """ダブルエリミネーションのブラケットを生成する。
+
+        構造（S = チーム数, R = log2(S)）:
+          Winners: R ラウンド。敗者は Losers の対応ラウンドへ落ちる
+          Losers : 2(R-1) ラウンド。奇数ラウンドはLB内部戦、偶数ラウンドで
+                   Winners の敗者を受け入れる。再戦をなるべく避けるため
+                   Winners 敗者は逆順で配置する
+          Grand Final: Winners 優勝 vs Losers 優勝の1試合
+                   （コミュニティ大会向けにブラケットリセットは行わない）
+
+        バイ（不戦勝）を Losers 側へ連鎖させる処理は複雑でバグの温床に
+        なるため、チーム数が2の累乗の場合のみ生成を許可する。
+        """
+        teams = [reg.team for reg in registrations]
+        n = len(teams)
+        if n < 4 or (n & (n - 1)) != 0:
+            raise BusinessRuleError(
+                "ダブルエリミネーションは4・8・16・32チームなど2の累乗の"
+                f"チーム数で生成できます（現在の承認チーム数: {n}）"
+            )
+
+        rounds_count = int(math.log2(n))
+        bo_format = tournament.rules.get("bo_format", "BO3") if tournament.rules else "BO3"
+        now = datetime.now(timezone.utc)
+
+        async def create_round(round_number: int, bracket_type: str, count: int) -> list[Match]:
+            bracket = await self._repo.create_brackets(
+                tournament.id,
+                [{"round_number": round_number, "bracket_type": bracket_type,
+                  "created_at": now}],
+            )
+            matches = []
+            for i in range(count):
+                match = Match(
+                    tournament_id=tournament.id,
+                    bracket_id=bracket[0].id,
+                    format=bo_format,
+                    status=MatchStatus.SCHEDULED,
+                    round_number=round_number,
+                    match_number=i + 1,
+                )
+                self._db.add(match)
+                matches.append(match)
+            await self._db.flush()
+            return matches
+
+        # ── Winners（round_number 1..R） ─────────────────────────────────────
+        winners: list[list[Match]] = []
+        for r in range(1, rounds_count + 1):
+            winners.append(await create_round(r, "winners", n // (2 ** r)))
+        # 1回戦にチームを配置
+        for i, match in enumerate(winners[0]):
+            match.team1_id = teams[2 * i].id
+            match.team2_id = teams[2 * i + 1].id
+        # Winners 内の勝者配線
+        for r in range(len(winners) - 1):
+            for i, match in enumerate(winners[r]):
+                match.next_match_id = winners[r + 1][i // 2].id
+
+        # ── Losers（round_number R+1 .. R+2(R-1)） ──────────────────────────
+        losers: list[list[Match]] = []
+        lb_rounds = 2 * (rounds_count - 1)
+        for l in range(1, lb_rounds + 1):
+            depth = (l + 1) // 2 + 1  # l=1,2→2 / l=3,4→3 …
+            losers.append(await create_round(rounds_count + l, "losers", n // (2 ** depth)))
+
+        # Losers 内の勝者配線: 奇数(内部戦)→同じ位置、偶数(受入戦)→半分に集約
+        for l in range(1, lb_rounds):  # 1..lb_rounds-1 → l+1 へ
+            src, dst = losers[l - 1], losers[l]
+            for i, match in enumerate(src):
+                if l % 2 == 1:  # 内部戦 → 同数の受入戦へ1対1
+                    match.next_match_id = dst[i].id
+                else:  # 受入戦 → 内部戦へ2勝者→1試合
+                    match.next_match_id = dst[i // 2].id
+
+        # Winners 敗者の落下先
+        for i, match in enumerate(winners[0]):  # R1: 2敗者→LB1試合
+            match.loser_next_match_id = losers[0][i // 2].id
+        for r in range(2, rounds_count + 1):  # R2以降: 対応する受入戦へ逆順配置
+            dst = losers[2 * (r - 1) - 1]
+            src = winners[r - 1]
+            for i, match in enumerate(src):
+                match.loser_next_match_id = dst[len(src) - 1 - i].id
+
+        # ── Grand Final（round_number 3R-1） ────────────────────────────────
+        grand_final = await create_round(3 * rounds_count - 1, "grand_final", 1)
+        winners[-1][0].next_match_id = grand_final[0].id
+        losers[-1][0].next_match_id = grand_final[0].id
+
+        await self._db.flush()
+        await self._cache.delete(
+            CacheKeys.BRACKET.replace("{tournament_id}", str(tournament.id))
+        )
+        return await self.get_bracket(tournament.id)
 
     async def _generate_round_robin(
         self, tournament: Tournament, registrations: list
@@ -565,13 +665,16 @@ class TournamentService:
             raise NotFoundError("大会", str(tournament_id))
 
         brackets = await self._repo.get_brackets_with_matches(tournament_id)
+        # bracket_type はDB表記(grand_final)、APIはフロント互換の表記に揃える
+        side_map = {"winners": "winners", "losers": "losers",
+                    "grand_final": "grand_finals"}
         rounds: dict[int, list[BracketMatch]] = {}
         for bracket in brackets:
             r = bracket.round_number
-            if r not in rounds:
-                rounds[r] = []
+            target = rounds.setdefault(r, [])
+            side = side_map.get(bracket.bracket_type or "winners", "winners")
             for match in bracket.matches:
-                rounds[r].append(
+                target.append(
                     BracketMatch(
                         id=str(match.id),
                         round_number=match.round_number,
@@ -591,6 +694,7 @@ class TournamentService:
                         winner_id=str(match.winner_id) if match.winner_id else None,
                         status=match.status.value,
                         scheduled_at=match.scheduled_at,
+                        bracket_side=side,
                     )
                 )
 

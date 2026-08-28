@@ -91,6 +91,18 @@ class Settings(BaseSettings):
     REDIS_QUEUE_ANALYTICS_KEY: str = "queue:analytics_events"
 
     # Discord
+    # ── メール送信（パスワードリセット等） ──────────────────────────────────
+    # SMTP_HOST 未設定の環境では送信せずログへ本文を出力する
+    SMTP_HOST: str | None = None
+    SMTP_PORT: int = 587
+    SMTP_USER: str | None = None
+    SMTP_PASSWORD: str | None = None
+    SMTP_SSL: bool = False  # True: SMTPS(465) / False: STARTTLS(587)
+    MAIL_FROM: str = "noreply@localhost"
+    MAIL_FROM_NAME: str = "AXELIA"
+    # リセットリンクの基点URL（フロントの公開URL）
+    FRONTEND_BASE_URL: str = "http://localhost"
+
     DISCORD_WEBHOOK_URL: str | None = None
     DISCORD_BOT_TOKEN: str | None = None
     DISCORD_CLIENT_ID: str | None = None

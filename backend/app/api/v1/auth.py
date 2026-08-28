@@ -1,11 +1,16 @@
+import secrets
+import uuid
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.dependencies import Cache, CurrentUser, DBSession
 from app.core.exceptions import BusinessRuleError, UnauthorizedError
 from app.core.redis import RedisCache
+from app.core import email as mailer
 from app.core.security import hash_password, verify_password
 from app.models.user import User
 from app.schemas.auth import (
@@ -32,6 +37,65 @@ class ChangeEmailRequest(BaseModel):
 
 class DeleteAccountRequest(BaseModel):
     password: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(min_length=16, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+@router.post("/forgot-password", status_code=202)
+async def forgot_password(data: ForgotPasswordRequest, db: DBSession, cache: Cache):
+    """パスワードリセットメールを要求する。
+
+    アドレスの存在有無を推測されないよう、該当ユーザーが居ても居なくても
+    同じ 202 を返す。トークンは Redis に30分だけ保持し、使い捨てにする。
+    """
+    user = await db.scalar(select(User).where(User.email == data.email))
+    if user and user.is_active:
+        token = secrets.token_urlsafe(32)
+        await cache.set(f"pwreset:{token}", str(user.id), ttl=30 * 60)
+        reset_url = f"{settings.FRONTEND_BASE_URL}/reset-password?token={token}"
+        body = f"""{user.username} さん
+
+パスワード再設定のリクエストを受け付けました。
+以下のURLから30分以内に新しいパスワードを設定してください。
+
+{reset_url}
+
+このリクエストに心当たりがない場合は、このメールを破棄してください。
+（その場合パスワードは変更されません）
+
+AXELIA"""
+        await mailer.send_email(
+            to=user.email,
+            subject="【AXELIA】パスワード再設定のご案内",
+            body=body,
+        )
+    return {"detail": "受け付けました。登録済みのアドレスであればメールが届きます"}
+
+
+@router.post("/reset-password", status_code=204)
+async def reset_password(data: ResetPasswordRequest, db: DBSession, cache: Cache):
+    """リセットトークンで新しいパスワードを設定する。"""
+    key = f"pwreset:{data.token}"
+    user_id = await cache.get(key)
+    if not user_id:
+        raise UnauthorizedError("リンクが無効か期限切れです。もう一度リセットを依頼してください")
+
+    # 先にトークンを消す（同じリンクの二重使用を防ぐ）
+    await cache.delete(key)
+
+    user = await db.get(User, uuid.UUID(str(user_id)))
+    if not user or not user.is_active:
+        raise UnauthorizedError("アカウントが見つかりません")
+
+    user.hashed_password = hash_password(data.new_password)
+    await db.flush()
 
 
 @router.post("/register", response_model=UserResponse, status_code=201)

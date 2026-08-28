@@ -184,6 +184,9 @@ class BracketMatch(BaseModel):
     winner_id: str | None
     status: str
     scheduled_at: datetime | None
+    # ダブルエリミネーションでの所属（winners / losers / grand_finals）。
+    # シングルエリミ・総当たりでは null
+    bracket_side: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -191,4 +194,6 @@ class BracketMatch(BaseModel):
 class BracketResponse(BaseModel):
     tournament_id: str
     format: TournamentFormat
+    # round_number をキーに全試合を返す。ダブルエリミネーションでは
+    # 各試合の bracket_side（winners/losers/grand_finals）で振り分ける
     rounds: dict[int, list[BracketMatch]]

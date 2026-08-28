@@ -274,7 +274,7 @@ class MatchService:
             await self._db.flush()
 
             # 次の試合にチームを自動セット
-            await self._advance_bracket(match, winner_id)
+            await self._advance_bracket(match, winner_id, loser_id)
 
             # 自動進行: Discord試合チャンネルをArchiveへ
             from app.services.discord_service import DiscordService
@@ -313,7 +313,14 @@ class MatchService:
         finally:
             await self._cache.release_lock(lock_key)
 
-    async def _advance_bracket(self, match, winner_id: uuid.UUID) -> None:
+    async def _advance_bracket(
+        self, match, winner_id: uuid.UUID, loser_id: uuid.UUID | None = None
+    ) -> None:
+        """勝者を次の試合へ、敗者を敗者側ブラケットへ送る。
+
+        loser_next_match_id はダブルエリミネーションの Winners 側にのみ
+        設定される。シングルエリミでは None なので敗者はそのまま敗退。
+        """
         if match.next_match_id:
             next_match = await self._repo.get_by_id(match.next_match_id)
             if next_match:
@@ -321,6 +328,15 @@ class MatchService:
                     next_match.team1_id = winner_id
                 else:
                     next_match.team2_id = winner_id
+                await self._db.flush()
+
+        if loser_id and match.loser_next_match_id:
+            loser_match = await self._repo.get_by_id(match.loser_next_match_id)
+            if loser_match:
+                if loser_match.team1_id is None:
+                    loser_match.team1_id = loser_id
+                else:
+                    loser_match.team2_id = loser_id
                 await self._db.flush()
 
     async def _publish_result_event(
