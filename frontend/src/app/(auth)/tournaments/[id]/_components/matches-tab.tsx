@@ -107,11 +107,14 @@ function MatchCard({ match }: { match: MatchSummary }) {
   const isOngoing = match.status === "ongoing";
 
   return (
-    <div
+    // カード全体で試合詳細へ飛べるようにする（右端の小さなアイコンだけだと
+    // クリックできることに気付きにくい）
+    <Link
+      href={`/matches/${match.id}`}
       className={cn(
-        "rounded-xl border bg-slate-900 p-4 transition-all",
+        "block rounded-xl border bg-slate-900 p-4 transition-all cursor-pointer",
         isOngoing && "border-red-500/30 shadow-sm shadow-red-500/10",
-        !isOngoing && "border-white/10 hover:border-white/20",
+        !isOngoing && "border-white/10 hover:border-brand-500/40",
       )}
     >
       <div className="flex items-center gap-4">
@@ -164,18 +167,16 @@ function MatchCard({ match }: { match: MatchSummary }) {
               href={match.stream_url}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
               className="flex items-center gap-1 rounded-lg bg-red-500/10 px-2 py-1 text-xs font-medium text-red-400 hover:bg-red-500/20 transition-colors"
             >
               <Radio className="h-3 w-3" />
               配信
             </a>
           )}
-          <Link
-            href={`/matches/${match.id}`}
-            className="rounded-lg border border-white/10 px-2 py-1 text-xs text-slate-400 hover:border-white/20 hover:text-white transition-colors"
-          >
+          <span className="rounded-lg border border-white/10 px-2 py-1 text-xs text-slate-400">
             <ExternalLink className="h-3.5 w-3.5" />
-          </Link>
+          </span>
         </div>
       </div>
 
@@ -192,7 +193,7 @@ function MatchCard({ match }: { match: MatchSummary }) {
           {formatDate(match.ended_at)} 終了
         </p>
       )}
-    </div>
+    </Link>
   );
 }
 

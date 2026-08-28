@@ -24,7 +24,11 @@ class MatchRepository(BaseRepository[Match]):
                 selectinload(Match.winner),
                 selectinload(Match.games).options(
                     selectinload(MatchGame.map),
-                    selectinload(MatchGame.player_stats),
+                    # player まで先読みする。_to_detail が ps.player.in_game_name を
+                    # 参照するため、ここに無いと非同期外の遅延ロード(MissingGreenlet)で落ちる
+                    selectinload(MatchGame.player_stats).selectinload(
+                        PlayerMatchStats.player
+                    ),
                 ),
                 selectinload(Match.ban_picks).options(
                     selectinload(BanPick.map),
