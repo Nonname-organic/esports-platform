@@ -15,6 +15,7 @@ class TournamentCreate(BaseModel):
     registration_start_at: datetime | None = None
     registration_end_at: datetime | None = None
     check_in_start_at: datetime | None = None
+    check_in_end_at: datetime | None = None
     start_at: datetime | None = None
     end_at: datetime | None = None
     rules: dict | None = None
@@ -62,6 +63,7 @@ class TournamentUpdate(BaseModel):
     registration_start_at: datetime | None = None
     registration_end_at: datetime | None = None
     check_in_start_at: datetime | None = None
+    check_in_end_at: datetime | None = None
     start_at: datetime | None = None
     end_at: datetime | None = None
     rules: dict | None = None
@@ -117,6 +119,7 @@ class TournamentDetail(TournamentSummary):
     registration_start_at: datetime | None
     registration_end_at: datetime | None
     check_in_start_at: datetime | None
+    check_in_end_at: datetime | None = None
     end_at: datetime | None
     require_check_in: bool
     created_at: datetime

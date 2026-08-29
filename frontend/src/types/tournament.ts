@@ -50,6 +50,7 @@ export interface TournamentDetail extends TournamentSummary {
   registration_start_at: string | null;
   registration_end_at: string | null;
   check_in_start_at: string | null;
+  check_in_end_at?: string | null;
   end_at: string | null;
   require_check_in: boolean;
   created_at: string;

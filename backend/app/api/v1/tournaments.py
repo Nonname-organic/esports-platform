@@ -6,11 +6,13 @@ from typing import Optional
 from fastapi import APIRouter, Query
 from sqlalchemy import select
 
+from app.core.check_in_window import check_in_window_state
 from app.core.discord_invite import normalize_discord_invite
 from app.core.dependencies import Cache, CurrentUser, DBSession, OrganizerUser
 from app.core.exceptions import BusinessRuleError, NotFoundError
 from app.core.storage import sign_attachments, resign_stored_url
 from app.models.enums import GameType, RegistrationStatus, TournamentStatus
+from app.models.tournament import Tournament
 from app.schemas.common import ListResponse, Meta, Response
 from app.schemas.rules import ApplyTemplateRequest, RulesDocRequest
 from app.schemas.tournament import (
@@ -68,6 +70,7 @@ def _build_detail(tournament, count: int) -> TournamentDetail:
         registration_start_at=tournament.registration_start_at,
         registration_end_at=tournament.registration_end_at,
         check_in_start_at=tournament.check_in_start_at,
+        check_in_end_at=tournament.check_in_end_at,
         end_at=tournament.end_at,
         require_check_in=tournament.require_check_in,
         created_at=tournament.created_at,
@@ -373,21 +376,30 @@ async def register_team(
 
 
 async def _user_registration(db, tournament_id: uuid.UUID, user):
-    """ログインユーザーの所属チームの、この大会への登録を解決。"""
-    from app.models.player import Player
-    from app.models.team import TeamMember
-    from app.schemas.tournament import RegistrationInfo  # noqa: F401 (型参照回避)
+    """ログインユーザーの所属チームの、この大会への登録を解決。
 
-    player = (await db.execute(select(Player).where(Player.user_id == user.id))).scalar_one_or_none()
-    if not player:
-        return None
-    team_ids = (
-        await db.execute(
-            select(TeamMember.team_id).where(
-                TeamMember.player_id == player.id, TeamMember.left_at.is_(None)
-            )
+    「所属」はオーナーとメンバーの両方を含む。申請は大抵オーナーが出すため、
+    選手登録（player）を持たないオーナーもチェックインできる必要がある。
+    """
+    from app.models.player import Player
+    from app.models.team import Team, TeamMember
+
+    team_ids: set[uuid.UUID] = set(
+        (await db.execute(select(Team.id).where(Team.owner_id == user.id)))
+        .scalars().all()
+    )
+    player = (await db.execute(
+        select(Player).where(Player.user_id == user.id)
+    )).scalar_one_or_none()
+    if player:
+        team_ids.update(
+            (await db.execute(
+                select(TeamMember.team_id).where(
+                    TeamMember.player_id == player.id,
+                    TeamMember.left_at.is_(None),
+                )
+            )).scalars().all()
         )
-    ).scalars().all()
     if not team_ids:
         return None
     from app.models.tournament import TournamentRegistration
@@ -406,15 +418,27 @@ async def my_check_in(
     tournament_id: uuid.UUID, db: DBSession, cache: Cache, current_user: CurrentUser,
 ):
     """自分のチームのチェックイン状態（フロントのボタン表示用）。"""
+    tournament = await db.get(Tournament, tournament_id)
+    if not tournament:
+        raise NotFoundError("大会", str(tournament_id))
+    # 時間判定はサーバー時刻で行い、クライアントの時計ズレに依存させない
+    window = {
+        "state": check_in_window_state(tournament),
+        "start_at": tournament.check_in_start_at.isoformat()
+        if tournament.check_in_start_at else None,
+        "end_at": tournament.check_in_end_at.isoformat()
+        if tournament.check_in_end_at else None,
+    }
     reg = await _user_registration(db, tournament_id, current_user)
     if not reg:
-        return {"data": {"registered": False, "checked_in": False}}
+        return {"data": {"registered": False, "checked_in": False, "window": window}}
     return {"data": {
         "registered": True,
         "approved": reg.status == RegistrationStatus.APPROVED,
         "checked_in": reg.checked_in_at is not None,
         "team_id": str(reg.team_id),
         "checked_in_at": reg.checked_in_at.isoformat() if reg.checked_in_at else None,
+        "window": window,
     }}
 
 
@@ -423,6 +447,14 @@ async def check_in(
     tournament_id: uuid.UUID, db: DBSession, cache: Cache, current_user: CurrentUser,
 ):
     """Webからチェックイン（自分の所属チームの登録を出席にする）。"""
+    tournament = await db.get(Tournament, tournament_id)
+    if not tournament:
+        raise NotFoundError("大会", str(tournament_id))
+    state = check_in_window_state(tournament)
+    if state == "before":
+        raise BusinessRuleError("チェックイン受付はまだ始まっていません")
+    if state == "after":
+        raise BusinessRuleError("チェックイン受付は終了しました。主催者に連絡してください")
     reg = await _user_registration(db, tournament_id, current_user)
     if not reg:
         raise NotFoundError("登録", "この大会にあなたのチームは登録されていません")

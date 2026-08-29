@@ -70,6 +70,7 @@ interface FormValues {
   registration_start_at: string;
   registration_end_at: string;
   check_in_start_at: string;
+  check_in_end_at: string;
   start_at: string;
   end_at: string;
   // 参加条件
@@ -168,6 +169,7 @@ export default function TournamentEditPage({ params }: { params: Promise<{ id: s
       registration_start_at: toLocalInput(t.registration_start_at),
       registration_end_at: toLocalInput(t.registration_end_at),
       check_in_start_at: toLocalInput(t.check_in_start_at),
+      check_in_end_at: toLocalInput(t.check_in_end_at),
       start_at: toLocalInput(t.start_at),
       end_at: toLocalInput(t.end_at),
       max_teams: t.max_teams ?? "",
@@ -224,6 +226,7 @@ export default function TournamentEditPage({ params }: { params: Promise<{ id: s
       registration_start_at: toIso(v.registration_start_at),
       registration_end_at: toIso(v.registration_end_at),
       check_in_start_at: toIso(v.check_in_start_at),
+      check_in_end_at: toIso(v.check_in_end_at),
       start_at: toIso(v.start_at),
       end_at: toIso(v.end_at),
       max_teams: num(v.max_teams),
@@ -378,6 +381,7 @@ export default function TournamentEditPage({ params }: { params: Promise<{ id: s
               { name: "registration_start_at" as const, label: "参加受付開始" },
               { name: "registration_end_at" as const, label: "参加受付終了" },
               { name: "check_in_start_at" as const, label: "チェックイン開始" },
+              { name: "check_in_end_at" as const, label: "チェックイン終了" },
               { name: "start_at" as const, label: "大会開始" },
               { name: "end_at" as const, label: "大会終了" },
             ].map(({ name, label }) => (

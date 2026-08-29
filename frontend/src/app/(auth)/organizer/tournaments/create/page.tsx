@@ -883,6 +883,7 @@ export default function TournamentCreatePage() {
         registration_start_at: toIso(values.registration_start_at),
         registration_end_at: toIso(values.registration_end_at),
         check_in_start_at: toIso(values.check_in_start_at),
+        check_in_end_at: toIso(values.check_in_end_at),
         start_at: toIso(values.start_at),
         end_at: toIso(values.end_at),
         require_check_in: values.require_check_in,

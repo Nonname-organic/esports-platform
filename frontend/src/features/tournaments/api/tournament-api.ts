@@ -63,6 +63,7 @@ export const tournamentApi = {
     registration_start_at?: string;
     registration_end_at?: string;
     check_in_start_at?: string;
+    check_in_end_at?: string;
     start_at?: string;
     end_at?: string;
     require_check_in?: boolean;
@@ -95,6 +96,7 @@ export const tournamentApi = {
       registration_start_at: string;
       registration_end_at: string;
       check_in_start_at: string;
+      check_in_end_at?: string;
       start_at: string;
       end_at: string;
       is_public: boolean;

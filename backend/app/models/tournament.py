@@ -70,6 +70,10 @@ class Tournament(UUIDMixin, TimestampMixin, Base):
     check_in_start_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # チェックイン受付の終了時刻（開始〜終了の幅の間だけチェックイン可能）
+    check_in_end_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     start_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True, index=True
     )

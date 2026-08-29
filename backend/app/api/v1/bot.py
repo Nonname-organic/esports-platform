@@ -16,6 +16,7 @@ from fastapi import APIRouter, Header, Query
 from pydantic import BaseModel
 from sqlalchemy import func, select
 
+from app.core.check_in_window import check_in_window_state
 from app.core.dependencies import BotActor, BotAuth, Cache, DBSession
 from app.core.exceptions import (
     BusinessRuleError,
@@ -247,6 +248,14 @@ async def self_check_in(
 ):
     user = await _require_actor(actor)
     ctx = await _actor_context(db, user)
+    tournament = await db.get(Tournament, tournament_id)
+    if not tournament:
+        raise NotFoundError("大会", str(tournament_id))
+    state = check_in_window_state(tournament)
+    if state == "before":
+        raise BusinessRuleError("チェックイン受付はまだ始まっていません")
+    if state == "after":
+        raise BusinessRuleError("チェックイン受付は終了しました。主催者に連絡してください")
     reg = await _reg_for_user_team(db, tournament_id, ctx["team_ids"])
     if reg is None:
         raise NotFoundError("登録", "あなたのチームはこの大会に登録されていません")
