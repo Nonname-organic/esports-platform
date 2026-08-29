@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: "standalone", // Docker最適化
+  // Docker では standalone、Netlify ではランタイムが独自に束ねるため無効化
+  output: process.env.NETLIFY ? undefined : "standalone",
   images: {
     remotePatterns: [
       {
@@ -20,7 +21,9 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     // Server Actions 有効化
-    serverActions: { allowedOrigins: ["localhost:3000"] },
+    serverActions: {
+      allowedOrigins: ["localhost:3000", "localhost", "*.netlify.app", "demo.axelia-esports.jp"],
+    },
   },
   async headers() {
     return [

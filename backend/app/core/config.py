@@ -32,7 +32,8 @@ class Settings(BaseSettings):
     DB_PORT: int = 5432
     DB_NAME: str = "esports_db"
     DB_USER: str = "esports_user"
-    DB_PASSWORD: str = Field(...)
+    # DATABASE_URL 運用時は未使用のため任意にしている
+    DB_PASSWORD: str = ""
     DB_POOL_SIZE: int = 10
     DB_MAX_OVERFLOW: int = 20
     DB_POOL_TIMEOUT: int = 30
@@ -40,8 +41,33 @@ class Settings(BaseSettings):
     # Set True for Neon / any hosted PostgreSQL that requires TLS.
     DB_SSL_REQUIRED: bool = False
 
+    # マネージドDB（Neon等）が発行する接続文字列を1本で受け付ける。
+    # 設定されている場合は DB_HOST 等の個別指定より優先される。
+    # 例: postgresql://user:pass@host/db?sslmode=require
+    DATABASE_URL: str | None = None
+
+    def _split_database_url(self):
+        """DATABASE_URL を (ホスト部, ssl要否) に正規化する。"""
+        if not self.DATABASE_URL:
+            return None
+        url = self.DATABASE_URL
+        for prefix in ("postgresql+asyncpg://", "postgresql+psycopg2://",
+                       "postgresql://", "postgres://"):
+            if url.startswith(prefix):
+                url = url[len(prefix):]
+                break
+        # sslmode等のクエリはドライバ別に付け直すため剥がす
+        base = url.split("?", 1)[0]
+        needs_ssl = "sslmode=require" in self.DATABASE_URL or self.DB_SSL_REQUIRED
+        return base, needs_ssl
+
     @property
     def database_url(self) -> str:
+        parsed = self._split_database_url()
+        if parsed:
+            base, ssl = parsed
+            # asyncpg は sslmode ではなく ssl パラメータを使う
+            return f"postgresql+asyncpg://{base}" + ("?ssl=require" if ssl else "")
         url = (
             f"postgresql+asyncpg://{self.DB_USER}:{self.DB_PASSWORD}"
             f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
@@ -50,6 +76,10 @@ class Settings(BaseSettings):
 
     @property
     def sync_database_url(self) -> str:
+        parsed = self._split_database_url()
+        if parsed:
+            base, ssl = parsed
+            return f"postgresql+psycopg2://{base}" + ("?sslmode=require" if ssl else "")
         url = (
             f"postgresql+psycopg2://{self.DB_USER}:{self.DB_PASSWORD}"
             f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
@@ -65,8 +95,14 @@ class Settings(BaseSettings):
     # Set True for Upstash or any Redis that requires TLS (rediss:// scheme).
     REDIS_TLS: bool = False
 
+    # マネージドRedis（Upstash等）の接続文字列を1本で受け付ける。
+    # 設定されている場合は REDIS_HOST 等より優先される。
+    REDIS_URL: str | None = None
+
     @property
     def redis_url(self) -> str:
+        if self.REDIS_URL:
+            return self.REDIS_URL
         scheme = "rediss" if self.REDIS_TLS else "redis"
         if self.REDIS_PASSWORD:
             return f"{scheme}://:{self.REDIS_PASSWORD}@{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"

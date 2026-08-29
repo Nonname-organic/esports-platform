@@ -1,0 +1,48 @@
+# Render Blueprint — API（FastAPI + OCR + 同居worker）を無料枠で動かす。
+#
+# 使い方: Render ダッシュボード → New → Blueprint → このリポジトリを選択。
+# DATABASE_URL / REDIS_URL / SECRET_KEY / SMTP_PASSWORD は sync:false のため
+# 初回デプロイ時にダッシュボードで入力を求められる。
+services:
+  - type: web
+    name: axelia-api
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    # 起動時にマイグレーションを流してからAPIを立てる（無料枠はpreDeploy不可のため）
+    dockerCommand: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1"
+    healthCheckPath: /health
+    envVars:
+      - key: ENVIRONMENT
+        value: demo
+      - key: RUN_WORKER_IN_APP
+        value: "true"
+      - key: USE_REDIS_QUEUE
+        value: "true"
+      - key: EXPOSE_API_DOCS
+        value: "false"
+      - key: SMTP_HOST
+        value: smtp.resend.com
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        value: resend
+      - key: MAIL_FROM
+        value: noreply@axelia-esports.jp
+      - key: MAIL_FROM_NAME
+        value: AXELIA
+      # ↓ 初回デプロイ時にダッシュボードで入力
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: FRONTEND_BASE_URL
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false

@@ -52,7 +52,12 @@ export default function MatchSpectatorPage({ params }: Props) {
   });
 
   const connect = useCallback(() => {
-    const ws = new WebSocket(`/ws/matches/${id}`);
+    // API別ホスト構成（Netlify+Render等）ではWSはプロキシを通らないため、
+    // NEXT_PUBLIC_WS_URL があればそちらへ直結する。未設定時は同一オリジン
+    const wsBase =
+      process.env.NEXT_PUBLIC_WS_URL ??
+      window.location.origin.replace(/^http/, "ws");
+    const ws = new WebSocket(`${wsBase}/ws/matches/${id}`);
     setWsStatus("connecting");
     let retryTimer: ReturnType<typeof setTimeout>;
 

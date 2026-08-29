@@ -1,0 +1,28 @@
+# Netlify（フロントエンド）の設定。
+#
+# 構成: フロント = Netlify / API = Render / DB = Neon / Redis = Upstash
+# ブラウザからのAPI呼び出しは相対パス(/api/…)のままにし、Netlifyのproxyで
+# Render のAPIへ中継する（同一オリジン維持・CORS不要）。
+# WebSocket はproxyを通らないため NEXT_PUBLIC_WS_URL で直結する。
+#
+# Netlify ダッシュボードで設定する環境変数:
+#   INTERNAL_API_URL    = https://axelia-api.onrender.com   （SSRからのAPI呼び出し）
+#   NEXT_PUBLIC_WS_URL  = wss://axelia-api.onrender.com     （ブラウザのWebSocket）
+#   NEXT_PUBLIC_DEMO_MODE = true                            （デモ告知バナー）
+
+[build]
+  base    = "frontend"
+  command = "npm run build"
+
+# ブラウザ → /api/* → Render（同一オリジンのまま中継）
+[[redirects]]
+  from   = "/api/*"
+  to     = "https://axelia-api.onrender.com/api/:splat"
+  status = 200
+  force  = true
+
+# 限定公開デモ: 検索エンジン除外（アプリ側のrobots.ts/noindexと多重防御）
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"

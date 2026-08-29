@@ -1,3 +1,5 @@
+import asyncio
+import os
 from contextlib import asynccontextmanager
 
 import structlog
@@ -30,7 +32,42 @@ async def lifespan(app: FastAPI):
         {"version": settings.IMAGE_TAG, "environment": settings.ENVIRONMENT}
     )
     await get_redis()
+
+    # 単一プロセス構成（Render無料枠など、workerコンテナを別に立てられない環境）
+    # では RUN_WORKER_IN_APP=true でイベント消費・自動ステータス遷移・Outbox
+    # Relay をAPIプロセス内のタスクとして走らせる。compose構成では従来どおり
+    # 別コンテナで動くため未設定のまま
+    worker_task = None
+    if os.getenv("RUN_WORKER_IN_APP", "").lower() == "true":
+        from app.workers.sqs_consumer import (
+            SQSConsumer, outbox_relay_loop, riot_auto_sync_loop,
+            tournament_status_loop,
+        )
+        consumer = SQSConsumer()
+
+        async def _embedded_worker():
+            try:
+                await asyncio.gather(
+                    consumer.run(),
+                    riot_auto_sync_loop(),
+                    tournament_status_loop(),
+                    outbox_relay_loop(),
+                )
+            except asyncio.CancelledError:
+                consumer.stop()
+                raise
+
+        worker_task = asyncio.create_task(_embedded_worker())
+        logger.info("embedded worker started (RUN_WORKER_IN_APP=true)")
+
     yield
+
+    if worker_task:
+        worker_task.cancel()
+        try:
+            await worker_task
+        except (asyncio.CancelledError, Exception):  # noqa: BLE001
+            pass
     await close_redis()
     logger.info("shutdown")
 

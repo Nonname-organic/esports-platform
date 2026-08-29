@@ -4,7 +4,10 @@ import { useEffect, useRef, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { WSMessage } from "@/types/match";
 
-const WS_BASE = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000";
+// 未設定時は同一オリジン（nginx経由）。API別ホスト構成では NEXT_PUBLIC_WS_URL で直結
+const WS_BASE =
+  process.env.NEXT_PUBLIC_WS_URL ??
+  (typeof window !== "undefined" ? window.location.origin.replace(/^http/, "ws") : "");
 
 interface UseMatchWebSocketOptions {
   matchId: string;
