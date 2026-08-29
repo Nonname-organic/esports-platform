@@ -47,6 +47,9 @@ class DiscordEventPublisher:
             redis = getattr(self._cache, "_redis", None)
             if redis:
                 await redis.rpush(settings.REDIS_QUEUE_DISCORD_KEY, message)
+                # botを起動しない運用ではこのキューを消費する者がいない。
+                # 溜まり続けてメモリを圧迫しないよう最新1000件だけ保持する
+                await redis.ltrim(settings.REDIS_QUEUE_DISCORD_KEY, -1000, -1)
         except Exception:
             pass
 

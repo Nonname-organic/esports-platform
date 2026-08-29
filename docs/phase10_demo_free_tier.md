@@ -424,3 +424,83 @@ docker compose exec -T postgres psql -U esports_user -d postgres \
 | コンテナが落ちたまま気付かない | 監視なし | `healthcheck.sh` が15分ごとに検知して通知 |
 | 証明書が切れてサイトが開けない | certbot タイマー停止 | `healthcheck.sh` が残14日で警告 |
 | VM が勝手に停止された | Always Free のアイドル回収 | 手順9のトラブルシューティング参照。有料テナンシへの昇格（課金は発生しない）で回避可能 |
+
+---
+
+## メール送信の設定（パスワードリセットに必須）
+
+SMTP未設定でもアプリは動きますが、パスワードリセットのメールが届かず
+本文がAPIログに出るだけになります。公開前に必ず設定してください。
+
+### 方式A: Gmail（最速・個人運用向け）
+
+無料枠: 500通/日。既存のGoogleアカウントで完結します。
+
+1. Googleアカウントで **2段階認証を有効化**（アプリパスワードの前提条件）
+2. https://myaccount.google.com/apppasswords で **アプリパスワードを発行**
+   （アプリ名は「AXELIA」など任意。16文字のパスワードが表示される）
+3. `backend/.env` に設定:
+
+```env
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=あなたのアドレス@gmail.com
+SMTP_PASSWORD=発行された16文字（スペースは除く）
+MAIL_FROM=あなたのアドレス@gmail.com
+MAIL_FROM_NAME=AXELIA
+FRONTEND_BASE_URL=https://<公開URL>
+```
+
+> 注意: Googleの通常パスワードでは送信できません。必ずアプリパスワードを使うこと。
+> 送信元は自分のGmailアドレスになります（独自ドメインにしたい場合は方式B）。
+
+### 方式B: Resend（独自ドメイン・本格運用向け）
+
+無料枠: 100通/日・3,000通/月。独自ドメインからの送信と到達率の面で有利です。
+
+1. https://resend.com にサインアップし、**APIキーを発行**
+2. （独自ドメインがある場合）Domains でドメインを追加し、表示される
+   DNSレコード（SPF/DKIM）をDNS管理画面に登録
+3. `backend/.env` に設定:
+
+```env
+SMTP_HOST=smtp.resend.com
+SMTP_PORT=587
+SMTP_USER=resend
+SMTP_PASSWORD=re_で始まるAPIキー
+MAIL_FROM=noreply@あなたのドメイン   # ドメイン未登録の間は onboarding@resend.dev
+MAIL_FROM_NAME=AXELIA
+FRONTEND_BASE_URL=https://<公開URL>
+```
+
+### 反映と疎通確認
+
+```bash
+docker compose restart api worker
+docker compose exec api python scripts/send_test_email.py 自分のアドレス
+```
+
+「送信に成功しました」と出て実際にメールが届けば完了です。
+届かない場合は迷惑メールフォルダと `docker compose logs api` を確認してください。
+
+### FRONTEND_BASE_URL について
+
+リセットメール内のリンク（`{FRONTEND_BASE_URL}/reset-password?token=...`）の
+基点です。ローカルでは `http://localhost`、公開後は必ず公開URLへ変更してください。
+ここが違うと、届いたメールのリンクが開けません。
+
+---
+
+## Discord連携の運用方針
+
+**botの導入は任意です。** 基本の運用は以下だけで完結します:
+
+1. 主催者が大会設定に自分のDiscordサーバーの**招待リンクを貼る**
+2. 参加申請が承認（抽選当選）されると、チーム全員のAXELIAアカウントへ
+   **招待リンク入りの通知が自動で届く**（アプリ内通知）
+3. 参加者はそのリンクから大会サーバーに入る
+
+botを導入すると追加でチャンネル/ロールの自動生成やDiscord上での
+チェックインが使えますが、無くても大会運営に支障はありません。
+bot向けイベントキューは未消費でも最新1000件で頭打ちになるため、
+bot無し運用でメモリが圧迫されることはありません。
