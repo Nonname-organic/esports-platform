@@ -19,6 +19,9 @@ export const metadata: Metadata = {
   description:
     "VALORANT大会のエントリー・ブラケット生成・スコア管理・統計分析を一元化するプラットフォーム",
   keywords: ["eスポーツ", "大会", "VALORANT", "ヴァロラント", "ゲーム大会"],
+  // 限定公開デモ: 検索エンジンにインデックスさせない（robots.ts と二重指定）。
+  // 一般公開時にこの行と robots.ts を合わせて解除する
+  robots: { index: false, follow: false },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -504,3 +504,29 @@ botを導入すると追加でチャンネル/ロールの自動生成やDiscord
 チェックインが使えますが、無くても大会運営に支障はありません。
 bot向けイベントキューは未消費でも最新1000件で頭打ちになるため、
 bot無し運用でメモリが圧迫されることはありません。
+
+---
+
+## 限定公開デモのデプロイ（demo.axelia-esports.jp）
+
+上記の手順を1コマンドに集約済み。前提が2つ揃っていれば、ローカルから
+以下だけでデプロイが完了する:
+
+```bash
+scripts/deploy-to-vm.sh ubuntu@<VMのIP> ~/.ssh/oracle_key
+```
+
+前提（先に済ませておく）:
+1. Oracle Cloud で VM 作成（本ドキュメント冒頭の手順1〜2。ポート80/443を
+   セキュリティリストで開放）
+2. ムームーDNSで `demo` サブドメインのAレコードを VM の IP に向ける
+
+スクリプトが自動で行うこと: 本番用 .env 生成（URL差し替え・docs非公開）→
+コード+最新DBバックアップの転送 → Docker導入 → OS内FW開放 →
+Let's Encrypt証明書取得 → TLS構成で起動 → migration → DBリストア →
+運用cron登録。2回目以降の実行は更新デプロイとして機能する。
+
+限定公開の担保: robots.txt 全拒否 + noindex メタ + nginx の X-Robots-Tag の
+三重で検索エンジンを除外している（URLを知っている人だけが見られる状態）。
+一般公開へ切り替える際は frontend/src/app/robots.ts・layout.tsx・
+nginx-tls.conf の3箇所を解除する。
