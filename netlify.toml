@@ -14,6 +14,11 @@
   base    = "frontend"
   command = "npm run build"
 
+# netlify.toml で command を上書きすると自動フレームワーク検出が効かない
+# ことがあるため、Next.js Runtime を明示的に有効化する
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
 # ブラウザ → /api/* → Render（同一オリジンのまま中継）
 [[redirects]]
   from   = "/api/*"
