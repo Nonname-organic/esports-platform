@@ -154,13 +154,13 @@ async def readiness():
     """Kubernetes readiness probe — 503 if DB or cache are unreachable."""
     from sqlalchemy import text
 
-    from app.core.database import async_session_factory
+    from app.core.database import AsyncSessionLocal
     from app.core.redis import get_redis
 
     checks: dict[str, str] = {}
 
     try:
-        async with async_session_factory() as session:
+        async with AsyncSessionLocal() as session:
             await session.execute(text("SELECT 1"))
         checks["database"] = "ok"
     except Exception as exc:

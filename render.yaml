@@ -8,7 +8,8 @@ services:
     name: axelia-api
     runtime: docker
     plan: free
-    region: singapore
+    # Neon(us-east-2/Ohio) と同居させ、API-DB間レイテンシを最小化する
+    region: ohio
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
     # 起動時にマイグレーションを流してからAPIを立てる（無料枠はpreDeploy不可のため）
@@ -33,7 +34,9 @@ services:
         value: noreply@axelia-esports.jp
       - key: MAIL_FROM_NAME
         value: AXELIA
-      # ↓ 初回デプロイ時にダッシュボードで入力
+      # ↓ 初回デプロイ時にダッシュボードで入力。
+      #   DATABASE_URL は Neon の direct 接続（ホスト名に -pooler が付かない方）を
+      #   使うこと。pooler 経由は asyncpg の prepared statement と衝突する
       - key: DATABASE_URL
         sync: false
       - key: REDIS_URL

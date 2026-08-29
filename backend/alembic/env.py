@@ -19,12 +19,10 @@ target_metadata = Base.metadata
 
 
 def get_url() -> str:
-    return (
-        f"postgresql+asyncpg://"
-        f"{os.environ['DB_USER']}:{os.environ['DB_PASSWORD']}"
-        f"@{os.environ.get('DB_HOST', 'localhost')}:{os.environ.get('DB_PORT', '5432')}"
-        f"/{os.environ.get('DB_NAME', 'esports_db')}"
-    )
+    # DATABASE_URL（Neon等の1本指定）を含め、接続解決は settings に一元化する
+    from app.core.config import settings
+
+    return settings.database_url
 
 
 def run_migrations_offline() -> None:
