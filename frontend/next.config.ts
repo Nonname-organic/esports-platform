@@ -34,6 +34,9 @@ const nextConfig: NextConfig = {
         source: "/((?!_next/static|_next/image|favicon.ico).*)",
         headers: [
           { key: "Cache-Control", value: "no-store, must-revalidate" },
+          // 限定公開デモ: SSR応答にも検索エンジン除外を付ける
+          // （robots.txt・noindexメタと合わせた多重防御。一般公開時に外す）
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
         ],
       },
     ];
