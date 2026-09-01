@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRequireAuth } from "@/hooks/use-require-auth";
-import { AlertTriangle, Bell, Check, ChevronRight, Loader2, Lock, Mail, Settings as SettingsIcon } from "lucide-react";
+import { AlertTriangle, Bell, Check, ChevronRight, Loader2, Lock, Mail, Settings as SettingsIcon, Shield } from "lucide-react";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthStore } from "@/store/auth-store";
 
@@ -39,7 +39,31 @@ export default function SettingsPage() {
   const [delConfirm, setDelConfirm] = useState(false);
   const [delState, setDelState] = useState<{ loading: boolean; err?: string }>({ loading: false });
 
+  const [orgState, setOrgState] = useState<{ loading: boolean; ok?: string; err?: string }>({ loading: false });
+
   if (!ready || !authed) return null;
+
+  const isOrganizer = user?.role === "organizer" || user?.role === "admin";
+
+  /** 主催者機能の有効・無効を切り替える。大会を持っていると無効化は断られる。 */
+  const setOrganizer = async (enabled: boolean) => {
+    setOrgState({ loading: true });
+    try {
+      const res = await apiClient.patch<{ role: string }>(
+        "/api/v1/auth/me/organizer", { enabled },
+      );
+      if (user) setUser({ ...user, role: res.role as typeof user.role });
+      setOrgState({
+        loading: false,
+        ok: enabled ? "主催者機能を有効にしました" : "主催者機能を無効にしました",
+      });
+    } catch (e) {
+      setOrgState({
+        loading: false,
+        err: e instanceof ApiError ? e.message : "変更に失敗しました",
+      });
+    }
+  };
 
   const changeEmail = async () => {
     setEmailState({ loading: true });
@@ -97,6 +121,36 @@ export default function SettingsPage() {
         </div>
         <ChevronRight className="h-4 w-4 text-slate-600" />
       </Link>
+
+      {/* 主催者機能 */}
+      <section className="mb-5 rounded-2xl border border-white/10 bg-slate-900 p-5">
+        <h2 className="mb-2 flex items-center gap-2 text-sm font-bold text-white">
+          <Shield className="h-4 w-4 text-brand-400" /> 主催者機能
+        </h2>
+        {isOrganizer ? (
+          <>
+            <p className="text-xs text-slate-400">
+              有効です。サイドバーの「大会を作成」から大会を開けます。
+            </p>
+            <button onClick={() => setOrganizer(false)} disabled={orgState.loading}
+              className="mt-3 flex items-center gap-2 rounded-lg border border-white/10 px-4 py-2 text-sm font-bold text-slate-300 hover:bg-white/5 disabled:opacity-40 transition-colors">
+              {orgState.loading && <Loader2 className="h-4 w-4 animate-spin" />} 無効にする
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="text-xs text-slate-400">
+              大会を主催する場合は有効にしてください。参加者としての利用はそのまま続けられます。
+            </p>
+            <button onClick={() => setOrganizer(true)} disabled={orgState.loading}
+              className="mt-3 flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-bold text-white hover:bg-brand-600 disabled:opacity-40 transition-colors">
+              {orgState.loading && <Loader2 className="h-4 w-4 animate-spin" />} 主催者機能を有効にする
+            </button>
+          </>
+        )}
+        {orgState.ok && <Notice type="ok" msg={orgState.ok} />}
+        {orgState.err && <Notice type="err" msg={orgState.err} />}
+      </section>
 
       {/* メールアドレス変更 */}
       <section className="mb-5 rounded-2xl border border-white/10 bg-slate-900 p-5">

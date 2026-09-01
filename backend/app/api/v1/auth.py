@@ -3,7 +3,7 @@ import uuid
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -37,6 +37,10 @@ class ChangeEmailRequest(BaseModel):
 
 class DeleteAccountRequest(BaseModel):
     password: str
+
+
+class OrganizerModeRequest(BaseModel):
+    enabled: bool
 
 
 class ForgotPasswordRequest(BaseModel):
@@ -143,6 +147,44 @@ async def change_email(data: ChangeEmailRequest, db: DBSession, current_user: Cu
         raise BusinessRuleError("このメールアドレスは既に使用されています")
     current_user.email = data.new_email
     current_user.is_email_verified = False
+    await db.flush()
+    return UserResponse.model_validate(current_user)
+
+
+@router.patch("/me/organizer", response_model=UserResponse)
+async def toggle_organizer(
+    data: OrganizerModeRequest, db: DBSession, current_user: CurrentUser,
+):
+    """主催者機能の有効・無効を本人が切り替える。
+
+    大会を開くのはコミュニティのメンバー自身なので、登録時に参加者を
+    選んだ人でも、あとから運営側にまわれるようにしておく。
+    管理者と、チーム管理向けの権限はこの操作では変更しない。
+    """
+    from app.models.enums import UserRole
+    from app.models.tournament import Tournament
+
+    if current_user.role not in (UserRole.PLAYER, UserRole.ORGANIZER):
+        raise BusinessRuleError(
+            "このアカウントの種別はここでは変更できません。運営へお問い合わせください"
+        )
+
+    if data.enabled:
+        current_user.role = UserRole.ORGANIZER
+    else:
+        # 開催中の大会を持ったまま権限を外すと、自分の大会を管理できなくなる
+        owned = await db.scalar(
+            select(func.count(Tournament.id)).where(
+                Tournament.organizer_id == current_user.id
+            )
+        )
+        if owned:
+            raise BusinessRuleError(
+                f"作成した大会が{owned}件あるため無効にできません。"
+                "先に大会を削除するか、運営へお問い合わせください"
+            )
+        current_user.role = UserRole.PLAYER
+
     await db.flush()
     return UserResponse.model_validate(current_user)
 
