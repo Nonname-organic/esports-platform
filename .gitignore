@@ -78,3 +78,6 @@ nginx/ssl/
 
 # DBバックアップ（ローカル保存分）
 backups/
+docs/manual/__pycache__/
+docs/manual/_*.pdf
+docs/manual/*.png
