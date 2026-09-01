@@ -3,6 +3,7 @@ import { formatDate } from "@/lib/utils";
 import type { TournamentDetail } from "@/types/tournament";
 import { TournamentImmersion } from "@/components/tournament-live/tournament-immersion";
 import { CheckInButton } from "./check-in-button";
+import { EntryPanel } from "./entry-panel";
 
 const FORMAT_LABEL: Record<string, string> = {
   single_elimination: "シングルエリミネーション",
@@ -227,6 +228,9 @@ export function OverviewTab({ tournament }: OverviewTabProps) {
 
       {/* サイドバー */}
       <div className="space-y-4">
+        {/* エントリー（申請と当落の確認） */}
+        <EntryPanel tournament={tournament} />
+
         {/* 参加状況カード */}
         <div className="rounded-xl border border-white/10 bg-slate-900 p-5">
           <h3 className="mb-4 flex items-center gap-2 font-bold text-white">

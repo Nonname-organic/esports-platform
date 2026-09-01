@@ -3,6 +3,7 @@ import uuid
 from datetime import datetime, timezone
 from itertools import combinations
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BusinessRuleError, ForbiddenError, NotFoundError
@@ -156,8 +157,39 @@ class TournamentService:
         await self._cache.delete_pattern("cache:tournament:list:*")
         return tournament
 
+    async def _require_team_authority(self, team_id: uuid.UUID, user: User) -> None:
+        """申請できるのは、そのチームのオーナーかキャプテンだけ。
+
+        大会参加はチームとしての約束なので、一般メンバーや無関係の
+        ログインユーザーが勝手に申し込めないようにする。
+        """
+        from app.models.enums import MemberRole
+        from app.models.player import Player
+        from app.models.team import Team, TeamMember
+
+        team = await self._db.get(Team, team_id)
+        if not team or not team.is_active:
+            raise NotFoundError("チーム", str(team_id))
+        if team.owner_id == user.id or user.role == UserRole.ADMIN:
+            return
+
+        role = (await self._db.execute(
+            select(TeamMember.role)
+            .join(Player, Player.id == TeamMember.player_id)
+            .where(
+                TeamMember.team_id == team_id,
+                Player.user_id == user.id,
+                TeamMember.left_at.is_(None),
+            )
+        )).scalar_one_or_none()
+        if role != MemberRole.CAPTAIN:
+            raise ForbiddenError(
+                "参加申請できるのはチームのオーナーまたはキャプテンだけです"
+            )
+
     async def register_team(
-        self, tournament_id: uuid.UUID, team_id: uuid.UUID, notes: str | None
+        self, tournament_id: uuid.UUID, team_id: uuid.UUID, notes: str | None,
+        current_user: User,
     ) -> RegistrationStatus:
         """チームの参加申請。確定した申請ステータスを返す。
 
@@ -172,6 +204,9 @@ class TournamentService:
 
         if tournament.status != TournamentStatus.REGISTRATION_OPEN:
             raise BusinessRuleError("現在参加申請を受け付けていません")
+
+        # 申請できる立場かどうかは、書き込みの前・重複判定の前に確かめる
+        await self._require_team_authority(team_id, current_user)
 
         existing = await self._repo.get_registration(tournament_id, team_id)
         if existing:

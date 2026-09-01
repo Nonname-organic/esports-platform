@@ -371,7 +371,9 @@ async def register_team(
     確定したステータスを返してフロントで結果を出し分けられるようにする。
     """
     service = TournamentService(db, cache)
-    status = await service.register_team(tournament_id, uuid.UUID(data.team_id), data.notes)
+    status = await service.register_team(
+        tournament_id, uuid.UUID(data.team_id), data.notes, current_user,
+    )
     return Response(data={"status": status.value}, meta=None)
 
 
@@ -411,6 +413,32 @@ async def _user_registration(db, tournament_id: uuid.UUID, user):
             )
         )
     ).scalar_one_or_none()
+
+
+@router.get("/{tournament_id}/my-registration")
+async def my_registration(
+    tournament_id: uuid.UUID, db: DBSession, cache: Cache, current_user: CurrentUser,
+):
+    """ログインユーザーのチームの申請状況（エントリー欄の表示用）。
+
+    申請済みかどうかだけでなく審査中・当選・補欠まで返し、
+    参加者が自分の当落を大会ページで確認できるようにする。
+    """
+    from app.models.team import Team
+
+    tournament = await db.get(Tournament, tournament_id)
+    if not tournament:
+        raise NotFoundError("大会", str(tournament_id))
+    reg = await _user_registration(db, tournament_id, current_user)
+    if not reg:
+        return {"data": {"registered": False}}
+    team = await db.get(Team, reg.team_id)
+    return {"data": {
+        "registered": True,
+        "status": reg.status.value,
+        "team_id": str(reg.team_id),
+        "team_name": team.name if team else None,
+    }}
 
 
 @router.get("/{tournament_id}/check-in/me")

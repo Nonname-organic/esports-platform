@@ -22,6 +22,16 @@ export interface TournamentListParams {
   limit?: number;
 }
 
+/** 申請の当落は pending（審査中）/ approved（当選）/ waitlisted（補欠）/ rejected（落選）。 */
+export type RegistrationState = "pending" | "approved" | "waitlisted" | "rejected";
+
+export interface MyRegistration {
+  registered: boolean;
+  status?: RegistrationState;
+  team_id?: string;
+  team_name?: string | null;
+}
+
 export interface RegistrationInfo {
   id: string;
   team_id: string;
@@ -134,6 +144,10 @@ export const tournamentApi = {
   /** 参加申請。自動承認の大会では approved / 定員超過時は waitlisted が返る。 */
   register: (id: string, teamId: string, notes?: string): Promise<ApiResponse<{ status: string }>> =>
     apiClient.post(`/api/v1/tournaments/${id}/register`, { team_id: teamId, notes }),
+
+  /** 自分のチームの申請状況（未申請なら registered: false）。 */
+  myRegistration: (id: string): Promise<ApiResponse<MyRegistration>> =>
+    apiClient.get(`/api/v1/tournaments/${id}/my-registration`),
 
   listRegistrations: (id: string): Promise<ApiResponse<RegistrationInfo[]>> =>
     apiClient.get(`/api/v1/tournaments/${id}/registrations`),

@@ -12,9 +12,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 from reportlab.lib.colors import HexColor
 from reportlab.lib.pagesizes import A4
+from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
@@ -43,6 +45,23 @@ MARGIN_X = 22 * 2.83465          # 22mm
 MARGIN_TOP = 24 * 2.83465
 MARGIN_BOTTOM = 18 * 2.83465
 CONTENT_W = PAGE_W - MARGIN_X * 2
+
+# 図の解像度。紙面1ptあたり何画素持たせるか（3.0 ≒ 216dpi）。
+# 元のキャプチャは2倍解像度で撮っているため、そのまま貼るとPDFが無駄に重くなる。
+FIGURE_PPP = 3.0
+
+
+def _fit_raster(path: Path, width_pt: float):
+    """図を紙面サイズに見合う画素数まで落として ImageReader を返す。"""
+    from PIL import Image
+
+    im = Image.open(path)
+    target = int(width_pt * FIGURE_PPP)
+    if im.width > target:
+        h = round(im.height * target / im.width)
+        im = im.resize((target, h), Image.LANCZOS)
+    return ImageReader(im.convert("RGB"))
+
 
 # 行末に置けない文字（行頭禁則）
 NO_LINE_START = "、。，．）」』】〉》〕｝・〜ー’”ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶーぐ！？!?：:；;"
@@ -254,7 +273,8 @@ class Doc:
 
     # ── 見出し ──────────────────────────────────────────────────────────────
     def h1(self, number: str, title: str) -> None:
-        self.need(90)
+        # 見出しだけがページ末尾に取り残されないよう、続く本文の分も確保する
+        self.need(190)
         self.space(14)
         c = self.c
         # 番号バッジ
@@ -278,7 +298,7 @@ class Doc:
         self.toc_entries.append(TocEntry(number, title, self.page, 1))
 
     def h2(self, number: str, title: str) -> None:
-        self.need(60)
+        self.need(115)
         self.space(10)
         c = self.c
         c.setFillColor(BRAND)
@@ -413,23 +433,55 @@ class Doc:
             ty -= size + 6
         self.y = top - h - 14
 
-    def figure(self, caption: str) -> None:
-        """画面キャプチャを貼る位置の指示枠。"""
-        h = 92
-        self.need(h + 24)
-        top = self.y
-        self.c.setFillColor(PANEL)
-        self.c.setStrokeColor(LINE)
-        self.c.setLineWidth(0.8)
-        self.c.roundRect(MARGIN_X, top - h, CONTENT_W, h, 5, stroke=1, fill=1)
-        self.c.setFillColor(MUTED)
-        self.c.setFont(FONT_R, 9)
-        self.c.drawCentredString(PAGE_W / 2, top - h / 2 - 3, "［ 画面キャプチャ ］")
-        self.y = top - h - 14
+    def figure(self, caption: str, image: str | None = None,
+               max_h: float = 300, width: float | None = None) -> None:
+        """画面キャプチャを貼る。image を省いた場合は貼り位置の指示枠を描く。
+
+        画像は紙面幅に収まるよう縮小し、縦に長い場合は max_h に合わせる。
+        小さく写ってしまう図は width で幅を指定して拡大できる。
+        """
+        img = Path(image) if image else None
+        if img and not img.is_absolute():
+            img = Path(__file__).parent / img
+
+        if img and img.exists():
+            reader = ImageReader(str(img))
+            iw, ih = reader.getSize()
+            w = min(width or CONTENT_W, CONTENT_W)
+            h = ih * (w / iw)
+            if h > max_h:                      # 縦長すぎる図は高さで抑える
+                h = max_h
+                w = iw * (h / ih)
+            reader = _fit_raster(img, w)
+            self.need(h + 26)
+            top = self.y
+            x = MARGIN_X + (CONTENT_W - w) / 2
+            self.c.drawImage(reader, x, top - h, width=w, height=h,
+                             mask="auto")
+            # 背景が濃い画面なので、細い枠を付けて紙面から浮かせる
+            self.c.setStrokeColor(LINE)
+            self.c.setLineWidth(0.6)
+            self.c.rect(x, top - h, w, h, stroke=1, fill=0)
+            self.y = top - h - 13
+        else:
+            h = 92
+            self.need(h + 24)
+            top = self.y
+            self.c.setFillColor(PANEL)
+            self.c.setStrokeColor(LINE)
+            self.c.setLineWidth(0.8)
+            self.c.roundRect(MARGIN_X, top - h, CONTENT_W, h, 5, stroke=1, fill=1)
+            self.c.setFillColor(MUTED)
+            self.c.setFont(FONT_R, 9)
+            self.c.drawCentredString(PAGE_W / 2, top - h / 2 - 3, "［ 画面キャプチャ ］")
+            self.y = top - h - 14
+
         self.c.setFont(FONT_R, 8.5)
         self.c.setFillColor(MUTED)
-        self.c.drawString(MARGIN_X, self.y, f"▲ {caption}")
-        self.space(20)
+        for line in wrap(f"▲ {caption}", FONT_R, 8.5, CONTENT_W):
+            self.c.drawString(MARGIN_X, self.y, line)
+            self.y -= 12
+        self.space(12)
 
     def faq(self, question: str, answer: str) -> None:
         size = 9.5

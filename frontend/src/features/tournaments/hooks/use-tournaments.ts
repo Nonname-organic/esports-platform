@@ -12,6 +12,8 @@ export const tournamentKeys = {
     [...tournamentKeys.lists(), filters] as const,
   detail: (id: string) => [...tournamentKeys.all, "detail", id] as const,
   bracket: (id: string) => [...tournamentKeys.all, "bracket", id] as const,
+  myRegistration: (id: string) =>
+    [...tournamentKeys.all, "my-registration", id] as const,
 };
 
 export function useTournaments(filters?: { game?: GameType; status?: TournamentStatus }) {
@@ -67,6 +69,17 @@ export function useCreateTournament() {
   });
 }
 
+/** 自分のチームの申請状況。未ログイン時は enabled: false で呼ばない。 */
+export function useMyRegistration(tournamentId: string, enabled = true) {
+  return useQuery({
+    queryKey: tournamentKeys.myRegistration(tournamentId),
+    queryFn: () => tournamentApi.myRegistration(tournamentId),
+    select: (res) => res.data,
+    enabled,
+    staleTime: 30 * 1000,
+  });
+}
+
 export function useRegisterTeam(tournamentId: string) {
   const qc = useQueryClient();
   return useMutation({
@@ -74,6 +87,7 @@ export function useRegisterTeam(tournamentId: string) {
       tournamentApi.register(tournamentId, teamId, notes),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: tournamentKeys.detail(tournamentId) });
+      qc.invalidateQueries({ queryKey: tournamentKeys.myRegistration(tournamentId) });
     },
   });
 }

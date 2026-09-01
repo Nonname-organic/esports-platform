@@ -15,11 +15,13 @@ export const teamKeys = {
   analytics: (id: string) => [...teamKeys.all, "analytics", id] as const,
 };
 
-export function useMyTeams() {
+/** 自分のチーム一覧。公開ページで使う場合は enabled で未ログイン時の呼び出しを止める。 */
+export function useMyTeams(enabled = true) {
   return useQuery({
     queryKey: teamKeys.mine(),
     queryFn: () => teamApi.mine(),
     select: (res) => res.data,
+    enabled,
     staleTime: 2 * 60 * 1000,
   });
 }
