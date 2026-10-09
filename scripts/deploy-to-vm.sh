@@ -5,12 +5,12 @@
 #   scripts/deploy-to-vm.sh ubuntu@<VMのIP> [SSH鍵のパス]
 #
 # やること:
-#   1. ローカルの .env を本番値（demo.axelia-esports.jp）へパッチした .env.deploy を生成
+#   1. ローカルの .env を本番値（$DOMAIN）へパッチした .env.deploy を生成
 #   2. コード一式 + 最新DBバックアップを tar で VM へ転送
 #   3. VM 上で vm-bootstrap.sh を実行（Docker導入〜TLS〜起動〜リストアまで自動）
 #
 # 前提: VM は Ubuntu (ARM/x86どちらも可)、ポート80/443がセキュリティリストで開放済み、
-#       DNS で demo.axelia-esports.jp が VM の IP を指していること（証明書取得に必要）
+#       DNS で $DOMAIN が VM の IP を指していること（証明書取得に必要）
 set -euo pipefail
 
 TARGET="${1:-}"
@@ -23,14 +23,15 @@ SSH_OPTS=(-o StrictHostKeyChecking=accept-new)
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$APP_DIR"
 
-DOMAIN="demo.axelia-esports.jp"
+# 既定は ConoHa VPS の本番ドメイン。別環境へ流す場合は DOMAIN=... で上書きする。
+DOMAIN="${DOMAIN:-app.axelia-esports.jp}"
 
 echo "── 1/4 本番用 .env を生成 ─────────────────────"
 [ -f backend/.env ] || { echo "backend/.env がありません"; exit 1; }
-python - <<'PYEOF'
-import pathlib, re
+DEPLOY_DOMAIN="$DOMAIN" python - <<'PYEOF'
+import os, pathlib, re
 src = pathlib.Path("backend/.env").read_text(encoding="utf-8")
-domain = "demo.axelia-esports.jp"
+domain = os.environ["DEPLOY_DOMAIN"]
 overrides = {
     "FRONTEND_BASE_URL": f"https://{domain}",
     "PUBLIC_WEB_URL": f"https://{domain}",

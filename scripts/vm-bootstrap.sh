@@ -6,7 +6,7 @@
 #   sudo bash /opt/app/scripts/vm-bootstrap.sh
 set -euo pipefail
 
-DOMAIN="demo.axelia-esports.jp"
+DOMAIN="${DOMAIN:-app.axelia-esports.jp}"
 APP_DIR="/opt/app"
 CERT_EMAIL="axelia.esports@gmail.com"
 
