@@ -9,6 +9,7 @@ from typing import Optional
 from urllib.parse import unquote, urlparse
 
 import boto3
+from botocore.config import Config as BotoConfig
 
 from app.core.config import settings
 
@@ -22,11 +23,23 @@ PRESIGN_MAX_EXPIRES = 7 * 24 * 3600
 def _client():
     global _s3_client
     if _s3_client is None:
-        # S3_ENDPOINT_URL 設定時は Cloudflare R2 等のS3互換ストレージへ接続（$0構成）
+        # S3_ENDPOINT_URL 設定時は Supabase Storage / Cloudflare R2 等のS3互換へ接続。
+        #
+        # 互換ストレージでは次の2点を明示しないと動かない。
+        #   signature_version="s3v4"
+        #     既定では署名付きURLが SigV2 で生成され、Supabase は 403 を返す。
+        #   addressing_style="path"
+        #     仮想ホスト形式はバケット名をホスト名に載せるため、エンドポイントに
+        #     パス（/storage/v1/s3）を持つ互換ストレージでは 404 になる。
+        endpoint = settings.S3_ENDPOINT_URL or None
         _s3_client = boto3.client(
             "s3",
             region_name=settings.AWS_REGION,
-            endpoint_url=settings.S3_ENDPOINT_URL or None,
+            endpoint_url=endpoint,
+            config=BotoConfig(
+                signature_version="s3v4",
+                s3={"addressing_style": "path" if endpoint else "auto"},
+            ),
         )
     return _s3_client
 
