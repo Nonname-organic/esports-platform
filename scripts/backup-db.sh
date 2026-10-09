@@ -48,17 +48,43 @@ fi
 echo "  ローカル保存 完了 (${SIZE})"
 
 # ── リモート保存（S3 互換。未設定ならスキップ） ────────────────────────────
-if [ -n "${BACKUP_S3_BUCKET:-}" ] && command -v aws >/dev/null 2>&1; then
-  ENDPOINT_ARG=""
-  [ -n "${S3_ENDPOINT_URL:-}" ] && ENDPOINT_ARG="--endpoint-url ${S3_ENDPOINT_URL}"
-  # shellcheck disable=SC2086
-  if aws s3 cp "$FILE" "s3://${BACKUP_S3_BUCKET}/db/$(basename "$FILE")" $ENDPOINT_ARG; then
+#
+# aws CLI があればそれを使う。無ければ api コンテナの boto3 で送る。
+# Ubuntu 24.04 では awscli が標準リポジトリから外れており、かつ
+# コンテナ側ならアプリと同じ認証・署名設定（SigV4 / path形式）を
+# そのまま再利用できるため、互換ストレージでも確実に通る。
+upload_remote() {
+  local file="$1"
+  local key="db/$(basename "$file")"
+
+  if command -v aws >/dev/null 2>&1; then
+    local endpoint_arg=""
+    [ -n "${S3_ENDPOINT_URL:-}" ] && endpoint_arg="--endpoint-url ${S3_ENDPOINT_URL}"
+    # shellcheck disable=SC2086
+    aws s3 cp "$file" "s3://${BACKUP_S3_BUCKET}/${key}" $endpoint_arg
+    return $?
+  fi
+
+  BACKUP_KEY="$key" BACKUP_BUCKET="$BACKUP_S3_BUCKET"     $COMPOSE exec -T       -e BACKUP_KEY="$key" -e BACKUP_BUCKET="$BACKUP_S3_BUCKET"       api python -c "
+import os, sys
+from app.core.storage import storage_client
+storage_client().put_object(
+    Bucket=os.environ['BACKUP_BUCKET'],
+    Key=os.environ['BACKUP_KEY'],
+    Body=sys.stdin.buffer.read(),
+    ContentType='application/gzip',
+)
+" < "$file"
+}
+
+if [ -n "${BACKUP_S3_BUCKET:-}" ]; then
+  if upload_remote "$FILE"; then
     echo "  リモート保存 完了: s3://${BACKUP_S3_BUCKET}/db/"
   else
     echo "  WARN: リモート保存に失敗（ローカルには残っています）"
   fi
 else
-  echo "  リモート保存 スキップ（BACKUP_S3_BUCKET 未設定 または aws CLI 無し）"
+  echo "  リモート保存 スキップ（BACKUP_S3_BUCKET 未設定）"
 fi
 
 # ── 世代整理 ───────────────────────────────────────────────────────────────
