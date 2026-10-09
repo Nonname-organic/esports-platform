@@ -1,7 +1,11 @@
+# ベースイメージは AWS ECR Public の公式ミラーから取得する。
+# Docker Hub は未認証だとIP単位で絞られ、GitHub のランナーはIPを共有するため
+# 429 や auth.docker.io の 504 でビルドが落ちることが繰り返し起きた。
+# ECR Public は同じ公式イメージを認証不要・レート制限なしで配る。
 # ============================
 # Stage 1: deps
 # ============================
-FROM node:20-alpine AS deps
+FROM public.ecr.aws/docker/library/node:20-alpine AS deps
 WORKDIR /app
 
 # package-lock.json をコピーして再現性を確保
@@ -11,7 +15,7 @@ RUN npm install --include=optional
 # ============================
 # Stage 2: builder
 # ============================
-FROM node:20-alpine AS builder
+FROM public.ecr.aws/docker/library/node:20-alpine AS builder
 WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
@@ -40,7 +44,7 @@ RUN npm run build
 # ============================
 # Stage 3: runner (production)
 # ============================
-FROM node:20-alpine AS runner
+FROM public.ecr.aws/docker/library/node:20-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
