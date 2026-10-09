@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# ローカル（Git Bash）から Oracle VM へデプロイする。
+# ローカル（Git Bash）から VPS へデプロイする。
 #
 #   scripts/deploy-to-vm.sh ubuntu@<VMのIP> [SSH鍵のパス]
 #

@@ -3,7 +3,7 @@
 # 前提:
 #   - nginx/nginx-tls.conf の YOUR_DOMAIN を置換済み
 #   - ホストの /etc/letsencrypt に certbot で証明書発行済み
-#     (発行手順は docs/phase10_demo_free_tier.md)
+#     (発行手順は docs/phase10_vps_conoha.md)
 #
 # Usage:
 #   docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.tls.yml up -d

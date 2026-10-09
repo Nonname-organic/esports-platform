@@ -1,0 +1,82 @@
+# ConoHa VPS (4GB) 向けの運用設定。
+#
+# base の docker-compose.yml は t2.micro (1GB) 時代のメモリ上限のままで、
+# とくに api は 300M しかなく、スコアボードOCR（OpenCV + Tesseract）を
+# 実行した瞬間に OOM で落ちる。実機に合わせた上限へ引き上げる。
+#
+# 上限の合計は約2.9GB。OS と Docker の取り分（500MB前後）を引いても
+# 4GB に収まる配分にしてある。api に 1GB を割いているのは OCR のため。
+#
+# 使い方:
+#   docker compose -f docker-compose.yml \
+#                  -f docker-compose.prod.yml \
+#                  -f docker-compose.tls.yml \
+#                  -f docker-compose.conoha.yml up -d
+
+# Docker のログは既定で無制限に増え続け、ディスクを食い潰す。
+# 全サービスに同じローテーション設定を当てる（1ファイル10MB × 3世代 = 最大30MB/コンテナ）。
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  nginx:
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 96M
+
+  frontend:
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 448M
+
+  api:
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          # OCR 実行時は cv2 のインポートだけで 100〜200MB、画像処理の
+          # 配列コピーと Tesseract の日本語モデルが加わって 500〜800MB に達する
+          memory: 1G
+
+  worker:
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 320M
+
+  scheduler:
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  postgres:
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 640M
+
+  redis:
+    logging: *default-logging
+    # maxmemory は base 側の 120mb のまま。上限はその退避先を含めた値。
+    deploy:
+      resources:
+        limits:
+          memory: 192M
+
+  discord-bot:
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 192M
