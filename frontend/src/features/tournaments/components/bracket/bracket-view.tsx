@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ZoomIn, ZoomOut, RotateCcw, Calendar, Radio, X, ExternalLink, Download } from "lucide-react";
 import { matchApi } from "@/features/matches/api/match-api";
 import { MatchOverviewTab } from "@/features/matches/components/match-overview-tab";
+import { useAuthStore } from "@/store/auth-store";
 import { cn, formatDate } from "@/lib/utils";
 import { downloadBlob, renderBracketPng } from "./export-png";
 import type { BracketMatch, BracketResponse, BracketSide } from "@/types/tournament";
@@ -569,6 +570,9 @@ interface MatchDetailPanelProps {
 function MatchDetailPanel({ match, onClose }: MatchDetailPanelProps) {
   const isCompleted = match.status === "completed";
   const isOngoing = match.status === "ongoing";
+  // 管理導線はロールで出し分ける。実際の可否はサーバー側（主催者本人か）で
+  // 判定するので、ここは見せるかどうかだけの判断。
+  const canManage = useAuthStore((st) => st.hasRole("admin", "organizer"));
 
   const STATUS_LABEL: Record<string, string> = {
     scheduled: "予定",
@@ -647,12 +651,25 @@ function MatchDetailPanel({ match, onClose }: MatchDetailPanelProps) {
              match.bracket_side === "losers" ? "Losers Bracket" : "Grand Finals"}
           </p>
         )}
-        <Link
-          href={`/matches/${match.id}`}
-          className="ml-auto flex items-center gap-1 text-xs text-brand-400 hover:text-brand-300 transition-colors"
-        >
-          試合ページを開く <ExternalLink className="h-3 w-3" />
-        </Link>
+        <div className="ml-auto flex items-center gap-3">
+          {/* 主催者はここから配信設定・スコア登録へ入る。
+              導線が無いと管理画面のURLを手打ちするしかなくなる。 */}
+          {canManage && (
+            <Link
+              href={`/admin/matches/${match.id}`}
+              className="flex items-center gap-1 text-xs font-semibold text-red-400 transition-colors hover:text-red-300"
+            >
+              <Radio className="h-3 w-3" />
+              試合を管理（配信設定）
+            </Link>
+          )}
+          <Link
+            href={`/matches/${match.id}`}
+            className="flex items-center gap-1 text-xs text-brand-400 transition-colors hover:text-brand-300"
+          >
+            試合ページを開く <ExternalLink className="h-3 w-3" />
+          </Link>
+        </div>
       </div>
     </div>
   );

@@ -483,6 +483,11 @@ export default function TournamentManagePage({ params }: { params: Promise<{ id:
               参加受付終了後にブラケットを生成できます。
               現在 {approvedCount} チームが承認されています。
             </p>
+            <p className="mb-4 text-xs text-slate-500">
+              生成後は「ブラケットを見る」から各試合を選び、「試合を管理」で
+              スコア登録や配信設定を行えます。配信に設定した試合には
+              ブラケット上に「配信」と表示されます。
+            </p>
             <div className="flex gap-3">
               <button
                 onClick={() => generateBracket.mutate()}
