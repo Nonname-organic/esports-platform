@@ -5,6 +5,8 @@ export const metadata: Metadata = {
   description: "AXELIA の利用規約",
 };
 
+const CONTACT = "AXELIA Community（Discord）、またはメール info@axelia-esports.jp";
+
 const SECTIONS: { heading: string; body: string[] }[] = [
   {
     heading: "第1条（適用）",
@@ -58,6 +60,13 @@ const SECTIONS: { heading: string; body: string[] }[] = [
     heading: "第8条（規約の変更）",
     body: [
       "運営者は必要と判断した場合、利用者への事前告知なく本規約を変更できるものとします。変更後の規約は本ページに掲載した時点で効力を生じます。",
+    ],
+  },
+  {
+    heading: "第9条（運営者・お問い合わせ）",
+    body: [
+      "本サービスは AXELIA Community が運営しています。",
+      `本規約に関するお問い合わせ、権利侵害の申し立て、その他のご連絡は ${CONTACT} までお願いします。`,
     ],
   },
 ];

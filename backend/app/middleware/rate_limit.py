@@ -20,6 +20,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     # パス末尾ごとに厳しい上限を別途設ける（値は「窓あたりの回数」）
     COSTLY_SUFFIXES: dict[str, int] = {
         "/scoreboard-ocr": 6,
+        # 認証まわりは総当たりの的になる。通常の操作では窓あたり数回しか
+        # 叩かないので、きつめに絞っても使い勝手は変わらない
+        "/auth/login": 10,
+        "/auth/register": 5,
+        "/auth/forgot-password": 5,
+        "/auth/reset-password": 5,
+        "/auth/refresh": 20,
     }
 
     async def dispatch(self, request: Request, call_next) -> Response:
@@ -81,7 +88,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if auth.startswith("Bearer "):
             # トークンの末尾16文字をIDとして使用（デコードコスト回避）
             return f"token:{auth[-16:]}"
+        # X-Forwarded-For はクライアントが先頭に任意の値を入れられる
+        # （nginx は追記するだけ）。偽の値を回すと制限をすり抜けられるため、
+        # nginx が $remote_addr から立てる X-Real-IP を優先する
+        real_ip = request.headers.get("x-real-ip")
+        if real_ip:
+            return f"ip:{real_ip.strip()}"
         forwarded_for = request.headers.get("x-forwarded-for")
         if forwarded_for:
-            return f"ip:{forwarded_for.split(',')[0].strip()}"
+            # 直前のプロキシが付けた末尾側が信用できる
+            return f"ip:{forwarded_for.split(',')[-1].strip()}"
         return f"ip:{request.client.host if request.client else 'unknown'}"

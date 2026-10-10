@@ -3,9 +3,13 @@
 E2E / Visual / Load / 手動QA で共通利用する。固定UUID + ドメイン golden.test。
 共通パスワード: Passw0rd!
 
-実行（テストDB or デモDB を指す環境で）:
+実行（テストDBを指す環境で）:
   python -m tests.seed.golden_seed
   （CIは DATABASE 環境変数で TEST DB を指してから実行）
+
+ENVIRONMENT=prod の環境では実行できない。ここで作るアカウントは
+パスワードが公開リポジトリに書かれており、本番DBに入ると誰でも
+ログインできてしまうため（実際に一度そうなった）。
 
 冪等: 固定IDで存在チェック。再実行しても重複しない。
 """
@@ -206,5 +210,21 @@ async def seed() -> None:
         print("GOLDEN SEED DONE ✅  users5/players4/teams2/tours5/matches4/notif3/scout/discord/riot")
 
 
+def _guard_production() -> None:
+    """本番DBへの流し込みを止める。
+
+    ここで作るアカウントの共通パスワードは公開リポジトリに書かれている。
+    本番に入ると誰でもログインできる状態になる。
+    """
+    from app.core.config import settings
+
+    if settings.ENVIRONMENT == "prod":
+        raise SystemExit(
+            "ENVIRONMENT=prod では実行できません。"
+            "テスト用DBを指してから実行してください"
+        )
+
+
 if __name__ == "__main__":
+    _guard_production()
     asyncio.run(seed())

@@ -65,7 +65,14 @@ const SECTIONS: { heading: string; body: string[]; list?: string[] }[] = [
   {
     heading: "8. 削除の請求",
     body: [
-      "アカウントおよび登録情報の削除をご希望の場合は、運営者までご連絡ください。合理的な期間内に対応します。",
+      "アカウントおよび登録情報の削除、開示、訂正、利用停止をご希望の場合は、下記のお問い合わせ先までご連絡ください。合理的な期間内に対応します。",
+    ],
+  },
+  {
+    heading: "9. 運営者・お問い合わせ",
+    body: [
+      "本サービスは AXELIA Community が運営しています。",
+      "個人情報の取り扱いに関するご連絡は、AXELIA Community（Discord）、またはメール info@axelia-esports.jp までお願いします。",
     ],
   },
 ];
