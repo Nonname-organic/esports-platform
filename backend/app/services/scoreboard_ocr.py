@@ -35,6 +35,12 @@ logger = logging.getLogger(__name__)
 _TARGET_WIDTH = 1920
 # 行として扱う最小の高さ（正規化後ピクセル）
 _MIN_BAND_HEIGHT = 20
+# 行の境目とみなす地色の変化量（BGR差の合計）
+_MIN_EDGE_DELTA = 18.0
+# 行の地色と同じ色とみなす許容差（BGR差の合計）
+_ROW_COLOR_TOLERANCE = 60
+# セル内で文字とみなす、地色からの色の隔たり（BGR差の合計）
+_TEXT_COLOR_TOLERANCE = 200
 _MAX_PLAYERS = 10
 # ヘッダーの断片をひとつの見出しにまとめる横方向の許容間隔（幅1920基準）。
 # 見出し内の文字間は数px、列と列の間は100px以上あるため中間の値を採る
@@ -151,6 +157,25 @@ def _enhance_for_ocr(crop: np.ndarray) -> np.ndarray:
     return cv2.copyMakeBorder(binary, 12, 12, 12, 12, cv2.BORDER_CONSTANT, value=255)
 
 
+def _enhance_region_for_ocr(crop: np.ndarray) -> np.ndarray:
+    """見出し行やスコア周辺など、広い領域をOCRしやすい形に整える。
+
+    セルと違ってこれらの領域は背景にゲーム内の絵が入り、明るさが場所に
+    よって大きく違う。画像全体でひとつの閾値を決めると、明るい部分と
+    暗い部分の差が文字とのコントラストを上回り、文字ごと塗り潰される。
+    局所的に閾値を決める。
+    """
+    if crop.size == 0:
+        return crop
+    gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+    gray = cv2.resize(gray, None, fx=3.0, fy=3.0, interpolation=cv2.INTER_CUBIC)
+    gray = cv2.bitwise_not(gray)
+    binary = cv2.adaptiveThreshold(
+        gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 51, 15
+    )
+    return cv2.copyMakeBorder(binary, 12, 12, 12, 12, cv2.BORDER_CONSTANT, value=255)
+
+
 def _ocr_text(crop: np.ndarray, config: str, lang: str = "eng") -> str:
     if crop.size == 0:
         return ""
@@ -165,18 +190,19 @@ def _ocr_text(crop: np.ndarray, config: str, lang: str = "eng") -> str:
 def _trim_to_content(crop: np.ndarray) -> np.ndarray:
     """セルの余白を落として、文字の外接矩形まで切り詰める。
 
-    列幅に対して数字は小さく、余白を付けたまま渡すと Tesseract が地色の
-    ムラを拾って桁を増やしたり（245→2495）、1桁の数字を取りこぼしたりする。
-    文字が見つからなければ元の crop をそのまま返す。
+    列幅に対し数字は小さく、余白を付けたまま渡すと Tesseract が地色の
+    ムラを拾って桁を増やしたり（245→2495）、1桁の数字を取りこぼす。
+
+    明るさで文字を拾おうとすると、セルに表の外の背景が入っている場合
+    （右端の列など）にそちらを文字と取り違える。地色からどれだけ離れた
+    色かで判定する。文字は地色と大きく違うが、背景はそこまで違わない。
     """
     if crop.size == 0:
         return crop
-    gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
-    _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    # スコアボードは地色より明るい文字。白が多数派なら地色を拾っているので反転
-    if np.count_nonzero(binary) > binary.size * 0.5:
-        binary = cv2.bitwise_not(binary)
-    ys, xs = np.nonzero(binary)
+    cell = crop.astype(np.int16)
+    base = np.median(cell, axis=(0, 1))
+    ink = np.abs(cell - base).sum(axis=2) > _TEXT_COLOR_TOLERANCE
+    ys, xs = np.nonzero(ink)
     if xs.size == 0:
         return crop
 
@@ -197,77 +223,123 @@ def _ocr_int(crop: np.ndarray) -> Optional[int]:
     return None
 
 
-def _row_brightness_profile(img: np.ndarray) -> tuple[np.ndarray, int]:
-    """
-    中央帯における各yの明度中央値と、行/背景を分ける閾値を返す。
+def _row_color_profile(img: np.ndarray) -> np.ndarray:
+    """中央帯における各yの代表色（BGRの中央値）を返す。
 
-    選手行は赤や青緑の塗りつぶし、ページ背景は暗い紺。色相で判別しようとすると
-    青緑（B成分が高い）で破綻するため、明度で分ける。文字は面積が小さく中央値
-    には出ないので、行内の文字色に影響されない。
+    文字は面積が小さく中央値には出ないので、行の地色がそのまま得られる。
     """
     w = img.shape[1]
     # 表は中央付近にある。左右の装飾（サイドバー等）を避けて中央帯だけ見る
-    strip = img[:, int(w * 0.25) : int(w * 0.75)]
-    value = cv2.cvtColor(strip, cv2.COLOR_BGR2HSV)[:, :, 2]
-    profile = np.median(value, axis=1).astype(np.uint8)
+    strip = img[:, int(w * 0.25) : int(w * 0.75)].astype(np.int16)
+    return np.median(strip, axis=1)
 
-    # profile を1列の画像とみなして大津の二値化で閾値を自動決定する
-    threshold, _ = cv2.threshold(
-        profile.reshape(-1, 1), 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
-    )
-    return profile, int(threshold)
+
+def _row_edges(img: np.ndarray) -> list[int]:
+    """行の境目（地色が大きく変わる y）を返す。"""
+    profile = _row_color_profile(img)
+    if profile.shape[0] < 2:
+        return []
+    delta = np.abs(np.diff(profile, axis=0)).sum(axis=1)
+    if delta.size == 0:
+        return []
+
+    # 境目はごく少数なので上位数%だけを拾う
+    threshold = max(_MIN_EDGE_DELTA, float(np.percentile(delta, 97)))
+    groups: list[list[int]] = []
+    for y in np.flatnonzero(delta > threshold):
+        y = int(y)
+        # 境目が数pxにじむことがあるので、近いものはひとつにまとめる
+        if groups and y - groups[-1][-1] <= 3:
+            groups[-1].append(y)
+        else:
+            groups.append([y])
+    return [int(round(sum(g) / len(g))) for g in groups]
+
+
+def _longest_even_run(bands: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    """等間隔に並んでいる最長の並びだけを残す。
+
+    選手行は同じ高さで規則正しく並ぶ。表の外にある帯が高さの条件を
+    すり抜けても、間隔が揃わないのでここで落ちる。
+    """
+    if len(bands) <= 2:
+        return bands
+
+    best: list[tuple[int, int]] = []
+    run = [bands[0]]
+    for previous, current in zip(bands, bands[1:]):
+        pitch = current[0] - previous[0]
+        reference = run[1][0] - run[0][0] if len(run) >= 2 else pitch
+        if abs(pitch - reference) <= max(4, reference * 0.15):
+            run.append(current)
+        else:
+            run = [previous, current]
+        if len(run) > len(best):
+            best = list(run)
+    return best
 
 
 def _detect_row_bands(img: np.ndarray) -> list[tuple[int, int]]:
-    """明度プロファイルから選手行の縦位置を検出する。"""
-    profile, threshold = _row_brightness_profile(img)
-    mask = profile > threshold
+    """選手行の縦位置を検出する。
 
-    bands: list[tuple[int, int]] = []
-    start = None
-    for y, is_row in enumerate(mask):
-        if is_row and start is None:
-            start = y
-        elif not is_row and start is not None:
-            if y - start >= _MIN_BAND_HEIGHT:
-                bands.append((start, y))
-            start = None
-    if start is not None and len(mask) - start >= _MIN_BAND_HEIGHT:
-        bands.append((start, len(mask)))
+    実機のスコアボードは行が隙間なく並び、しかも自チームと相手チームで
+    行の色が違う。「行は明るく行間は暗い」という前提で切ると暗い側の
+    チームが丸ごと落ちる（実際それで10行中4行しか取れていなかった）。
+    明るさではなく地色の変化点を境目として使う。
+    """
+    edges = _row_edges(img)
+    if len(edges) < 2:
+        return []
 
+    bands = [(a, b) for a, b in zip(edges, edges[1:]) if b - a >= _MIN_BAND_HEIGHT]
     if not bands:
         return []
 
-    # ヘッダーの色帯や見出しなど、選手行と明らかに高さの違う帯を除く
+    # 見出しの色帯など、選手行と明らかに高さの違う帯を除く
     heights = sorted(b - a for a, b in bands)
     median_h = heights[len(heights) // 2]
-    return [
-        (a, b) for a, b in bands if median_h * 0.6 <= (b - a) <= median_h * 1.8
-    ]
+    bands = [(a, b) for a, b in bands if median_h * 0.6 <= (b - a) <= median_h * 1.8]
+    return _longest_even_run(bands)
+
+
+def _longest_true_run(mask: np.ndarray) -> Optional[tuple[int, int]]:
+    """真が最も長く続く区間を (開始, 終了) で返す。"""
+    best = None
+    start = None
+    for i, on in enumerate(mask):
+        if on and start is None:
+            start = i
+        elif not on and start is not None:
+            if best is None or i - start > best[1] - best[0]:
+                best = (start, i - 1)
+            start = None
+    if start is not None:
+        if best is None or len(mask) - start > best[1] - best[0]:
+            best = (start, len(mask) - 1)
+    return best
 
 
 def _detect_table_x_range(
     img: np.ndarray, bands: list[tuple[int, int]]
 ) -> tuple[int, int]:
-    """
-    塗りつぶし行の横方向の広がりから表の左右端を求める。
+    """行ごとに地色が違うことを手がかりに、表の左右端を求める。
 
-    「個人成績順」列の見出しはOCRで拾えないことがあるため、選手名セルの左端は
-    ヘッダーではなくこの表の左端から決める。
+    表の中では行ごとに色が変わる（チームで色が違う）のに対し、表の外は
+    どの行でも同じ背景のまま。列方向の色のばらつきが大きい範囲を表と
+    みなす。行の塗りに濃淡があっても効く。
     """
-    _profile, threshold = _row_brightness_profile(img)
-    lefts, rights = [], []
-    for top, bottom in bands:
-        middle = img[(top + bottom) // 2, :, :]
-        value = cv2.cvtColor(middle.reshape(1, -1, 3), cv2.COLOR_BGR2HSV)[0, :, 2]
-        filled = np.flatnonzero(value > threshold)
-        if filled.size:
-            lefts.append(int(filled[0]))
-            rights.append(int(filled[-1]))
+    w = img.shape[1]
+    if len(bands) < 2:
+        return 0, w
 
-    if not lefts:
-        return 0, img.shape[1]
-    return int(np.median(lefts)), int(np.median(rights))
+    middles = np.stack(
+        [img[(top + bottom) // 2, :, :].astype(np.int16) for top, bottom in bands]
+    )
+    spread = (middles.max(axis=0) - middles.min(axis=0)).sum(axis=1)
+    span = _longest_true_run(spread > _ROW_COLOR_TOLERANCE)
+    if span is None:
+        return 0, w
+    return span[0], span[1]
 
 
 def _team_hint(img: np.ndarray, band: tuple[int, int]) -> Optional[str]:
@@ -295,43 +367,41 @@ def _name_text_left(
 ) -> int:
     """選手名セルの左端を、エージェント画像の右隣まで寄せて返す。
 
-    エージェント画像は行の地色よりかなり暗い。これを含めたまま二値化すると
-    「画像と地色の差」が「文字と地色の差」を上回り、選手名より小さく暗い
-    エージェント名が地色ごと塗り潰されて読めなくなる。画像の幅ぶんだけ
-    内側へ寄せることでこれを避ける。暗いブロックが無ければ left のまま。
+    画像を含めたまま二値化すると、「画像と地色の差」が「文字と地色の差」を
+    上回り、選手名より小さく暗いエージェント名が地色ごと塗り潰される。
+
+    画像は暗いとは限らず（実機では色鮮やかな立ち絵）、明るさでは判別
+    できない。かわりに「地色と違う画素が縦方向にびっしり詰まっている列」
+    を画像とみなす。文字は線が細く縦に隙間があるので引っかからない。
     """
     span = right - left
     if span < 60 or not bands:
         return left
 
-    profiles = []
+    filled = []
     for top, bottom in bands:
-        cell = img[top:bottom, left:right]
+        cell = img[top:bottom, left:right].astype(np.int16)
         if cell.size == 0:
             continue
-        value = cv2.cvtColor(cell, cv2.COLOR_BGR2HSV)[:, :, 2]
-        profiles.append(np.median(value, axis=0))
-    if not profiles:
+        base = np.median(cell, axis=(0, 1))
+        differs = np.abs(cell - base).sum(axis=2) > _ROW_COLOR_TOLERANCE
+        filled.append(differs.mean(axis=0))
+    if not filled:
         return left
 
-    # 全行の中央値を取る。1行だけ暗い装飾があっても引きずられない
-    profile = np.median(np.asarray(profiles), axis=0)
-    # セルの右半分は文字の載らない余白が多く、行の地色がそのまま出る
-    base = float(np.median(profile[int(span * 0.5) :]))
-    if base <= 0:
-        return left
-
-    dark = profile < base * 0.7
-    indices = np.flatnonzero(dark)
-    # 左端寄りに暗いブロックが無ければ、エージェント画像は無いとみなす
+    # 全行の中央値。1行だけ装飾が違っても引きずられない
+    profile = np.median(np.asarray(filled), axis=0)
+    dense = profile > 0.7
+    indices = np.flatnonzero(dense)
+    # 左端寄りに詰まった列が無ければ、画像は無いとみなす
     if indices.size == 0 or indices[0] > span * 0.25:
         return left
 
     start = int(indices[0])
     end = start
-    while end + 1 < span and dark[end + 1]:
+    while end + 1 < span and dense[end + 1]:
         end += 1
-    # 細い罫線や、セルの大半を占めるほど広い暗部は画像ではない
+    # 細い罫線や、セルの大半を占めるほど広い範囲は画像ではない
     if end - start < 8 or end > span * 0.6:
         return left
     return left + end + 5
@@ -353,7 +423,7 @@ def _find_header_columns(
 
     try:
         data = pytesseract.image_to_data(
-            _enhance_for_ocr(header_region),
+            _enhance_region_for_ocr(header_region),
             config="--psm 6",
             lang=lang,
             output_type=pytesseract.Output.DICT,
@@ -614,13 +684,16 @@ def _detect_score(img: np.ndarray, first_band_top: int) -> Optional[tuple[int, i
 
     大きな装飾文字は誤読しやすいため、あくまで初期値の提案として扱う。
     """
-    region = img[: max(1, first_band_top - 120), :]
+    # スコアは画面中央にある。上部HUD（時刻・所持金・クレジット等）の数字を
+    # 拾ってしまわないよう、横も中央だけに絞る
+    w = img.shape[1]
+    region = img[: max(1, first_band_top - 120), int(w * 0.35) : int(w * 0.65)]
     if region.size == 0:
         return None
 
     try:
         data = pytesseract.image_to_data(
-            _enhance_for_ocr(region),
+            _enhance_region_for_ocr(region),
             # 左右のスコアは大きく離れている。--psm 6（段落）だと間の
             # 「VICTORY」を飛ばして "13" と "9" を "139" に繋げてしまうため、
             # 散在する文字をそのまま拾う --psm 11 を使う
@@ -630,7 +703,7 @@ def _detect_score(img: np.ndarray, first_band_top: int) -> Optional[tuple[int, i
     except pytesseract.TesseractError:
         return None
 
-    candidates: list[tuple[float, int]] = []
+    candidates: list[tuple[float, int, float]] = []  # (x, 値, 文字の高さ)
     for i, raw_text in enumerate(data["text"]):
         digits = re.sub(r"\D", "", (raw_text or "").strip())
         if not digits:
@@ -638,10 +711,20 @@ def _detect_score(img: np.ndarray, first_band_top: int) -> Optional[tuple[int, i
         value = int(digits)
         if not 0 <= value <= 30:
             continue
-        candidates.append((float(data["left"][i]), value))
+        candidates.append(
+            (float(data["left"][i]), value, float(data["height"][i]))
+        )
 
     if len(candidates) < 2:
         return None
+
+    # スコアは大きな装飾文字。上部HUDの小さい数字が混ざるため、
+    # いちばん大きい文字と同程度の高さのものだけを残す
+    tallest = max(c[2] for c in candidates)
+    candidates = [c for c in candidates if c[2] >= tallest * 0.6]
+    if len(candidates) < 2:
+        return None
+
     candidates.sort(key=lambda c: c[0])
     return candidates[0][1], candidates[-1][1]
 
@@ -682,15 +765,18 @@ def parse_scoreboard(raw: bytes) -> tuple[ScoreboardParseResult, np.ndarray]:
 
     # 選手名セルは「表の左端 〜 ACS列の左端」。見出し「個人成績順」はOCRで
     # 拾えないことがあるため、ヘッダーではなく塗りつぶし行の広がりから決める
-    table_left, _table_right = _detect_table_x_range(img, bands)
-    name_bounds: Optional[tuple[int, int]] = None
-    if acs_bounds is not None:
+    name_bounds = _column_bounds(columns, "name", width)
+    if name_bounds is None and acs_bounds is not None:
+        # 見出しを拾えなかったときだけ、行の塗りの左端から決める
+        table_left, _table_right = _detect_table_x_range(img, bands)
+        if acs_bounds[0] - table_left > 40:
+            name_bounds = (table_left, acs_bounds[0])
+    if name_bounds is not None:
         # エージェント画像を外して文字の始まりから切り出す
-        left = _name_text_left(img, bands, table_left, acs_bounds[0])
-        if acs_bounds[0] - left > 40:
-            name_bounds = (left, acs_bounds[0])
-    if name_bounds is None:
-        name_bounds = _column_bounds(columns, "name", width)
+        name_bounds = (
+            _name_text_left(img, bands, name_bounds[0], name_bounds[1]),
+            name_bounds[1],
+        )
 
     kda_bounds = _column_bounds(columns, "kda", width)
     fb_bounds = _column_bounds(columns, "first_bloods", width)
