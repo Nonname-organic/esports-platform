@@ -169,10 +169,11 @@ function NotificationCard({
   const content = (
     <div
       className={cn(
+        // 未読は左の帯と背景で立たせる。既読は沈めて、一覧で区別が付くようにする
         "flex items-start gap-3 rounded-xl border p-4 transition-colors",
         notification.is_read
-          ? "border-white/5 bg-transparent"
-          : "border-brand-500/20 bg-slate-900",
+          ? "border-white/5 bg-transparent opacity-70 hover:opacity-100"
+          : "border-l-4 border-l-brand-500 border-y-brand-500/20 border-r-brand-500/20 bg-slate-900",
       )}
     >
       <div className={cn("mt-0.5 flex-shrink-0 rounded-lg p-2", cfg.bg)}>
@@ -181,10 +182,22 @@ function NotificationCard({
 
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2">
-          <p className={cn("text-sm font-semibold", notification.is_read ? "text-slate-400" : "text-white")}>
-            {notification.title}
-          </p>
-          {!notification.is_read && <span className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-brand-500" />}
+          <div className="min-w-0 flex-1">
+            <span className={cn(
+              "mr-2 inline-block rounded px-1.5 py-0.5 align-middle text-[10px] font-bold",
+              notification.is_read
+                ? "bg-white/5 text-slate-500"
+                : "bg-brand-500 text-white",
+            )}>
+              {notification.is_read ? "既読" : "未読"}
+            </span>
+            <span className={cn(
+              "align-middle text-sm",
+              notification.is_read ? "font-medium text-slate-400" : "font-bold text-white",
+            )}>
+              {notification.title}
+            </span>
+          </div>
         </div>
         {notification.body && (
           open ? (

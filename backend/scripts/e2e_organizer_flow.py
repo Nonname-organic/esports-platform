@@ -53,7 +53,19 @@ def check(label: str, cond: bool, detail: str = "") -> bool:
 
 
 async def cleanup() -> int:
+    """テストで作った大会と、それに紐づく通知を消す。
+
+    notifications は大会への外部キーを持たず metadata に id を入れるだけなので、
+    大会を消しても通知が残る。放置すると「存在しない大会の通知」が
+    利用者の一覧に溜まるため、ここで一緒に片付ける。
+    """
     async with AsyncSessionLocal() as db:
+        ids = (await db.execute(text(
+            "SELECT id FROM tournaments WHERE name = :n"), {"n": TOURNAMENT_NAME})).scalars().all()
+        for tid in ids:
+            await db.execute(text(
+                "DELETE FROM notifications WHERE metadata->>'tournament_id' = :i"),
+                {"i": str(tid)})
         res = await db.execute(text(
             "DELETE FROM tournaments WHERE name = :n RETURNING id"), {"n": TOURNAMENT_NAME})
         n = len(res.fetchall())

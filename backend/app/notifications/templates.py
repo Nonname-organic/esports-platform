@@ -6,6 +6,9 @@
 
 本文は改行を含む複数行になる。通知一覧では折りたたんで見せ、
 開いたときに全文と導線（Discordへ参加 / 大会ページ）を出す。
+
+件名の先頭には必ず大会名を入れる。複数の大会に応募していると、
+一覧でどの大会の通知か分からなくなるため。
 """
 from __future__ import annotations
 
@@ -28,7 +31,7 @@ def format_tournament_date(start_at: datetime | None) -> str:
 def approved_with_discord(tournament_name: str, tournament_date: str,
                           discord_invite_url: str) -> tuple[str, str]:
     """参加確定（Discord招待URLあり）。(件名, 本文) を返す。"""
-    title = "大会参加確定のお知らせ"
+    title = f"【{tournament_name}】大会参加確定のお知らせ"
     body = (
         "大会へのご応募ありがとうございます。\n"
         "この度、以下の大会への参加が確定いたしましたので、お知らせいたします。\n"
@@ -49,7 +52,7 @@ def approved_with_discord(tournament_name: str, tournament_date: str,
 
 def approved_without_discord(tournament_name: str, tournament_date: str) -> tuple[str, str]:
     """参加確定（Discord招待URLが未設定）。(件名, 本文) を返す。"""
-    title = "大会参加確定のお知らせ"
+    title = f"【{tournament_name}】大会参加確定のお知らせ"
     body = (
         "大会へのご応募ありがとうございます。\n"
         "この度、以下の大会への参加が確定いたしましたので、お知らせいたします。\n"
@@ -73,7 +76,7 @@ def waitlisted(tournament_name: str, tournament_date: str) -> tuple[str, str]:
     主催者が繰り上げられる。「落選」と言い切ると、その後の繰り上げ連絡と
     食い違うため、補欠であることを明示した文面にしている。
     """
-    title = "大会参加申請結果のお知らせ"
+    title = f"【{tournament_name}】大会参加申請結果のお知らせ"
     body = (
         "大会へのご応募ありがとうございます。\n"
         "この度、以下の大会への参加申請について、選考の結果、\n"
