@@ -55,7 +55,10 @@ _HEADER_ALIASES: dict[str, tuple[str, ...]] = {
     "assists": ("A", "ASSISTS"),
 }
 
-_DIGITS_CONFIG = "--psm 7 -c tessedit_char_whitelist=0123456789"
+# 数字セルは余白を落としてから「1語」として読む。--psm 7（1行）だと
+# 1桁のセルを取りこぼしたり、桁を増やして誤読したりする
+_DIGITS_CONFIG = "--psm 8 -c tessedit_char_whitelist=0123456789"
+_DIGITS_FALLBACK_CONFIG = "--psm 7 -c tessedit_char_whitelist=0123456789"
 _NAME_CONFIG = "--psm 6"
 
 _CLEAN_LABEL_RE = re.compile(r"[^0-9A-Za-zぁ-んァ-ヶ一-龠]")
@@ -159,10 +162,39 @@ def _ocr_text(crop: np.ndarray, config: str, lang: str = "eng") -> str:
         return ""
 
 
+def _trim_to_content(crop: np.ndarray) -> np.ndarray:
+    """セルの余白を落として、文字の外接矩形まで切り詰める。
+
+    列幅に対して数字は小さく、余白を付けたまま渡すと Tesseract が地色の
+    ムラを拾って桁を増やしたり（245→2495）、1桁の数字を取りこぼしたりする。
+    文字が見つからなければ元の crop をそのまま返す。
+    """
+    if crop.size == 0:
+        return crop
+    gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+    _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    # スコアボードは地色より明るい文字。白が多数派なら地色を拾っているので反転
+    if np.count_nonzero(binary) > binary.size * 0.5:
+        binary = cv2.bitwise_not(binary)
+    ys, xs = np.nonzero(binary)
+    if xs.size == 0:
+        return crop
+
+    pad = 6
+    x0, x1 = max(0, int(xs.min()) - pad), min(crop.shape[1], int(xs.max()) + pad + 1)
+    y0, y1 = max(0, int(ys.min()) - pad), min(crop.shape[0], int(ys.max()) + pad + 1)
+    if x1 - x0 < 6 or y1 - y0 < 6:
+        return crop
+    return crop[y0:y1, x0:x1]
+
+
 def _ocr_int(crop: np.ndarray) -> Optional[int]:
-    text = _ocr_text(crop, _DIGITS_CONFIG)
-    digits = re.sub(r"\D", "", text)
-    return int(digits) if digits else None
+    trimmed = _trim_to_content(crop)
+    for config in (_DIGITS_CONFIG, _DIGITS_FALLBACK_CONFIG):
+        digits = re.sub(r"\D", "", _ocr_text(trimmed, config))
+        if digits:
+            return int(digits)
+    return None
 
 
 def _row_brightness_profile(img: np.ndarray) -> tuple[np.ndarray, int]:
@@ -256,6 +288,53 @@ def _team_hint(img: np.ndarray, band: tuple[int, int]) -> Optional[str]:
     if green - red > 8:
         return "green"
     return None
+
+
+def _name_text_left(
+    img: np.ndarray, bands: list[tuple[int, int]], left: int, right: int
+) -> int:
+    """選手名セルの左端を、エージェント画像の右隣まで寄せて返す。
+
+    エージェント画像は行の地色よりかなり暗い。これを含めたまま二値化すると
+    「画像と地色の差」が「文字と地色の差」を上回り、選手名より小さく暗い
+    エージェント名が地色ごと塗り潰されて読めなくなる。画像の幅ぶんだけ
+    内側へ寄せることでこれを避ける。暗いブロックが無ければ left のまま。
+    """
+    span = right - left
+    if span < 60 or not bands:
+        return left
+
+    profiles = []
+    for top, bottom in bands:
+        cell = img[top:bottom, left:right]
+        if cell.size == 0:
+            continue
+        value = cv2.cvtColor(cell, cv2.COLOR_BGR2HSV)[:, :, 2]
+        profiles.append(np.median(value, axis=0))
+    if not profiles:
+        return left
+
+    # 全行の中央値を取る。1行だけ暗い装飾があっても引きずられない
+    profile = np.median(np.asarray(profiles), axis=0)
+    # セルの右半分は文字の載らない余白が多く、行の地色がそのまま出る
+    base = float(np.median(profile[int(span * 0.5) :]))
+    if base <= 0:
+        return left
+
+    dark = profile < base * 0.7
+    indices = np.flatnonzero(dark)
+    # 左端寄りに暗いブロックが無ければ、エージェント画像は無いとみなす
+    if indices.size == 0 or indices[0] > span * 0.25:
+        return left
+
+    start = int(indices[0])
+    end = start
+    while end + 1 < span and dark[end + 1]:
+        end += 1
+    # 細い罫線や、セルの大半を占めるほど広い暗部は画像ではない
+    if end - start < 8 or end > span * 0.6:
+        return left
+    return left + end + 5
 
 
 def _clean_label(text: str) -> str:
@@ -355,8 +434,17 @@ def _label_matches(label: str, aliases: tuple[str, ...]) -> bool:
         cleaned = _clean_label(alias)
         if not cleaned:
             continue
-        if len(cleaned) <= 2:
+        if len(cleaned) == 1:
             if label == cleaned:
+                return True
+            continue
+        if len(cleaned) == 2:
+            # 「設置」が「設直」になるなど、2文字の見出しは1文字だけ
+            # 誤読されることがある。完全一致だと列ごと落ちてしまうため、
+            # 同じ長さで1文字違いまでは同じ列とみなす
+            if label == cleaned:
+                return True
+            if len(label) == 2 and sum(a != b for a, b in zip(label, cleaned)) == 1:
                 return True
             continue
         # 3文字以上なら、どちらかがどちらかを含めば同じ列とみなす。
@@ -533,7 +621,10 @@ def _detect_score(img: np.ndarray, first_band_top: int) -> Optional[tuple[int, i
     try:
         data = pytesseract.image_to_data(
             _enhance_for_ocr(region),
-            config="--psm 6 -c tessedit_char_whitelist=0123456789",
+            # 左右のスコアは大きく離れている。--psm 6（段落）だと間の
+            # 「VICTORY」を飛ばして "13" と "9" を "139" に繋げてしまうため、
+            # 散在する文字をそのまま拾う --psm 11 を使う
+            config="--psm 11 -c tessedit_char_whitelist=0123456789",
             output_type=pytesseract.Output.DICT,
         )
     except pytesseract.TesseractError:
@@ -594,8 +685,8 @@ def parse_scoreboard(raw: bytes) -> tuple[ScoreboardParseResult, np.ndarray]:
     table_left, _table_right = _detect_table_x_range(img, bands)
     name_bounds: Optional[tuple[int, int]] = None
     if acs_bounds is not None:
-        # アイコン部分を避けて少し内側から切り出す
-        left = table_left + int((acs_bounds[0] - table_left) * 0.04)
+        # エージェント画像を外して文字の始まりから切り出す
+        left = _name_text_left(img, bands, table_left, acs_bounds[0])
         if acs_bounds[0] - left > 40:
             name_bounds = (left, acs_bounds[0])
     if name_bounds is None:
