@@ -62,7 +62,9 @@ def resign_stored_url(url: Optional[str]) -> Optional[str]:
     """DB に保存済みの S3 署名付きURLから key を逆算し、フレッシュな署名付きURLを返す。
 
     - 空 / 自バケット以外（外部URL・Discord CDN等）はそのまま返す
-    - virtual-hosted 形式（bucket.s3.../key）と path 形式（s3.../bucket/key）の両対応
+    - virtual-hosted 形式（bucket.s3.../key）
+    - path 形式（s3.../bucket/key）
+    - エンドポイントがパスを持つ形式（host/storage/v1/s3/bucket/key = Supabase）
     - 解析失敗時は元の url にフォールバック
     """
     if not url:
@@ -72,8 +74,12 @@ def resign_stored_url(url: Optional[str]) -> Optional[str]:
         return url
     try:
         path = unquote(urlparse(url).path).lstrip("/")
-        if path.startswith(f"{bucket}/"):
-            path = path[len(bucket) + 1:]
+        # バケット名のセグメントより後ろがキー。Supabase のように
+        # エンドポイント自体が /storage/v1/s3 を含む場合、先頭一致だけでは
+        # 剥がせずキーがずれて 404 になるため、位置で探す。
+        parts = path.split("/")
+        if bucket in parts:
+            path = "/".join(parts[parts.index(bucket) + 1:])
         if not path:
             return url
         return sign_url(path)

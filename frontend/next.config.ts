@@ -17,12 +17,20 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "**.r2.cloudflarestorage.com", // R2 S3互換エンドポイント
       },
+      {
+        protocol: "https",
+        hostname: "**.supabase.co", // Supabase Storage（現行の保存先）
+      },
+      {
+        protocol: "https",
+        hostname: "**.supabase.in",
+      },
     ],
   },
   experimental: {
     // Server Actions 有効化
     serverActions: {
-      allowedOrigins: ["localhost:3000", "localhost", "*.netlify.app", "demo.axelia-esports.jp"],
+      allowedOrigins: ["localhost:3000", "localhost", "*.netlify.app", "app.axelia-esports.jp"],
     },
   },
   async headers() {
