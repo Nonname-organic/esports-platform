@@ -39,8 +39,8 @@ _MIN_BAND_HEIGHT = 20
 _MIN_EDGE_DELTA = 18.0
 # 行の地色と同じ色とみなす許容差（BGR差の合計）
 _ROW_COLOR_TOLERANCE = 60
-# セル内で文字とみなす、地色からの色の隔たり（BGR差の合計）
-_TEXT_COLOR_TOLERANCE = 200
+# セル内で文字とみなす、地色からの明るさの差
+_TEXT_BRIGHTNESS_MARGIN = 55
 _MAX_PLAYERS = 10
 # ヘッダーの断片をひとつの見出しにまとめる横方向の許容間隔（幅1920基準）。
 # 見出し内の文字間は数px、列と列の間は100px以上あるため中間の値を採る
@@ -51,7 +51,7 @@ _HEADER_ALIASES: dict[str, tuple[str, ...]] = {
     "name": ("個人成績順", "PLAYER", "プレイヤー"),
     "acs": ("平均バトルスコア", "バトルスコア", "ACS", "平均"),
     "kda": ("KDA",),
-    "econ": ("マネー", "ECON", "所持金"),
+    "econ": ("マネーレーティング", "マネー", "ECON", "所持金"),
     "first_bloods": ("ファーストブラッド", "FB", "ファースト"),
     "plants": ("設置", "PLT", "PLANTS"),
     "defuses": ("解除", "DEF", "DEFUSES"),
@@ -193,20 +193,21 @@ def _trim_to_content(crop: np.ndarray) -> np.ndarray:
     列幅に対し数字は小さく、余白を付けたまま渡すと Tesseract が地色の
     ムラを拾って桁を増やしたり（245→2495）、1桁の数字を取りこぼす。
 
-    明るさで文字を拾おうとすると、セルに表の外の背景が入っている場合
-    （右端の列など）にそちらを文字と取り違える。地色からどれだけ離れた
-    色かで判定する。文字は地色と大きく違うが、背景はそこまで違わない。
+    スコアボードの文字は地色よりはっきり明るい。大津の二値化のように
+    2つの塊に割る方法だと、セルに濃さの違う背景（並び替え中の列や、
+    表の外）が入ったときにそちらを文字と取り違える。地色の明るさから
+    どれだけ上かで判定する。
     """
     if crop.size == 0:
         return crop
-    cell = crop.astype(np.int16)
-    base = np.median(cell, axis=(0, 1))
-    ink = np.abs(cell - base).sum(axis=2) > _TEXT_COLOR_TOLERANCE
+    gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+    base = float(np.median(gray))
+    ink = gray > base + _TEXT_BRIGHTNESS_MARGIN
     ys, xs = np.nonzero(ink)
     if xs.size == 0:
         return crop
 
-    pad = 6
+    pad = 10
     x0, x1 = max(0, int(xs.min()) - pad), min(crop.shape[1], int(xs.max()) + pad + 1)
     y0, y1 = max(0, int(ys.min()) - pad), min(crop.shape[0], int(ys.max()) + pad + 1)
     if x1 - x0 < 6 or y1 - y0 < 6:
@@ -279,6 +280,60 @@ def _longest_even_run(bands: list[tuple[int, int]]) -> list[tuple[int, int]]:
     return best
 
 
+def _band_color(img: np.ndarray, band: tuple[int, int]) -> np.ndarray:
+    """行の代表色（中央帯のBGR中央値）を返す。"""
+    w = img.shape[1]
+    core = img[band[0] : band[1], int(w * 0.25) : int(w * 0.75)]
+    return np.median(core.astype(np.int16), axis=(0, 1))
+
+
+def _extend_to_full_table(
+    img: np.ndarray, bands: list[tuple[int, int]]
+) -> list[tuple[int, int]]:
+    """検出できた行から等間隔のまま上下へ伸ばし、欠けた行を補う。
+
+    同じチームの行が隣り合うと境目に色の変化が出ず、その分の行が
+    落ちる（行間の細い線も、動画からの切り出しなどでは潰れる）。
+    行の高さと間隔は一定なので、既知の行と同じ色が続く限り補う。
+    """
+    if len(bands) < 2 or len(bands) >= _MAX_PLAYERS:
+        return bands
+
+    pitch = int(round(np.median([b[0] - a[0] for a, b in zip(bands, bands[1:])])))
+    height = int(round(np.median([b - a for a, b in bands])))
+    if pitch <= 0 or height <= 0:
+        return bands
+
+    known = [_band_color(img, band) for band in bands]
+
+    def looks_like_row(candidate: tuple[int, int]) -> bool:
+        if candidate[0] < 0 or candidate[1] > img.shape[0]:
+            return False
+        color = _band_color(img, candidate)
+        # 見出しのバーを行として拾わないよう、既知の行とほぼ同じ色だけ通す
+        return any(
+            float(np.abs(color - k).sum()) <= _ROW_COLOR_TOLERANCE for k in known
+        )
+
+    result = list(bands)
+    top = bands[0][0]
+    while len(result) < _MAX_PLAYERS:
+        top -= pitch
+        candidate = (top, top + height)
+        if not looks_like_row(candidate):
+            break
+        result.insert(0, candidate)
+
+    bottom = bands[-1][0]
+    while len(result) < _MAX_PLAYERS:
+        bottom += pitch
+        candidate = (bottom, bottom + height)
+        if not looks_like_row(candidate):
+            break
+        result.append(candidate)
+    return result
+
+
 def _detect_row_bands(img: np.ndarray) -> list[tuple[int, int]]:
     """選手行の縦位置を検出する。
 
@@ -299,7 +354,7 @@ def _detect_row_bands(img: np.ndarray) -> list[tuple[int, int]]:
     heights = sorted(b - a for a, b in bands)
     median_h = heights[len(heights) // 2]
     bands = [(a, b) for a, b in bands if median_h * 0.6 <= (b - a) <= median_h * 1.8]
-    return _longest_even_run(bands)
+    return _extend_to_full_table(img, _longest_even_run(bands))
 
 
 def _longest_true_run(mask: np.ndarray) -> Optional[tuple[int, int]]:
@@ -458,6 +513,28 @@ def _find_header_columns(
                 continue
             if _label_matches(label, aliases):
                 columns[key] = cx
+    return _fill_missing_tail_column(columns)
+
+
+def _fill_missing_tail_column(columns: dict[str, float]) -> dict[str, float]:
+    """末尾の「設置 / 解除」を取りこぼしたとき、等間隔から位置を補う。
+
+    2文字の見出しは誤読で丸ごと落ちることがある。落ちたまま進むと
+    隣の列のセルが2列ぶんに広がり、2つの数字が繋がって読まれる。
+    ファーストブラッド・設置・解除は等間隔に並ぶので、2つ分かれば
+    残り1つの位置は決まる。
+    """
+    fb = columns.get("first_bloods")
+    plants = columns.get("plants")
+    defuses = columns.get("defuses")
+    if fb is None:
+        return columns
+
+    if plants is None and defuses is not None and defuses > fb:
+        # この並びで両者の間にある列は設置だけなので、真ん中が設置
+        columns["plants"] = (fb + defuses) / 2
+    elif defuses is None and plants is not None and plants > fb:
+        columns["defuses"] = plants + (plants - fb)
     return columns
 
 
@@ -756,8 +833,10 @@ def parse_scoreboard(raw: bytes) -> tuple[ScoreboardParseResult, np.ndarray]:
     columns = _find_header_columns(img, bands[0][0], lang)
     if "acs" not in columns or ("kda" not in columns and "kills" not in columns):
         raise ValidationError(
-            "ヘッダー（平均バトルスコア / KDA）を検出できませんでした。"
-            "スコアボードの見出し行を含めて撮影してください"
+            "見出し行（平均バトルスコア / KDA）を読み取れませんでした。"
+            "見出しが写っているか、写っていれば画質が足りているかを"
+            "確認してください。動画からの切り出しや縮小された画像では"
+            "文字が潰れて読めないことがあります"
         )
 
     width = img.shape[1]
