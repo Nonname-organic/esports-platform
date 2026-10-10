@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Users, Trophy, Clock, Coins, Eye, PlayCircle, Timer } from "lucide-react";
+import { Users, Trophy, Clock, Coins, PlayCircle, Timer } from "lucide-react";
 import { cn, getGameColor, formatPrize } from "@/lib/utils";
 import type { TournamentSummary } from "@/types/tournament";
 import { deadlineLabel } from "@/features/live/lib/format";
@@ -10,10 +10,6 @@ import { LiveBadge } from "./live-dot";
 
 type Mode = "entry" | "live";
 
-// 閲覧人数（モック許可枠）: props から決定的に算出（SSR/CSR一致・hydration safe）。
-function viewerEstimate(t: TournamentSummary): number {
-  return 120 + ((t.registered_teams * 53 + t.name.length * 17) % 900);
-}
 function elapsedLabel(startIso: string | null): string {
   if (!startIso) return "進行中";
   const ms = Date.now() - new Date(startIso).getTime();
@@ -107,13 +103,6 @@ export function TournamentLiveCard({ t, mode }: { t: TournamentSummary; mode: Mo
           <Users className="h-3.5 w-3.5 text-slate-500" />
           <span className="font-semibold text-white">{t.registered_teams}</span>
           <span className="text-slate-500">/ {t.max_teams} Teams</span>
-          {isLive && (
-            <span className="ml-auto inline-flex items-center gap-1 text-xs text-slate-400">
-              <Eye className="h-3.5 w-3.5 text-red-400" />
-              <span className="font-semibold text-white tabular-nums">{viewerEstimate(t).toLocaleString()}</span>
-              観戦中
-            </span>
-          )}
         </div>
 
         <div className="mt-3">
