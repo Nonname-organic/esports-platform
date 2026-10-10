@@ -29,6 +29,18 @@ from app.models.team import Team
 CAREER_CACHE_TTL = 600  # 10分
 
 
+def _win_streaks(results: list[bool]) -> tuple[int, int]:
+    """勝敗の並びから (現在の連勝数, 最長連勝数) を返す。
+
+    results は時系列順。直近が負けなら現在の連勝は 0。
+    """
+    best = run = 0
+    for won in results:
+        run = run + 1 if won else 0
+        best = max(best, run)
+    return run, best
+
+
 class CareerAggregationService:
     def __init__(self, db: AsyncSession, cache: RedisCache):
         self._db = db
@@ -170,7 +182,9 @@ class CareerAggregationService:
     # Team Career
     # ══════════════════════════════════════════════════════════════════════════
     async def get_team_career(self, team_id: uuid.UUID) -> dict:
-        cache_key = f"career:team:{team_id}"
+        # 返す項目を増やしたときはキーの版を上げる。上げないと古い形の
+        # キャッシュが残り、読み出し側が KeyError で落ちる
+        cache_key = f"career:team:v2:{team_id}"
         cached = await self._cache.get(cache_key)
         if cached:
             return cached  # type: ignore[return-value]
@@ -185,12 +199,14 @@ class CareerAggregationService:
             from app.core.exceptions import NotFoundError
             raise NotFoundError("チーム", str(team_id))
 
-        # チームの全試合（team1 or team2）
+        # チームの全試合（team1 or team2）。連勝記録を数えるため時系列に並べる
         matches = (await self._db.execute(
-            select(Match).where(
+            select(Match)
+            .where(
                 ((Match.team1_id == team_id) | (Match.team2_id == team_id)),
                 Match.status == MatchStatus.COMPLETED,
             )
+            .order_by(Match.ended_at.asc().nulls_last(), Match.round_number.asc())
         )).scalars().all()
 
         total_matches = len(matches)
@@ -198,6 +214,9 @@ class CareerAggregationService:
         total_losses = total_matches - total_wins
         win_rate = total_wins / total_matches if total_matches else 0.0
         tournaments = {m.tournament_id for m in matches}
+        current_streak, best_streak = _win_streaks(
+            [m.winner_id == team_id for m in matches]
+        )
 
         # ライバル分析（対戦頻度）
         rival_agg: dict[uuid.UUID, dict] = defaultdict(lambda: {"matches": 0, "wins": 0})
@@ -220,6 +239,7 @@ class CareerAggregationService:
         map_agg, agent_agg = await self._team_map_agent_stats(team_id)
         map_names = await self._load_map_names()
 
+        game_wins, game_total = await self._team_game_record(team_id)
         rating = await self._get_team_rating(team_id)
         championships = await self._get_team_titles(team_id)
 
@@ -234,6 +254,11 @@ class CareerAggregationService:
             "win_rate": round(win_rate, 4),
             "championships": championships,
             "tournaments_played": len(tournaments),
+            "current_streak": current_streak,
+            "best_streak": best_streak,
+            "game_wins": game_wins,
+            "game_losses": game_total - game_wins,
+            "game_win_rate": round(game_wins / game_total, 4) if game_total else 0.0,
             "current_rating": rating.get("current") if rating else None,
             "peak_rating": rating.get("peak") if rating else None,
             "map_performance": [
@@ -315,6 +340,24 @@ class CareerAggregationService:
             pass
         return None
 
+    async def _team_game_record(self, team_id: uuid.UUID) -> tuple[int, int]:
+        """マップ単位の (勝ち数, 総数) を返す。
+
+        map_performance は選手ごとの PlayerMatchStats を集めたもので、
+        1マップが5件に数えられる。マップの勝敗はここで別に数える。
+        """
+        row = (await self._db.execute(text("""
+            SELECT count(*) FILTER (WHERE mg.winner_id = :team) AS wins,
+                   count(*) AS total
+              FROM match_games mg
+              JOIN matches m ON m.id = mg.match_id
+             WHERE (m.team1_id = :team OR m.team2_id = :team)
+               AND m.status::text = 'completed'
+        """), {"team": team_id})).first()
+        if not row:
+            return 0, 0
+        return int(row.wins or 0), int(row.total or 0)
+
     async def _get_team_rating(self, team_id: uuid.UUID) -> Optional[dict]:
         # チームレーティングは rankings テーブルの points を流用
         try:
@@ -344,14 +387,26 @@ class CareerAggregationService:
         return championships, mvp_count
 
     async def _get_team_titles(self, team_id: uuid.UUID) -> int:
-        try:
-            row = (await self._db.execute(text(
-                "SELECT COUNT(*) FROM team_achievements "
-                "WHERE team_id = :tid AND achievement_type = 'champion'"
-            ), {"tid": str(team_id)})).first()
-            return row[0] if row else 0
-        except Exception:
-            return 0
+        """優勝した大会の数。完了した大会の決勝を勝ったかで数える。
+
+        以前は team_achievements を見ていたが、実績を作る処理がまだ無く
+        常に0だった。4戦全勝して優勝したチームの画面にも「0優勝」と
+        出てしまうため、ブラケットから直接求める。
+        """
+        row = (await self._db.execute(text("""
+            SELECT count(*)
+              FROM (
+                SELECT DISTINCT ON (m.tournament_id) m.winner_id
+                  FROM matches m
+                  JOIN tournaments t ON t.id = m.tournament_id
+                 WHERE m.status::text = 'completed'
+                   AND t.status::text = 'completed'
+                   AND m.winner_id IS NOT NULL
+                 ORDER BY m.tournament_id, m.round_number DESC, m.match_number DESC
+              ) AS finals
+             WHERE finals.winner_id = :team
+        """), {"team": team_id})).first()
+        return int(row[0]) if row and row[0] is not None else 0
 
     # ── 実績一覧 ────────────────────────────────────────────────────────────────
     async def get_player_achievements(self, player_id: uuid.UUID) -> list[dict]:
@@ -400,4 +455,4 @@ class CareerAggregationService:
         await self._cache.delete(f"career:player:{player_id}")
 
     async def invalidate_team(self, team_id: uuid.UUID) -> None:
-        await self._cache.delete(f"career:team:{team_id}")
+        await self._cache.delete(f"career:team:v2:{team_id}")

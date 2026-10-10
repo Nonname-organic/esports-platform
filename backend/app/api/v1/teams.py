@@ -176,14 +176,31 @@ async def get_team_audit(
 
 @router.get("/{team_id}/stats", response_model=Response[dict])
 async def get_team_stats(team_id: uuid.UUID, db: DBSession, cache: Cache):
-    """チーム統計（暫定: ゼロ値を返す）"""
+    """チーム統計。試合結果から集計する。
+
+    以前は固定値（0勝0敗・レーティング1000）を返していた。実際には
+    試合結果がDBにあるため、公開ページのチームがどれも 0W0L に見えていた。
+    """
     service = TeamService(db, cache)
-    await service.get_team(team_id)
+    await service.get_team(team_id)  # 存在しなければ 404
+
+    career = await CareerAggregationService(db, cache).get_team_career(team_id)
+
     return Response(data={
-        "wins": 0, "losses": 0, "win_rate": 0.0, "rating": 1000,
-        "peak_rating": 1000, "game_win_rate": 0.0,
-        "tournaments_played": 0, "tournaments_won": 0,
-        "win_rate_history": [],
+        "total_matches": career["total_matches"],
+        "wins": career["total_wins"],
+        "losses": career["total_losses"],
+        "win_rate": career["win_rate"],
+        "game_wins": career["game_wins"],
+        "game_losses": career["game_losses"],
+        "game_win_rate": career["game_win_rate"],
+        # レーティングはランキング集計が走っていないと無い。無ければ null
+        "rating": career["current_rating"],
+        "peak_rating": career["peak_rating"],
+        "tournaments_played": career["tournaments_played"],
+        "tournaments_won": career["championships"],
+        "current_streak": career["current_streak"],
+        "best_streak": career["best_streak"],
     }, meta=None)
 
 

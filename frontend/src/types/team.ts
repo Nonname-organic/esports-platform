@@ -49,8 +49,9 @@ export interface TeamStats {
   game_wins: number;
   game_losses: number;
   game_win_rate: number;
-  rating: number;
-  peak_rating: number;
+  /** ランキング集計がまだ無いチームは null */
+  rating: number | null;
+  peak_rating: number | null;
   tournaments_played: number;
   tournaments_won: number;
   current_streak: number;

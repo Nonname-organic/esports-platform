@@ -109,7 +109,7 @@ export function TeamHeader({ team, stats }: TeamHeaderProps) {
         {/* スタッツ行 */}
         <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatCard label="勝率" value={`${winRatePct}%`} highlight={stats.win_rate >= 0.6} />
-          <StatCard label="レーティング" value={stats.rating.toLocaleString()} />
+          <StatCard label="レーティング" value={stats.rating?.toLocaleString() ?? "—"} />
           <StatCard label="勝 / 敗" value={`${stats.wins}W ${stats.losses}L`} />
           <StatCard label="大会優勝" value={`${stats.tournaments_won} / ${stats.tournaments_played}`} />
         </div>

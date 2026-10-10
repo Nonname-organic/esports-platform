@@ -40,7 +40,7 @@ export function OverviewTab({ team, stats }: OverviewTabProps) {
             ベストストリーク: <span className="text-white font-semibold">{stats.best_streak}連勝</span>
           </span>
         )}
-        {stats.peak_rating > 0 && (
+        {stats.peak_rating != null && stats.peak_rating > 0 && (
           <span className="text-xs text-slate-500">
             最高レーティング: <span className="text-yellow-400 font-semibold">{stats.peak_rating.toLocaleString()}</span>
           </span>
