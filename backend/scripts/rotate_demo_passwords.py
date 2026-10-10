@@ -5,6 +5,9 @@
 パスワードをランダム値に差し替えてログイン不能にする（データは残るため、
 大会・チームの表示には影響しない）。
 
+管理者ロールのアカウントは対象外。巻き込むと公開直前に管理画面へ
+入れなくなるため、管理者のパスワードは画面から個別に変更すること。
+
     docker compose exec api python scripts/rotate_demo_passwords.py [--yes]
 
 --yes を付けない場合は対象を表示するだけ（ドライラン）。
@@ -35,8 +38,12 @@ async def main() -> None:
     async with AsyncSessionLocal() as db:
         rows = []
         for pattern in TARGET_PATTERNS:
+            # 管理者は除く。ここを巻き込むと公開直前に自分が管理画面へ
+            # 入れなくなる。管理者のパスワードは画面から個別に変えること
             rows += (await db.execute(text(
-                "SELECT id, email FROM users WHERE email LIKE :p ORDER BY email"
+                "SELECT id, email FROM users"
+                " WHERE email LIKE :p AND role::text <> 'admin'"
+                " ORDER BY email"
             ), {"p": pattern})).all()
 
         if not rows:
