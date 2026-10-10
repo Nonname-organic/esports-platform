@@ -431,13 +431,20 @@ function BracketMatchCard({ match, isSelected, onClick }: BracketMatchCardProps)
               <span className="ml-1.5">· {new Date(match.scheduled_at).toLocaleDateString("ja-JP", { month: "numeric", day: "numeric" })}</span>
             )}
           </span>
-          {/* どの試合が配信されるかは観戦側が一番知りたい情報なので、
-              開催前でもカード上で分かるようにする */}
+          {/* どの試合が配信されるかは観戦側が一番知りたい情報。
+              印を出すだけでなく、ここから配信へ直接飛べるようにする。 */}
           {match.stream_url && (
-            <span className="flex items-center gap-0.5 rounded bg-red-500/15 px-1 text-[9px] font-bold text-red-400">
+            <a
+              href={match.stream_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              title="配信を見る"
+              className="flex items-center gap-0.5 rounded bg-red-500/15 px-1 text-[9px] font-bold text-red-400 transition-colors hover:bg-red-500/30 hover:text-red-300"
+            >
               <Radio className="h-2.5 w-2.5" />
               配信
-            </span>
+            </a>
           )}
         </div>
       )}
@@ -650,6 +657,17 @@ function MatchDetailPanel({ match, onClose }: MatchDetailPanelProps) {
             {match.bracket_side === "winners" ? "Winners Bracket" :
              match.bracket_side === "losers" ? "Losers Bracket" : "Grand Finals"}
           </p>
+        )}
+        {match.stream_url && (
+          <a
+            href={match.stream_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 rounded-lg bg-red-500 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-red-600"
+          >
+            <Radio className="h-3.5 w-3.5" />
+            配信を見る
+          </a>
         )}
         <div className="ml-auto flex items-center gap-3">
           {/* 主催者はここから配信設定・スコア登録へ入る。

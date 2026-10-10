@@ -9,8 +9,11 @@ import type { MatchDetail } from "@/types/match";
 /**
  * この試合を配信対象にする設定。
  *
- * どの試合が配信されるかは観戦側が一番知りたい情報なので、ここで設定すると
- * ブラケット上に「配信」の印が出る。URLを空にすると解除される。
+ * 設定するのは最初の1回だけで、配信の開始・終了にあわせてこの画面を
+ * 操作する必要はない。運営の手間を増やさないため、状態の管理はせず
+ * 「この試合はここで配信する」という事実だけを持たせている。
+ *
+ * 設定するとブラケットに「配信」の印が出て、そこから配信へ直接飛べる。
  */
 export function StreamSetting({ match }: { match: MatchDetail }) {
   const [url, setUrl] = useState(match.stream_url ?? "");
@@ -38,7 +41,7 @@ export function StreamSetting({ match }: { match: MatchDetail }) {
         <Radio className="h-4 w-4 text-red-400" />
         <h2 className="text-sm font-bold text-white">配信設定</h2>
         <span className="ml-auto text-xs text-slate-500">
-          設定するとブラケットに「配信」と表示されます
+          ブラケットに印が出て、そこから配信へ飛べます
         </span>
       </div>
 
@@ -64,7 +67,8 @@ export function StreamSetting({ match }: { match: MatchDetail }) {
           </button>
         </div>
         <p className="text-xs text-slate-500">
-          空のまま保存すると、配信対象から外れます。
+          最初に1回設定するだけで、配信の開始・終了にあわせた操作は要りません。
+          空のまま保存すると配信対象から外れます。
         </p>
         {done && (
           <p className="flex items-center gap-1 text-xs text-green-400">
