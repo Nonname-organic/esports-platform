@@ -7,10 +7,15 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.exceptions import BusinessRuleError, ConflictError, NotFoundError
+from app.core.exceptions import (
+    BusinessRuleError,
+    ConflictError,
+    NotFoundError,
+    ValidationError,
+)
 from app.core.redis import CacheKeys, RedisCache
 from app.models.enums import MatchStatus
-from app.models.match import MatchGame
+from app.models.match import Map, MatchGame
 from app.models.user import User
 from app.repositories.match import MatchRepository
 from app.repositories.tournament import TournamentRepository
@@ -30,6 +35,28 @@ class MatchService:
         self._tournament_repo = TournamentRepository(db)
         self._cache = cache
         self._db = db
+
+    async def _resolve_map_id(self, value: str | None) -> uuid.UUID | None:
+        """画面から来た map_id を maps.id へ解決する。
+
+        マップ選択欄は "ascent" のような内部名を値に持つため、UUID 前提で
+        変換すると選んだだけで 500 になる。内部名とUUIDのどちらも受ける。
+        """
+        if not value:
+            return None
+        try:
+            return uuid.UUID(str(value))
+        except ValueError:
+            pass
+
+        found = (
+            await self._db.execute(
+                select(Map.id).where(Map.internal_name == str(value))
+            )
+        ).scalar_one_or_none()
+        if found is None:
+            raise ValidationError(f"マップ「{value}」が見つかりません")
+        return found
 
     async def get_detail(self, match_id: uuid.UUID) -> MatchDetail:
         cache_key = CacheKeys.MATCH_DETAIL.replace("{id}", str(match_id))
@@ -143,7 +170,7 @@ class MatchService:
         game = await self._repo.upsert_game_score(
             match_id=match_id,
             game_number=game_number,
-            map_id=uuid.UUID(data.map_id) if data.map_id else None,
+            map_id=await self._resolve_map_id(data.map_id),
             team1_score=data.team1_score,
             team2_score=data.team2_score,
             winner_id=winner_id,
@@ -155,8 +182,8 @@ class MatchService:
             [
                 {
                     "match_game_id": game.id,
-                    "player_id": uuid.UUID(ps.player_id),
-                    "team_id": uuid.UUID(ps.team_id),
+                    "player_id": ps.player_id,
+                    "team_id": ps.team_id,
                     "agent": ps.agent,
                     "kills": ps.kills,
                     "deaths": ps.deaths,
@@ -183,9 +210,9 @@ class MatchService:
 
         await self._repo.create_ban_pick(
             match_id=match_id,
-            team_id=uuid.UUID(data.team_id),
+            team_id=data.team_id,
             action=data.action,
-            map_id=uuid.UUID(data.map_id),
+            map_id=await self._resolve_map_id(data.map_id),
             order=data.order,
         )
 
@@ -211,7 +238,7 @@ class MatchService:
             if match.status != MatchStatus.ONGOING:
                 raise BusinessRuleError("進行中の試合の結果のみ登録できます")
 
-            winner_id = uuid.UUID(data.winner_id)
+            winner_id = data.winner_id
             if winner_id not in (match.team1_id, match.team2_id):
                 raise BusinessRuleError("勝者はこの試合の参加チームである必要があります")
 
@@ -232,10 +259,10 @@ class MatchService:
                     game = await self._repo.upsert_game_score(
                         match_id=match_id,
                         game_number=game_stat.game_number,
-                        map_id=uuid.UUID(game_stat.map_id),
+                        map_id=await self._resolve_map_id(game_stat.map_id),
                         team1_score=game_stat.team1_score,
                         team2_score=game_stat.team2_score,
-                        winner_id=uuid.UUID(game_stat.winner_id),
+                        winner_id=game_stat.winner_id,
                         side_first_team1=game_stat.side_first_team1,
                         duration_seconds=game_stat.duration_seconds,
                         ended_at=datetime.now(timezone.utc),
@@ -244,8 +271,8 @@ class MatchService:
                         await self._repo.bulk_create_player_stats([
                             {
                                 "match_game_id": game.id,
-                                "player_id": uuid.UUID(ps.player_id),
-                                "team_id": uuid.UUID(ps.team_id),
+                                "player_id": ps.player_id,
+                                "team_id": ps.team_id,
                                 "agent": ps.agent,
                                 "kills": ps.kills,
                                 "deaths": ps.deaths,

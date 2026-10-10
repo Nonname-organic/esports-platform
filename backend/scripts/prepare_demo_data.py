@@ -232,7 +232,7 @@ async def simulate_tournament(db, cache, apply: bool,
         return
 
     map_ids = (await db.execute(text(
-        "SELECT id FROM maps WHERE game='VALORANT' AND is_active LIMIT 9"
+        "SELECT id FROM maps WHERE game='VALORANT' AND is_active"
     ))).scalars().all()
 
     service = MatchService(db, cache)
@@ -467,4 +467,7 @@ async def main() -> None:
             log(f"  {label}: {count}")
 
 
-asyncio.run(main())
+# import しただけで実行されないようにする。ガードが無いと、このモジュールの
+# 関数を再利用しようとした側でデータ生成が丸ごと走ってしまう
+if __name__ == "__main__":
+    asyncio.run(main())

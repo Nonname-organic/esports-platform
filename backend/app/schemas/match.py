@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime
 
 from pydantic import BaseModel, Field
@@ -13,21 +14,23 @@ class ScoreUpdate(BaseModel):
 
 
 class BanPickCreate(BaseModel):
-    team_id: str
+    team_id: uuid.UUID
     action: BanPickAction
+    # 画面のマップ一覧は "ascent" のような内部名を値に持つため
+    # UUID とどちらも受け付け、サービス層で解決する
     map_id: str
     order: int = Field(..., ge=1)
 
 
 class MatchResultCreate(BaseModel):
-    winner_id: str
+    winner_id: uuid.UUID
     was_forfeit: bool = False
     game_stats: list["GameStatsCreate"] | None = None
 
 
 class PlayerStatsCreate(BaseModel):
-    player_id: str
-    team_id: str
+    player_id: uuid.UUID
+    team_id: uuid.UUID
     agent: str | None = None
     kills: int = Field(default=0, ge=0)
     deaths: int = Field(default=0, ge=0)
@@ -52,7 +55,7 @@ class GameStatsCreate(BaseModel):
     map_id: str
     team1_score: int = Field(..., ge=0)
     team2_score: int = Field(..., ge=0)
-    winner_id: str
+    winner_id: uuid.UUID
     side_first_team1: SideType | None = None
     duration_seconds: int | None = None
     player_stats: list[PlayerStatsCreate]
