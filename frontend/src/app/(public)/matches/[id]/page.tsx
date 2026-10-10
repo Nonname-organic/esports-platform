@@ -18,16 +18,14 @@ import { BanPickTab } from "./_components/banpick-tab";
 import { StatisticsTab } from "./_components/statistics-tab";
 import { TimelineTab } from "./_components/timeline-tab";
 import { MatchResult } from "./_components/match-result";
-import { RoundHistoryTab } from "./_components/round-history-tab";
 import { PlayerStatsTab } from "./_components/player-stats-tab";
 import { TeamStatsTab } from "./_components/team-stats-tab";
 
-type TabId = "overview" | "maps" | "round_history" | "player_stats" | "team_stats" | "banpick" | "timeline";
+type TabId = "overview" | "maps" | "player_stats" | "team_stats" | "banpick" | "timeline";
 
 const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "maps", label: "Maps", icon: Map },
-  { id: "round_history", label: "Round History", icon: Clock },
   { id: "player_stats", label: "Player Stats", icon: Users },
   { id: "team_stats", label: "Team Stats", icon: BarChart2 },
   { id: "banpick", label: "Ban/Pick", icon: Shield },
@@ -185,7 +183,6 @@ export default function MatchSpectatorPage({ params }: Props) {
       <div className="min-h-[300px]">
         {activeTab === "overview" && <OverviewTab match={match} />}
         {activeTab === "maps" && <MapsTab match={match} />}
-        {activeTab === "round_history" && <RoundHistoryTab match={match} />}
         {activeTab === "player_stats" && <PlayerStatsTab match={match} />}
         {activeTab === "team_stats" && <TeamStatsTab match={match} />}
         {activeTab === "banpick" && <BanPickTab match={match} />}

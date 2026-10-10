@@ -53,6 +53,9 @@ _HEADER_ALIASES: dict[str, tuple[str, ...]] = {
     "kda": ("KDA",),
     "econ": ("マネーレーティング", "マネー", "ECON", "所持金"),
     "first_bloods": ("ファーストブラッド", "FB", "ファースト"),
+    # 設置・解除の値は保存先が無いため読まないが、列の位置は検出する。
+    # ファーストブラッド列の右端をこの2列との中間で決めているため、
+    # 見落とすとセルが2列ぶんに広がって数字が繋がって読まれる。
     "plants": ("設置", "PLT", "PLANTS"),
     "defuses": ("解除", "DEF", "DEFUSES"),
     # 英語クライアントでKDAが分かれている場合
@@ -81,8 +84,6 @@ class ScoreboardRow:
     deaths: Optional[int] = None
     assists: Optional[int] = None
     first_bloods: Optional[int] = None
-    plants: Optional[int] = None
-    defuses: Optional[int] = None
     # 行の背景色から推定したチーム識別子（"red" / "green"）。順位順に並ぶため
     # 行位置ではチームを判定できず、これが唯一の画像側の手がかりになる
     team_hint: Optional[str] = None
@@ -859,8 +860,6 @@ def parse_scoreboard(raw: bytes) -> tuple[ScoreboardParseResult, np.ndarray]:
 
     kda_bounds = _column_bounds(columns, "kda", width)
     fb_bounds = _column_bounds(columns, "first_bloods", width)
-    plants_bounds = _column_bounds(columns, "plants", width)
-    defuses_bounds = _column_bounds(columns, "defuses", width)
 
     if fb_bounds is None:
         result.warnings.append(
@@ -892,8 +891,6 @@ def parse_scoreboard(raw: bytes) -> tuple[ScoreboardParseResult, np.ndarray]:
             row.assists = _ocr_int(cell(band, _column_bounds(columns, "assists", width)))
 
         row.first_bloods = _ocr_int(cell(band, fb_bounds))
-        row.plants = _ocr_int(cell(band, plants_bounds))
-        row.defuses = _ocr_int(cell(band, defuses_bounds))
 
         for label, value in (
             ("ACS", row.acs), ("K", row.kills), ("D", row.deaths),
