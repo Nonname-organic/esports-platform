@@ -70,6 +70,14 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U esports_user"
           --health-interval 5s --health-timeout 5s --health-retries 10
+      # レート制限ミドルウェアが参照する。無いと全リクエストが
+      # Redis 接続エラーになり、APIテストがまとめて落ちる
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       TEST_DATABASE_URL: postgresql+asyncpg://esports_user:password@localhost:5432/esports_test
       # アプリ設定の必須項目（import 時に必要）
@@ -128,6 +136,14 @@ jobs:
         ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U esports_user"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      # レート制限ミドルウェアが参照する。無いと全リクエストが
+      # Redis 接続エラーになり、APIテストがまとめて落ちる
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       TEST_DATABASE_URL: postgresql+asyncpg://esports_user:password@localhost:5432/esports_test

@@ -1,10 +1,14 @@
+import structlog
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
+from redis.exceptions import RedisError
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.config import settings
 from app.core.exceptions import RateLimitError
 from app.core.redis import get_redis
+
+logger = structlog.get_logger()
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
@@ -34,10 +38,19 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         endpoint = path.replace("/", "_")[:50]
         key = f"ratelimit:{identifier}:{endpoint}"
 
-        redis = await get_redis()
-        count = await redis.incr(key)
-        if count == 1:
-            await redis.expire(key, settings.RATE_LIMIT_WINDOW_SECONDS)
+        try:
+            redis = await get_redis()
+            count = await redis.incr(key)
+            if count == 1:
+                await redis.expire(key, settings.RATE_LIMIT_WINDOW_SECONDS)
+        except (RedisError, OSError) as exc:
+            # Redis が落ちている間も API 自体は動かし続ける。ここで例外を
+            # 投げると全リクエストが 500 になり、レート制限のために
+            # サイト全体を落とすことになる
+            logger.warning(
+                "rate_limit_unavailable", error=str(exc), path=path
+            )
+            return await call_next(request)
 
         if count > limit:
             # BaseHTTPMiddleware 内で raise した例外は FastAPI の exception handler を
