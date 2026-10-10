@@ -84,6 +84,8 @@ interface FormValues {
   // 大会形式
   format: string;
   bo_format: string;
+  /** 終盤ラウンドのBO上書き（final / semifinal / quarterfinal） */
+  bo_overrides?: Record<string, string>;
   seeding_type: string;
   // 競技設定
   server: string;
@@ -181,6 +183,7 @@ export default function TournamentEditPage({ params }: { params: Promise<{ id: s
       max_age: age.max_age ?? "",
       format: t.format ?? "single_elimination",
       bo_format: r.bo_format ?? "BO3",
+      bo_overrides: (r.bo_overrides as Record<string, string>) ?? {},
       seeding_type: t.seeding_type ?? r.seeding_type ?? "auto",
       server: gs.server ?? "",
       map_pool: Array.isArray(gs.map_pool) ? gs.map_pool.join(", ") : "",
@@ -252,6 +255,9 @@ export default function TournamentEditPage({ params }: { params: Promise<{ id: s
       rules: {
         ...((t?.rules ?? {}) as Record<string, unknown>),
         bo_format: v.bo_format,
+        bo_overrides: Object.fromEntries(
+          Object.entries(v.bo_overrides ?? {}).filter(([, x]) => x),
+        ),
         seeding_type: v.seeding_type,
         tier: v.tier,
         subtitle: v.subtitle,
@@ -430,7 +436,7 @@ export default function TournamentEditPage({ params }: { params: Promise<{ id: s
             </select>
           </Field>
           <div className="grid grid-cols-2 gap-4">
-            <Field label="試合形式">
+            <Field label="試合形式（既定）">
               <select {...register("bo_format")} className={selectCls}>
                 {BO_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
               </select>
@@ -442,6 +448,29 @@ export default function TournamentEditPage({ params }: { params: Promise<{ id: s
               </select>
             </Field>
           </div>
+
+          {/* 終盤ラウンドだけ BO を変える。決勝のみ長くする運用が多いため用意している */}
+          <Field label="終盤ラウンドの試合形式（任意）">
+            <div className="space-y-2">
+              {[
+                { key: "final", label: "決勝" },
+                { key: "semifinal", label: "準決勝" },
+                { key: "quarterfinal", label: "準々決勝" },
+              ].map((r) => (
+                <div key={r.key} className="flex items-center gap-3">
+                  <span className="w-20 shrink-0 text-sm text-slate-400">{r.label}</span>
+                  <select {...register(`bo_overrides.${r.key}` as never)} className={selectCls}>
+                    <option value="">既定のまま</option>
+                    {BO_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </div>
+              ))}
+              <p className="text-xs text-slate-500">
+                「準決勝からBO3」にする場合は、決勝と準決勝の両方をBO3にしてください。
+                ブラケット生成後に変更しても、既に作られた試合には反映されません。
+              </p>
+            </div>
+          </Field>
         </Section>
 
         {/* 競技設定 */}

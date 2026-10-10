@@ -53,6 +53,8 @@ const schema = z.object({
   approval_mode: z.enum(["manual", "auto", "lottery"]),
   format: z.string().min(1),
   bo_format: z.string().min(1),
+  // 終盤ラウンドだけ BO を変える場合の指定。空文字は「既定のまま」
+  bo_overrides: z.record(z.string()).optional(),
   seeding_type: z.enum(["auto", "manual"]),
   game_settings: z.record(z.unknown()),
   prize_pool: z.coerce.number().min(0).optional(),
@@ -398,6 +400,12 @@ function Step3Entry({ register, control, watch, errors }: any) {
 
 function Step4Format({ register, control, watch }: any) {
   const BO_OPTIONS = ["BO1", "BO3", "BO5", "BO7"];
+  // 終盤から数えた位置で持つ。参加チーム数が変わっても「決勝」の意味がずれない。
+  const BO_ROUND_OPTIONS = [
+    { key: "final", label: "決勝" },
+    { key: "semifinal", label: "準決勝" },
+    { key: "quarterfinal", label: "準々決勝" },
+  ];
   return (
     <div className="space-y-5">
       <SectionCard title="トーナメント形式">
@@ -417,7 +425,7 @@ function Step4Format({ register, control, watch }: any) {
         </div>
       </SectionCard>
 
-      <SectionCard title="BO形式">
+      <SectionCard title="BO形式" subtitle="全試合の既定値です">
         <Controller name="bo_format" control={control} render={({ field }) => (
           <div className="flex gap-3">
             {BO_OPTIONS.map((bo) => (
@@ -429,6 +437,37 @@ function Step4Format({ register, control, watch }: any) {
             ))}
           </div>
         )} />
+      </SectionCard>
+
+      <SectionCard title="終盤ラウンドの BO 形式" subtitle="決勝だけ長くする場合に設定します（任意）">
+        <div className="space-y-3">
+          {BO_ROUND_OPTIONS.map((r) => (
+            <Controller key={r.key} name={`bo_overrides.${r.key}`} control={control}
+              render={({ field }) => (
+                <div className="flex items-center gap-3">
+                  <span className="w-20 shrink-0 text-sm text-slate-300">{r.label}</span>
+                  <div className="flex flex-1 gap-2">
+                    <button type="button" onClick={() => field.onChange("")}
+                      className={cn("flex-1 rounded-lg border py-2 text-xs font-bold transition-colors",
+                        !field.value ? "border-brand-500 bg-brand-500/10 text-brand-400" : "border-white/10 text-slate-500 hover:text-white")}>
+                      既定のまま
+                    </button>
+                    {BO_OPTIONS.map((bo) => (
+                      <button key={bo} type="button" onClick={() => field.onChange(bo)}
+                        className={cn("flex-1 rounded-lg border py-2 text-xs font-bold transition-colors",
+                          field.value === bo ? "border-brand-500 bg-brand-500/10 text-brand-400" : "border-white/10 text-slate-400 hover:text-white")}>
+                        {bo}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )} />
+          ))}
+          <p className="text-xs text-slate-500">
+            「決勝のみ BO3」なら決勝だけ、「準決勝から BO3」なら決勝と準決勝の両方を
+            BO3 にしてください。該当ラウンドが無い規模の大会では無視されます。
+          </p>
+        </div>
       </SectionCard>
 
       <SectionCard title="シード設定">
@@ -891,6 +930,10 @@ export default function TournamentCreatePage() {
         is_public: values.is_public,
         rules: {
           bo_format: values.bo_format,
+          // 空文字（既定のまま）は送らない
+          bo_overrides: Object.fromEntries(
+            Object.entries(values.bo_overrides ?? {}).filter(([, v]) => v),
+          ),
           seeding_type: values.seeding_type,
           game_settings: values.game_settings,
           tier: values.tier,

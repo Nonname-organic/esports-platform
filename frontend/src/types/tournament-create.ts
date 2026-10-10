@@ -19,7 +19,9 @@ export const SUPPORTED_GAMES = {
       "プラチナ1", "プラチナ2", "プラチナ3", "ダイヤモンド1", "ダイヤモンド2", "ダイヤモンド3",
       "アセンダント1", "アセンダント2", "アセンダント3",
       "イモータル1", "イモータル2", "イモータル3", "レディアント"],
-    maps: ["Ascent", "Bind", "Haven", "Icebox", "Pearl", "Lotus", "Fracture", "Breeze", "Sunset", "Abyss"],
+    // コンペティティブに採用されうる全マップ。Riot のプール入れ替えは Act 単位で
+    // 起きるため、現在のローテーションに限らず選べるようにしている。
+    maps: ["Ascent", "Bind", "Haven", "Icebox", "Pearl", "Lotus", "Fracture", "Breeze", "Sunset", "Abyss", "Split", "Corrode", "Summit"],
     servers: ["Tokyo", "Singapore", "Seoul", "Hong Kong", "Mumbai"],
     gameSettings: {
       server: "Tokyo",
@@ -147,6 +149,8 @@ export interface TournamentCreateForm {
   // Section 4: 大会形式
   format: TournamentFormat;
   bo_format: BOFormat;
+  /** 終盤ラウンドのBO上書き。キーは final / semifinal / quarterfinal */
+  bo_overrides?: Record<string, string>;
   seeding_type: SeedingType;
   group_stage_teams?: number;
   group_count?: number;
@@ -207,6 +211,7 @@ export const DEFAULT_FORM_VALUES: TournamentCreateForm = {
   approval_mode: "manual",
   format: "single_elimination",
   bo_format: "BO3",
+  bo_overrides: {},
   seeding_type: "auto",
   game_settings: { ...SUPPORTED_GAMES.VALORANT.gameSettings },
   prize_currency: "JPY",

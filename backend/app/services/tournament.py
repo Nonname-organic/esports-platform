@@ -44,6 +44,40 @@ def _scalar(v):
     return str(v)
 
 
+# ラウンド別BOの指定キー。終盤から数えた位置で持つ（決勝=0, 準決勝=1, 準々決勝=2）。
+# 参加チーム数が変わっても「決勝だけBO3」の意味が変わらないようにするため、
+# ラウンド番号ではなく終盤からの距離で表す。
+BO_ROUND_KEYS = {"final": 0, "semifinal": 1, "quarterfinal": 2}
+
+
+def resolve_bo_format(tournament, round_number: int, rounds_count: int,
+                      default: str = "BO3") -> str:
+    """そのラウンドで使うBO形式を決める。
+
+    rules には次の形で入る:
+        {"bo_format": "BO1", "bo_overrides": {"final": "BO3", "semifinal": "BO3"}}
+
+    「決勝のみBO3」は final だけ、「準決勝からBO3」は final と semifinal の
+    両方を指定する。ラウンドごとの指定だけで両方を表せるので、
+    「以降」のような別概念は持たせない。
+
+    指定が無いラウンドは bo_format（無ければ default）になる。
+    参加チーム数が少なく該当ラウンドが存在しない場合は、単に無視される。
+    """
+    rules = tournament.rules or {}
+    base = rules.get("bo_format") or default
+    overrides = rules.get("bo_overrides")
+    if not isinstance(overrides, dict):
+        return base
+
+    # 終盤からの距離（決勝 = 0, 準決勝 = 1, 準々決勝 = 2）
+    from_end = rounds_count - round_number
+    for key, offset in BO_ROUND_KEYS.items():
+        if offset == from_end and overrides.get(key):
+            return overrides[key]
+    return base
+
+
 class TournamentService:
     def __init__(self, db: AsyncSession, cache: RedisCache):
         self._repo = TournamentRepository(db)
@@ -322,7 +356,7 @@ class TournamentService:
                 team1_id=t1.id if t1 else None,
                 team2_id=t2.id if t2 else None,
                 winner_id=t1.id if t2 is None and t1 else None,  # バイ
-                format=tournament.rules.get("bo_format", "BO3") if tournament.rules else "BO3",
+                format=resolve_bo_format(tournament, 1, rounds_count),
                 status=MatchStatus.SCHEDULED if t2 else MatchStatus.COMPLETED,
                 round_number=1,
                 match_number=match_number,
@@ -352,7 +386,7 @@ class TournamentService:
                 match = Match(
                     tournament_id=tournament.id,
                     bracket_id=bracket[0].id,
-                    format=tournament.rules.get("bo_format", "BO3") if tournament.rules else "BO3",
+                    format=resolve_bo_format(tournament, r, rounds_count),
                     status=MatchStatus.SCHEDULED,
                     round_number=r,
                     match_number=i // 2 + 1,
@@ -429,18 +463,24 @@ class TournamentService:
         bo_format = tournament.rules.get("bo_format", "BO3") if tournament.rules else "BO3"
         now = datetime.now(timezone.utc)
 
+        # ラウンド別BOは、ダブルエリミではグランドファイナルにだけ適用する。
+        # Winners/Losers は進行が一直線でないため「準決勝」の対応付けが
+        # 一意に決まらず、取り違えると意図しない試合数になるため。
+        grand_final_bo = (tournament.rules or {}).get("bo_overrides", {}).get("final")             if isinstance((tournament.rules or {}).get("bo_overrides"), dict) else None
+
         async def create_round(round_number: int, bracket_type: str, count: int) -> list[Match]:
             bracket = await self._repo.create_brackets(
                 tournament.id,
                 [{"round_number": round_number, "bracket_type": bracket_type,
                   "created_at": now}],
             )
+            round_bo = grand_final_bo if (bracket_type == "grand_final" and grand_final_bo) else bo_format
             matches = []
             for i in range(count):
                 match = Match(
                     tournament_id=tournament.id,
                     bracket_id=bracket[0].id,
-                    format=bo_format,
+                    format=round_bo,
                     status=MatchStatus.SCHEDULED,
                     round_number=round_number,
                     match_number=i + 1,

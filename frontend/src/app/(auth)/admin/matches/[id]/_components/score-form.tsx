@@ -25,6 +25,8 @@ const GAME_MAPS: Record<string, { id: string; name: string }[]> = {
     { id: "pearl", name: "Pearl" }, { id: "lotus", name: "Lotus" },
     { id: "fracture", name: "Fracture" }, { id: "breeze", name: "Breeze" },
     { id: "sunset", name: "Sunset" }, { id: "abyss", name: "Abyss" },
+    { id: "split", name: "Split" }, { id: "corrode", name: "Corrode" },
+    { id: "summit", name: "Summit" },
   ],
   CS2: [
     { id: "mirage", name: "Mirage" }, { id: "inferno", name: "Inferno" },
