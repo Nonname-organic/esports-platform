@@ -182,15 +182,46 @@ def build_game_stats(
         values[0] += total - sum(values)
         return [max(0, v) for v in values]
 
-    kills_a = int(total_rounds * (0.92 if winner_is_a else 0.72))
-    kills_b = int(total_rounds * (0.72 if winner_is_a else 0.92))
+    def split_capped(total: int, n: int, cap: int) -> list[int]:
+        """split と同じだが、1人あたり cap を超えないよう配り直す。"""
+        values = split(total, n)
+        overflow = sum(max(0, v - cap) for v in values)
+        values = [min(v, cap) for v in values]
+        for i in range(n):
+            if overflow <= 0:
+                break
+            take = min(cap - values[i], overflow)
+            values[i] += take
+            overflow -= take
+        return values
 
-    ka, kb = split(kills_a, 5), split(kills_b, 5)
-    da, db_ = split(kills_b, 5), split(kills_a, 5)  # 相手のキル = 自分のデス
+    # 落としたラウンドはほぼ全滅、取ったラウンドでも何人かは倒れる、という
+    # 前提でチームのデス数を見積もる。相手のキル数はこれと等しい。
+    # 以前は「ラウンド数 × 0.92」をチーム合計のキル数として5人に配っていたが、
+    # これは1人分の値で、18ラウンドの試合が両チーム計28キルになっていた。
+    LOST_ROUND_DEATHS = 0.85
+    WON_ROUND_DEATHS = 0.45
+    deaths_a = round(5 * (rounds_b * LOST_ROUND_DEATHS + rounds_a * WON_ROUND_DEATHS))
+    deaths_b = round(5 * (rounds_a * LOST_ROUND_DEATHS + rounds_b * WON_ROUND_DEATHS))
+
+    # 1人が1ラウンドに死ねるのは1回まで。全ラウンドで倒れるのは不自然なので
+    # 少し手前で頭打ちにする
+    death_cap = max(1, int(total_rounds * 0.9))
+    da = split_capped(deaths_a, 5, death_cap)
+    db_ = split_capped(deaths_b, 5, death_cap)
+    ka, kb = split(sum(db_), 5), split(sum(da), 5)  # 自分のキル = 相手のデス
 
     agents_a = random.sample(AGENTS, 5)
     agents_b = random.sample(AGENTS, 5)
-    fb_a, fb_b = split(max(1, total_rounds // 6), 5), split(max(1, total_rounds // 7), 5)
+
+    # ファーストブラッドは1ラウンドにつき1回しか出ない。勝者側へ少し寄せて分ける。
+    fb_winner = round(total_rounds * 0.58)
+    fb_loser = total_rounds - fb_winner
+    fb_a, fb_b = (
+        (split(fb_winner, 5), split(fb_loser, 5))
+        if winner_is_a
+        else (split(fb_loser, 5), split(fb_winner, 5))
+    )
 
     stats: list[PlayerStatsCreate] = []
     for side, roster, team_id, kills, deaths, agents, fbs, won in (
