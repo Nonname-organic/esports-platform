@@ -69,20 +69,19 @@ async def notify_registration_approved(
             ((tournament.rules or {}).get("discord") or {}).get("invite_url")
         )
 
-        title = (
-            f"【{tournament.name}】抽選の結果、参加が確定しました"
-            if by_lottery
-            else f"【{tournament.name}】参加が承認されました"
-        )
+        from app.notifications import templates
+
+        date_text = templates.format_tournament_date(tournament.start_at)
         if invite:
-            body = (
-                "大会の連絡はDiscordサーバーで行われます。"
-                f"以下の招待リンクから参加してください。\n{invite}"
-            )
-            action_url = invite
+            title, body = templates.approved_with_discord(
+                tournament.name, date_text, invite)
         else:
-            body = "大会ページで日程・詳細を確認してください。"
-            action_url = f"/tournaments/{tournament.id}"
+            title, body = templates.approved_without_discord(
+                tournament.name, date_text)
+
+        # 開いたときの遷移先は大会ページにする。Discord へは本文を読んだうえで
+        # ボタンから明示的に飛ばす（通知を押した瞬間に外部サイトへ送らない）。
+        action_url = f"/tournaments/{tournament.id}"
 
         service = NotificationService(db, cache)
         sent = 0
@@ -104,6 +103,48 @@ async def notify_registration_approved(
     except Exception:  # noqa: BLE001 - 通知失敗は承認処理を妨げない
         logger.exception(
             "承認通知の送信に失敗しました tournament=%s team=%s",
+            tournament.id, team_id,
+        )
+        return 0
+
+
+async def notify_registration_waitlisted(
+    db: AsyncSession,
+    cache: RedisCache,
+    tournament: Tournament,
+    team_id: uuid.UUID,
+) -> int:
+    """抽選に外れたチームへ通知を送る。送った件数を返す。
+
+    外れたチームは削除せず補欠として残り、辞退が出れば繰り上げられる。
+    結果が分からないまま放置されるのが一番困るので、外れた側にも必ず知らせる。
+    """
+    try:
+        from app.notifications import templates
+        from app.services.notification_service import NotificationService
+
+        date_text = templates.format_tournament_date(tournament.start_at)
+        title, body = templates.waitlisted(tournament.name, date_text)
+
+        service = NotificationService(db, cache)
+        sent = 0
+        for user_id in await _team_user_ids(db, team_id):
+            await service.create(
+                user_id=user_id,
+                ntype="application_rejected",
+                title=title,
+                body=body,
+                action_url=f"/tournaments/{tournament.id}",
+                metadata={
+                    "tournament_id": str(tournament.id),
+                    "team_id": str(team_id),
+                },
+            )
+            sent += 1
+        return sent
+    except Exception:  # noqa: BLE001 - 通知失敗は抽選処理を妨げない
+        logger.exception(
+            "補欠通知の送信に失敗しました tournament=%s team=%s",
             tournament.id, team_id,
         )
         return 0

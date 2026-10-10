@@ -70,13 +70,20 @@ async def run_registration_lottery(
             after={"registration_id": str(reg.id), "team_id": str(reg.team_id), "lottery": True},
         ))
 
-    # 当選チームのメンバーへ、Discord招待リンクを同封した通知を送る
+    # 当落をチームのメンバーへ知らせる。外れた側にも必ず送る。結果が
+    # 分からないまま待たされるのが一番困るため、補欠であることと
+    # 繰り上げの可能性もあわせて伝える。
     if cache is not None:
-        from app.services.registration_notifier import notify_registration_approved
+        from app.services.registration_notifier import (
+            notify_registration_approved,
+            notify_registration_waitlisted,
+        )
         for reg in winners:
             await notify_registration_approved(
                 db, cache, tournament, reg.team_id, by_lottery=True
             )
+        for reg in losers:
+            await notify_registration_waitlisted(db, cache, tournament, reg.team_id)
 
     await db.flush()
     return len(winners)

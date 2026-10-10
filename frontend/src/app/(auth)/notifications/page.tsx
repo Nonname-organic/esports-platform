@@ -146,6 +146,17 @@ function NotificationCard({
 }) {
   const cfg = TYPE_CONFIG[notification.type] ?? TYPE_CONFIG.general;
   const Icon = cfg.icon;
+  // メールのように、まず本文を開いて読ませる。押した瞬間に外部サイト
+  // （Discord招待）へ飛ばすと、何の通知だったか分からないまま遷移してしまう。
+  const [open, setOpen] = useState(false);
+
+  // 本文から Discord 招待URLを拾って、専用のボタンとして出す
+  const discordUrl = (() => {
+    const fromMeta = (notification.metadata as Record<string, unknown> | undefined)?.discord_invite;
+    if (typeof fromMeta === "string" && fromMeta) return fromMeta;
+    const m = notification.body?.match(/https:\/\/discord\.gg\/[A-Za-z0-9-]+/);
+    return m ? m[0] : null;
+  })();
 
   const timeAgo = (() => {
     try {
@@ -176,9 +187,41 @@ function NotificationCard({
           {!notification.is_read && <span className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-brand-500" />}
         </div>
         {notification.body && (
-          <p className="mt-0.5 text-xs text-slate-500 line-clamp-2">{notification.body}</p>
+          open ? (
+            <p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-slate-300">
+              {notification.body}
+            </p>
+          ) : (
+            <p className="mt-0.5 text-xs text-slate-500 line-clamp-2">{notification.body}</p>
+          )
         )}
-        <p className="mt-1 text-[10px] text-slate-600">{timeAgo}</p>
+
+        {open && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {discordUrl && (
+              <a
+                href={discordUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="rounded-lg bg-[#5865F2] px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-[#4752c4]"
+              >
+                Discordサーバーに参加する
+              </a>
+            )}
+            {notification.action_url?.startsWith("/") && (
+              <Link
+                href={notification.action_url}
+                onClick={(e) => e.stopPropagation()}
+                className="rounded-lg border border-white/15 px-3 py-2 text-xs font-bold text-slate-300 transition-colors hover:bg-white/5"
+              >
+                大会ページを開く
+              </Link>
+            )}
+          </div>
+        )}
+
+        <p className="mt-2 text-[10px] text-slate-600">{timeAgo}</p>
       </div>
 
       <div className="flex flex-shrink-0 items-center gap-1">
@@ -202,12 +245,24 @@ function NotificationCard({
     </div>
   );
 
-  if (notification.action_url) {
-    return (
-      <Link href={notification.action_url} onClick={() => !notification.is_read && onRead()}>
-        {content}
-      </Link>
-    );
-  }
-  return content;
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => {
+        setOpen((v) => !v);
+        if (!notification.is_read) onRead();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          setOpen((v) => !v);
+          if (!notification.is_read) onRead();
+        }
+      }}
+      className="cursor-pointer"
+    >
+      {content}
+    </div>
+  );
 }
