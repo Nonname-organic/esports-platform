@@ -1,20 +1,26 @@
 import asyncio
 import os
 import uuid
+from pathlib import Path
 from typing import AsyncGenerator
 
 import pytest
 import pytest_asyncio
+from alembic import command
+from alembic.config import Config
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.database import get_db
 from app.core.redis import RedisCache, get_redis
 from app.main import app
-from app.models.base import Base
 from app.models.enums import UserRole
 from app.models.user import User
 from app.core.security import hash_password, create_access_token
+
+BACKEND_DIR = Path(__file__).resolve().parents[1]
 
 # 既定はローカル。CI 等では TEST_DATABASE_URL で上書き可能（後方互換のため既定値は維持）。
 TEST_DB_URL = os.getenv(
@@ -25,6 +31,42 @@ TEST_DB_URL = os.getenv(
 test_engine = create_async_engine(TEST_DB_URL, echo=False)
 TestSessionLocal = async_sessionmaker(test_engine, expire_on_commit=False)
 
+# 1テーブルずつ TRUNCATE すると毎テスト数秒かかる。1文にまとめて一度に消す。
+# alembic_version を消すと毎回マイグレーションを流し直すことになるため残す
+_TRUNCATE_ALL = text(
+    """
+    DO $$
+    DECLARE stmt text;
+    BEGIN
+      SELECT 'TRUNCATE TABLE ' || string_agg(format('%I', tablename), ', ')
+             || ' RESTART IDENTITY CASCADE'
+        INTO stmt
+        FROM pg_tables
+       WHERE schemaname = current_schema() AND tablename <> 'alembic_version';
+      IF stmt IS NOT NULL THEN
+        EXECUTE stmt;
+      END IF;
+    END $$;
+    """
+)
+
+
+def _run_migrations() -> None:
+    """alembic/env.py は接続先を settings から解決するため、テスト用DBに向ける。"""
+    from app.core.config import settings
+
+    url = make_url(TEST_DB_URL)
+    settings.DATABASE_URL = None
+    settings.DB_USER = url.username or settings.DB_USER
+    settings.DB_PASSWORD = url.password or settings.DB_PASSWORD
+    settings.DB_HOST = url.host or settings.DB_HOST
+    settings.DB_PORT = url.port or settings.DB_PORT
+    settings.DB_NAME = url.database or settings.DB_NAME
+
+    config = Config(str(BACKEND_DIR / "alembic.ini"))
+    config.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
+    command.upgrade(config, "head")
+
 
 @pytest.fixture(scope="session")
 def event_loop():
@@ -33,17 +75,35 @@ def event_loop():
     loop.close()
 
 
+@pytest.fixture(scope="session", autouse=True)
+def schema() -> None:
+    """テスト用スキーマを本番と同じ手順（alembic）で1回だけ作る。
+
+    モデルから create_all すると、マイグレーションでしか作られない
+    テーブル（player_ratings など）が抜ける。本番では通るコードが
+    テストでだけ落ちることになり、実際 scout 検索がそれで失敗していた。
+    """
+    async def reset() -> None:
+        engine = create_async_engine(TEST_DB_URL)
+        async with engine.begin() as conn:
+            await conn.execute(text("DROP SCHEMA public CASCADE"))
+            await conn.execute(text("CREATE SCHEMA public"))
+        await engine.dispose()
+
+    # env.py が asyncio.run を呼ぶので、ここでループを持ち越さない
+    asyncio.run(reset())
+    _run_migrations()
+
+
 @pytest_asyncio.fixture(scope="function")
 async def db() -> AsyncGenerator[AsyncSession, None]:
-    async with test_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
     async with TestSessionLocal() as session:
         yield session
         await session.rollback()
 
+    # コミットまで進んだテストの後始末。スキーマは作り直さない
     async with test_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
+        await conn.execute(_TRUNCATE_ALL)
 
 
 @pytest_asyncio.fixture

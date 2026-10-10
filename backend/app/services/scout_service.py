@@ -12,7 +12,9 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
+import structlog
 from sqlalchemy import select, func, text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AlreadyExistsError, ForbiddenError, NotFoundError
@@ -30,6 +32,8 @@ from app.core.storage import resign_stored_url
 # ══════════════════════════════════════════════════════════════════════════════
 # Scout Rating 算出
 # ══════════════════════════════════════════════════════════════════════════════
+logger = structlog.get_logger()
+
 class ScoutRatingCalculator:
     """
     Scout Rating = 各要素の重み付き合成（0-100スケール）
@@ -241,6 +245,17 @@ class ScoutService:
         cards.sort(key=sort_key, reverse=True)
         return cards[:limit]
 
+    async def _note_career_failure(self, exc: Exception, **context) -> None:
+        """career 集計の失敗を記録し、DBエラーならセッションを巻き戻す。
+
+        黙って握り潰すと原因が追えない。さらにDBエラーの場合は
+        トランザクションが中断したままになり、同じリクエストの後続クエリが
+        すべて "current transaction is aborted" で落ちる。
+        """
+        logger.warning("career_lookup_failed", error=str(exc), **context)
+        if isinstance(exc, SQLAlchemyError):
+            await self._db.rollback()
+
     async def _player_stats_quick(self, player_id: uuid.UUID, game: str) -> dict:
         """軽量集計（careerキャッシュを利用）"""
         try:
@@ -263,7 +278,8 @@ class ScoutService:
                 "mvp_count": career["mvp_count"],
                 "tournaments_played": career["tournaments_played"],
             }
-        except Exception:
+        except Exception as exc:
+            await self._note_career_failure(exc, player_id=str(player_id))
             return {"rating": None, "scout_rating": None, "win_rate": 0.0,
                     "total_matches": 0, "championships": 0, "mvp_count": 0, "tournaments_played": 0}
 
@@ -309,7 +325,8 @@ class ScoutService:
         for t in teams:
             try:
                 career = await self._career.get_team_career(t.id)
-            except Exception:
+            except Exception as exc:
+                await self._note_career_failure(exc, team_id=str(t.id))
                 career = {"win_rate": 0.0, "total_matches": 0, "championships": 0, "current_rating": None}
 
             if has_tournaments and (career.get("championships", 0) == 0 and career.get("total_matches", 0) == 0):
@@ -531,7 +548,8 @@ class ScoutService:
         try:
             t_career = await self._career.get_team_career(team_id)
             t_rating = t_career.get("current_rating") or 1500
-        except Exception:
+        except Exception as exc:
+            await self._note_career_failure(exc, team_id=str(team_id))
             t_rating = 1500
 
         # 募集中の選手を取得
