@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { ZoomIn, ZoomOut, RotateCcw, Calendar, Radio, X, ExternalLink, Download } from "lucide-react";
+import { ZoomIn, ZoomOut, RotateCcw, Calendar, Radio, X, ExternalLink, Download, Settings } from "lucide-react";
 import { matchApi } from "@/features/matches/api/match-api";
 import { MatchOverviewTab } from "@/features/matches/components/match-overview-tab";
 import { useAuthStore } from "@/store/auth-store";
@@ -684,15 +684,16 @@ function MatchDetailPanel({ match, onClose }: MatchDetailPanelProps) {
           </a>
         )}
         <div className="ml-auto flex items-center gap-3">
-          {/* 主催者はここから配信設定・スコア登録へ入る。
-              導線が無いと管理画面のURLを手打ちするしかなくなる。 */}
+          {/* 主催者の管理画面への唯一の入口。スコアボードの取り込み、
+              スコア登録、Ban/Pick、配信設定がすべてこの先にあるため、
+              特定の機能名で呼ばない。 */}
           {canManage && (
             <Link
               href={`/admin/matches/${match.id}`}
-              className="flex items-center gap-1 text-xs font-semibold text-red-400 transition-colors hover:text-red-300"
+              className="flex items-center gap-1 text-xs font-semibold text-amber-400 transition-colors hover:text-amber-300"
             >
-              <Radio className="h-3 w-3" />
-              試合を管理（配信設定）
+              <Settings className="h-3 w-3" />
+              試合を管理（スコアボード取り込み・配信設定）
             </Link>
           )}
           <Link
