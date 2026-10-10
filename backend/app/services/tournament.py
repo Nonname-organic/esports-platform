@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime, timezone
 from itertools import combinations
 
-from sqlalchemy import select
+from sqlalchemy import inspect as sa_inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BusinessRuleError, ForbiddenError, NotFoundError
@@ -52,6 +52,13 @@ def bracket_scores(match) -> dict[str, int | None]:
     まだ1マップも終わっていない試合は None にして、何も出さない。
     """
     empty = {"team1_score": None, "team2_score": None}
+
+    # 未ロードの関連に触ると、非同期セッションでは遅延読み込みが走って
+    # MissingGreenlet になる。読み込まれていなければスコア無しとして扱う
+    state = sa_inspect(match, raiseerr=False)
+    if state is not None and "games" in state.unloaded:
+        return empty
+
     games = list(getattr(match, "games", None) or [])
     if not games:
         return empty
@@ -446,7 +453,6 @@ class TournamentService:
                     winner_id=str(m.winner_id) if m.winner_id else None,
                     status=m.status.value,
                     stream_url=m.stream_url,
-                    **bracket_scores(m),
                     scheduled_at=None,
                 )
                 for m in matches
@@ -611,7 +617,6 @@ class TournamentService:
                         winner_id=None,
                         status=m.status.value,
                         stream_url=m.stream_url,
-                        **bracket_scores(m),
                         scheduled_at=None,
                     )
                     for m in matches_by_round[1]

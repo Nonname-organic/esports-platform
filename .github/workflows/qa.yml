@@ -80,6 +80,9 @@ jobs:
       DB_HOST: localhost
       BOT_API_TOKEN: ci-bot-secret
       USE_REDIS_QUEUE: "true"
+      # 契約テストは /openapi.json を読む。既定では公開デモ向けに
+      # 無効化されているため、CI では明示的に有効化する
+      EXPOSE_API_DOCS: "true"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -135,6 +138,9 @@ jobs:
       DB_HOST: localhost
       BOT_API_TOKEN: ci-bot-secret
       USE_REDIS_QUEUE: "true"
+      # 契約テストは /openapi.json を読む。既定では公開デモ向けに
+      # 無効化されているため、CI では明示的に有効化する
+      EXPOSE_API_DOCS: "true"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
