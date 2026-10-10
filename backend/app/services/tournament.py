@@ -44,6 +44,30 @@ def _scalar(v):
     return str(v)
 
 
+def bracket_scores(match) -> dict[str, int | None]:
+    """ブラケットに出すスコアを決める。BracketMatch へそのまま展開して使う。
+
+    スコアはマップ単位(MatchGame)にしか無い。BO1 ならそのマップのラウンド数、
+    BO3以上なら取ったマップ数を出すのが観戦者の期待に合う。
+    まだ1マップも終わっていない試合は None にして、何も出さない。
+    """
+    empty = {"team1_score": None, "team2_score": None}
+    games = list(getattr(match, "games", None) or [])
+    if not games:
+        return empty
+
+    fmt = getattr(match.format, "value", match.format) or "BO1"
+    if str(fmt).upper() == "BO1":
+        game = games[0]
+        return {"team1_score": game.team1_score, "team2_score": game.team2_score}
+
+    team1 = sum(1 for g in games if g.winner_id and g.winner_id == match.team1_id)
+    team2 = sum(1 for g in games if g.winner_id and g.winner_id == match.team2_id)
+    if team1 == 0 and team2 == 0:
+        return empty
+    return {"team1_score": team1, "team2_score": team2}
+
+
 # ラウンド別BOの指定キー。終盤から数えた位置で持つ（決勝=0, 準決勝=1, 準々決勝=2）。
 # 参加チーム数が変わっても「決勝だけBO3」の意味が変わらないようにするため、
 # ラウンド番号ではなく終盤からの距離で表す。
@@ -422,6 +446,7 @@ class TournamentService:
                     winner_id=str(m.winner_id) if m.winner_id else None,
                     status=m.status.value,
                     stream_url=m.stream_url,
+                    **bracket_scores(m),
                     scheduled_at=None,
                 )
                 for m in matches
@@ -586,6 +611,7 @@ class TournamentService:
                         winner_id=None,
                         status=m.status.value,
                         stream_url=m.stream_url,
+                        **bracket_scores(m),
                         scheduled_at=None,
                     )
                     for m in matches_by_round[1]
@@ -776,6 +802,7 @@ class TournamentService:
                         winner_id=str(match.winner_id) if match.winner_id else None,
                         status=match.status.value,
                         stream_url=match.stream_url,
+                        **bracket_scores(match),
                         scheduled_at=match.scheduled_at,
                         bracket_side=side,
                     )

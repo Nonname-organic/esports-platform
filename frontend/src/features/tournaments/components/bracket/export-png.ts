@@ -121,12 +121,14 @@ function drawMatch(ctx: CanvasRenderingContext2D, m: BracketMatch, x: number, y:
 
   const w1 = !!m.winner_id && m.winner_id === m.team1?.id;
   const w2 = !!m.winner_id && m.winner_id === m.team2?.id;
-  drawTeamRow(ctx, x, y + HEADER_H, m.team1, w1, "");
+  const s1 = m.team1_score != null ? String(m.team1_score) : "";
+  const s2 = m.team2_score != null ? String(m.team2_score) : "";
+  drawTeamRow(ctx, x, y + HEADER_H, m.team1, w1, s1);
   ctx.beginPath();
   ctx.moveTo(x + 1, y + HEADER_H + ROW_H);
   ctx.lineTo(x + CARD_W - 1, y + HEADER_H + ROW_H);
   ctx.stroke();
-  drawTeamRow(ctx, x, y + HEADER_H + ROW_H, m.team2, w2, "");
+  drawTeamRow(ctx, x, y + HEADER_H + ROW_H, m.team2, w2, s2);
 }
 
 /** ラウンド間をつなぐ線。カードの右端から次ラウンドの左端へ。 */

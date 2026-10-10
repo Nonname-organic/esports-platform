@@ -455,6 +455,7 @@ function BracketMatchCard({ match, isSelected, onClick }: BracketMatchCardProps)
         seed={match.team1_seed}
         isWinner={isCompleted && match.winner_id === match.team1?.id}
         isLoser={isCompleted && !!match.winner_id && match.winner_id !== match.team1?.id}
+        score={match.team1_score}
       />
 
       <div className="border-t border-white/5" />
@@ -465,6 +466,7 @@ function BracketMatchCard({ match, isSelected, onClick }: BracketMatchCardProps)
         seed={match.team2_seed}
         isWinner={isCompleted && match.winner_id === match.team2?.id}
         isLoser={isCompleted && !!match.winner_id && match.winner_id !== match.team2?.id}
+        score={match.team2_score}
       />
     </button>
   );
@@ -475,9 +477,11 @@ interface TeamRowProps {
   seed: number | null | undefined;
   isWinner: boolean;
   isLoser: boolean;
+  /** BO1 はラウンド数、BO3以上は取ったマップ数。未消化なら出さない */
+  score?: number | null;
 }
 
-function TeamRow({ team, seed, isWinner, isLoser }: TeamRowProps) {
+function TeamRow({ team, seed, isWinner, isLoser, score }: TeamRowProps) {
   return (
     <div
       className={cn(
@@ -517,6 +521,16 @@ function TeamRow({ team, seed, isWinner, isLoser }: TeamRowProps) {
           <p className="text-xs text-slate-600">TBD</p>
         )}
       </div>
+
+      {/* スコア */}
+      {score != null && (
+        <span className={cn(
+          "flex-shrink-0 text-xs font-black tabular-nums",
+          isWinner ? "text-brand-400" : "text-slate-400",
+        )}>
+          {score}
+        </span>
+      )}
 
       {/* 勝者マーク */}
       {isWinner && (

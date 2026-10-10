@@ -192,6 +192,10 @@ class BracketMatch(BaseModel):
     bracket_side: str | None = None
     # 配信対象の試合だけ URL が入る。ブラケット上で印を出すのに使う。
     stream_url: str | None = None
+    # ブラケットに出すスコア。BO1 はラウンド数、BO3以上は取ったマップ数。
+    # 未消化の試合では null。
+    team1_score: int | None = None
+    team2_score: int | None = None
 
     model_config = {"from_attributes": True}
 

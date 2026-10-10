@@ -102,6 +102,9 @@ export interface BracketMatch {
   bracket_side: BracketSide | null;
   /** 配信対象の試合だけ入る。ブラケット上で印を出すのに使う */
   stream_url?: string | null;
+  /** BO1 はラウンド数、BO3以上は取ったマップ数。未消化なら null */
+  team1_score?: number | null;
+  team2_score?: number | null;
 }
 
 export interface BracketResponse {

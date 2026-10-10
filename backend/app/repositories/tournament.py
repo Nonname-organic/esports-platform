@@ -185,6 +185,9 @@ class TournamentRepository(BaseRepository[Tournament]):
                     selectinload(Match.team1),
                     selectinload(Match.team2),
                     selectinload(Match.winner),
+                    # スコアはマップ単位(MatchGame)にしか無いので、
+                    # ブラケットに出すためここで一緒に読む
+                    selectinload(Match.games),
                 )
             )
             .order_by(Bracket.round_number.asc())
