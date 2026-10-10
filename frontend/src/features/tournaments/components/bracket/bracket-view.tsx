@@ -3,10 +3,11 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { ZoomIn, ZoomOut, RotateCcw, Calendar, Radio, X, ExternalLink } from "lucide-react";
+import { ZoomIn, ZoomOut, RotateCcw, Calendar, Radio, X, ExternalLink, Download } from "lucide-react";
 import { matchApi } from "@/features/matches/api/match-api";
 import { MatchOverviewTab } from "@/features/matches/components/match-overview-tab";
 import { cn, formatDate } from "@/lib/utils";
+import { downloadBlob, renderBracketPng } from "./export-png";
 import type { BracketMatch, BracketResponse, BracketSide } from "@/types/tournament";
 
 // ── レイアウト定数 ─────────────────────────────────────────────────────────────
@@ -150,6 +151,7 @@ function buildDELayout(allRounds: { roundNum: number; matches: BracketMatch[] }[
 export function BracketView({ bracket, className }: BracketViewProps) {
   const [zoom, setZoom] = useState(1);
   const [selected, setSelected] = useState<BracketMatch | null>(null);
+  const [exporting, setExporting] = useState(false);
   const outerRef = useRef<HTMLDivElement>(null);
 
   const changeZoom = useCallback((delta: number) => {
@@ -201,12 +203,37 @@ export function BracketView({ bracket, className }: BracketViewProps) {
           <span className="text-xs text-slate-600">•</span>
           <span className="text-xs text-slate-500">Ctrl+スクロールでズーム</span>
         </div>
-        <ZoomControls
-          zoom={zoom}
-          onZoomIn={() => changeZoom(ZOOM_STEP)}
-          onZoomOut={() => changeZoom(-ZOOM_STEP)}
-          onReset={() => setZoom(1)}
-        />
+        <div className="flex items-center gap-2">
+          <button
+            onClick={async () => {
+              setExporting(true);
+              try {
+                // 画面のDOMではなく同じ座標から描き直す。ズームやスクロールの
+                // 影響を受けず、背景が透過のまま出る。
+                const blob = await renderBracketPng(
+                  [...rounds, ...losers], totalWidth,
+                  isDE ? totalHeight + 80 : totalHeight,
+                  { scale: 2, background: null },
+                );
+                downloadBlob(blob, "bracket.png");
+              } finally {
+                setExporting(false);
+              }
+            }}
+            disabled={exporting}
+            className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-400 transition-colors hover:text-white disabled:opacity-50"
+            title="背景透過のPNGとして保存します"
+          >
+            <Download className="h-3.5 w-3.5" />
+            {exporting ? "出力中..." : "PNG出力"}
+          </button>
+          <ZoomControls
+            zoom={zoom}
+            onZoomIn={() => changeZoom(ZOOM_STEP)}
+            onZoomOut={() => changeZoom(-ZOOM_STEP)}
+            onReset={() => setZoom(1)}
+          />
+        </div>
       </div>
 
       {/* ── キャンバス ── */}
@@ -396,13 +423,21 @@ function BracketMatchCard({ match, isSelected, onClick }: BracketMatchCardProps)
         </div>
       )}
       {!isOngoing && (
-        <div className="shrink-0 border-b border-white/5 px-2.5 py-1">
+        <div className="flex shrink-0 items-center justify-between gap-1 border-b border-white/5 px-2.5 py-1">
           <span className="text-[10px] text-slate-600">
             M{match.match_number}
             {match.scheduled_at && (
               <span className="ml-1.5">· {new Date(match.scheduled_at).toLocaleDateString("ja-JP", { month: "numeric", day: "numeric" })}</span>
             )}
           </span>
+          {/* どの試合が配信されるかは観戦側が一番知りたい情報なので、
+              開催前でもカード上で分かるようにする */}
+          {match.stream_url && (
+            <span className="flex items-center gap-0.5 rounded bg-red-500/15 px-1 text-[9px] font-bold text-red-400">
+              <Radio className="h-2.5 w-2.5" />
+              配信
+            </span>
+          )}
         </div>
       )}
 

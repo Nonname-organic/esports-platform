@@ -493,3 +493,39 @@ class MatchService:
             stream_url=match.stream_url,
             vod_url=match.vod_url,
         )
+
+    async def set_stream_url(
+        self, match_id: uuid.UUID, stream_url: str | None, current_user: User,
+    ) -> str | None:
+        """配信対象の試合として URL を設定する。空なら解除。
+
+        他の試合操作はロール（organizer）だけで通しているが、どの試合を
+        配信するかは大会の見せ方そのものなので、ここでは主催者本人かどうかも
+        確認する。
+        """
+        from app.core.exceptions import ForbiddenError
+        from app.models.enums import UserRole
+        from app.models.match import Match
+        from app.models.tournament import Tournament
+
+        match = await self._db.get(Match, match_id)
+        if not match:
+            raise NotFoundError("試合", str(match_id))
+
+        tournament = await self._db.get(Tournament, match.tournament_id)
+        if (current_user.role != UserRole.ADMIN
+                and (tournament is None or tournament.organizer_id != current_user.id)):
+            raise ForbiddenError("この大会の配信設定を変更する権限がありません")
+
+        url = (stream_url or "").strip() or None
+        match.stream_url = url
+        await self._db.flush()
+        # ブラケットはキャッシュして返しているので、ここで消さないと
+        # 配信の印が画面に反映されない。
+        await self._cache.delete(
+            CacheKeys.BRACKET.replace("{tournament_id}", str(match.tournament_id))
+        )
+        await self._cache.delete(
+            CacheKeys.TOURNAMENT_DETAIL.replace("{id}", str(match.tournament_id))
+        )
+        return url

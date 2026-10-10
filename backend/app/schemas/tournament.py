@@ -190,6 +190,8 @@ class BracketMatch(BaseModel):
     # ダブルエリミネーションでの所属（winners / losers / grand_finals）。
     # シングルエリミ・総当たりでは null
     bracket_side: str | None = None
+    # 配信対象の試合だけ URL が入る。ブラケット上で印を出すのに使う。
+    stream_url: str | None = None
 
     model_config = {"from_attributes": True}
 

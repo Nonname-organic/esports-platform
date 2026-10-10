@@ -25,6 +25,10 @@ export const matchApi = {
   start: (id: string): Promise<void> =>
     apiClient.patch(`/api/v1/matches/${id}/start`),
 
+  /** この試合を配信対象にする。空文字で解除。 */
+  setStreamUrl: (id: string, streamUrl: string): Promise<unknown> =>
+    apiClient.patch(`/api/v1/matches/${id}/stream`, { stream_url: streamUrl }),
+
   updateScore: (
     id: string,
     gameNumber: number,

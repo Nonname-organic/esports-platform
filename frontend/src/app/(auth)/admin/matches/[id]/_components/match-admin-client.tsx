@@ -10,6 +10,7 @@ import { StatusControls } from "./status-controls";
 import { GameManager } from "./game-manager";
 import { BanPickPanel } from "./banpick-panel";
 import { ScoreboardImport } from "./scoreboard-import";
+import { StreamSetting } from "./stream-setting";
 import { WsIndicator } from "./ws-indicator";
 
 interface MatchAdminClientProps {
@@ -74,6 +75,8 @@ export function MatchAdminClient({ matchId, initialMatch, game }: MatchAdminClie
       </div>
 
       {/* スコアボード画像から選手成績を一括登録 */}
+      <StreamSetting match={match} />
+
       <ScoreboardImport match={match} />
     </div>
   );

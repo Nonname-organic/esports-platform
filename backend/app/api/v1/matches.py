@@ -1,6 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, File, UploadFile
+from pydantic import BaseModel, Field
 
 from app.core.dependencies import Cache, CurrentUser, DBSession, OrganizerUser
 from app.core.exceptions import ValidationError
@@ -124,3 +125,25 @@ async def register_result(
 ):
     service = MatchService(db, cache)
     await service.register_result(match_id, data, current_user)
+
+
+class StreamUrlUpdate(BaseModel):
+    """配信試合の指定。空文字・null で解除する。"""
+    stream_url: str | None = Field(default=None, max_length=500)
+
+
+@router.patch("/{match_id}/stream", response_model=Response[dict])
+async def set_stream_url(
+    match_id: uuid.UUID,
+    data: StreamUrlUpdate,
+    db: DBSession,
+    cache: Cache,
+    current_user: OrganizerUser,
+):
+    """この試合を配信対象にする（配信URLを設定・解除する）。
+
+    どの試合を配信するかはブラケット上で示したいので、試合側に持たせる。
+    """
+    service = MatchService(db, cache)
+    url = await service.set_stream_url(match_id, data.stream_url, current_user)
+    return Response(data={"match_id": str(match_id), "stream_url": url}, meta=None)

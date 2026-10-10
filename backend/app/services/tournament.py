@@ -421,6 +421,7 @@ class TournamentService:
                     ) if m.team2_id else None,
                     winner_id=str(m.winner_id) if m.winner_id else None,
                     status=m.status.value,
+                    stream_url=m.stream_url,
                     scheduled_at=None,
                 )
                 for m in matches
@@ -584,6 +585,7 @@ class TournamentService:
                         team1=None, team2=None,
                         winner_id=None,
                         status=m.status.value,
+                        stream_url=m.stream_url,
                         scheduled_at=None,
                     )
                     for m in matches_by_round[1]
@@ -773,6 +775,7 @@ class TournamentService:
                         ) if match.team2 else None,
                         winner_id=str(match.winner_id) if match.winner_id else None,
                         status=match.status.value,
+                        stream_url=match.stream_url,
                         scheduled_at=match.scheduled_at,
                         bracket_side=side,
                     )

@@ -100,6 +100,8 @@ export interface BracketMatch {
   status: string;
   scheduled_at: string | null;
   bracket_side: BracketSide | null;
+  /** 配信対象の試合だけ入る。ブラケット上で印を出すのに使う */
+  stream_url?: string | null;
 }
 
 export interface BracketResponse {
