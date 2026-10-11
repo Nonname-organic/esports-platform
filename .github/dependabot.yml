@@ -1,0 +1,48 @@
+# 依存の更新を自動で拾う。
+#
+# 導入時点で backend に7件、frontend の本番依存に5件の脆弱性が残っていた。
+# 手で気づける量ではないので、上がってきた PR を見て取り込む運用にする。
+#
+# グループ化しているのは、パッチだけで PR が溢れると見なくなるため。
+# セキュリティ更新は group に関係なく個別に飛んでくる。
+version: 2
+
+updates:
+  - package-ecosystem: pip
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Tokyo
+    open-pull-requests-limit: 5
+    groups:
+      backend-minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Tokyo
+    open-pull-requests-limit: 5
+    groups:
+      frontend-minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+
+  # ベースイメージ（python / node / nginx / postgres / redis）
+  - package-ecosystem: docker
+    directories:
+      - /backend
+      - /frontend
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
