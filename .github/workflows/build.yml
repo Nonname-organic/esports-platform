@@ -52,6 +52,10 @@ jobs:
           - service: frontend
             context: ./frontend
             target: ""
+            # Next.js の NEXT_PUBLIC_* はビルド時に埋め込まれる。渡さないと
+            # 空になり、デモ環境である旨のバナーが出なくなる（実際に出ていなかった）。
+            # 実データを載せる段階で vars.NEXT_PUBLIC_DEMO_MODE を false にする。
+            build-args: NEXT_PUBLIC_DEMO_MODE=${{ vars.NEXT_PUBLIC_DEMO_MODE || 'true' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -86,6 +90,7 @@ jobs:
         with:
           context: ${{ matrix.context }}
           target: ${{ matrix.target || '' }}
+          build-args: ${{ matrix.build-args || '' }}
           push: true
           # ConoHa VPS は x86 のみ。ARM向けビルドは Oracle(ARM) 構成をやめた時点で不要になった。
           # 2アーキ分のベースイメージを引くと Docker Hub のレート制限(429)に当たりやすい。
