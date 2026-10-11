@@ -38,11 +38,7 @@ updates:
       interval: monthly
     open-pull-requests-limit: 3
 
-  # ベースイメージ（python / node / nginx / postgres / redis）
-  - package-ecosystem: docker
-    directories:
-      - /backend
-      - /frontend
-    schedule:
-      interval: monthly
-    open-pull-requests-limit: 3
+  # ベースイメージ（docker）は入れていない。Dockerfile は Docker Hub の
+  # レート制限を避けて public.ecr.aws のミラーを指しているが、Dependabot は
+  # そこから Docker Hub に問い合わせに行って 429 で必ず失敗する。
+  # 常に赤いジョブは見なくなるので、python / node の版上げは手で見る。
