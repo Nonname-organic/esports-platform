@@ -1,5 +1,5 @@
 import { Map, Trophy } from "lucide-react";
-import { cn, formatDate } from "@/lib/utils";
+import { cn, formatDate, getMatchStatusLabel } from "@/lib/utils";
 import type { MatchDetail } from "@/types/match";
 
 /**
@@ -71,7 +71,7 @@ export function MatchOverviewTab({ match }: { match: MatchDetail }) {
           {[
             { label: "フォーマット", value: match.format },
             { label: "ラウンド", value: `Round ${match.round_number}` },
-            { label: "ステータス", value: match.status },
+            { label: "ステータス", value: getMatchStatusLabel(match.status) },
             ...(match.scheduled_at ? [{ label: "予定時刻", value: formatDate(match.scheduled_at) }] : []),
             ...(match.started_at ? [{ label: "開始時刻", value: formatDate(match.started_at) }] : []),
             ...(match.ended_at ? [{ label: "終了時刻", value: formatDate(match.ended_at) }] : []),

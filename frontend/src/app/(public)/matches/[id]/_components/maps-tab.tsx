@@ -104,7 +104,7 @@ function PlayerStatsTable({ players, teamName, isWin }: {
                 <td className="py-1.5">
                   <div className="flex items-center gap-1.5">
                     {p.agent && (
-                      <span className="rounded bg-white/5 px-1 text-[9px] text-slate-400">{p.agent.slice(0, 4)}</span>
+                      <span className="rounded bg-white/5 px-1 text-[9px] text-slate-400 whitespace-nowrap shrink-0">{p.agent}</span>
                     )}
                     <span className="truncate text-slate-300 max-w-[80px]">{p.player_name}</span>
                   </div>

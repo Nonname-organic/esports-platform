@@ -9,7 +9,8 @@ import { MatchOverviewTab } from "@/features/matches/components/match-overview-t
 import { useAuthStore } from "@/store/auth-store";
 import { cn, formatDate } from "@/lib/utils";
 import { downloadBlob, renderBracketPng } from "./export-png";
-import type { BracketMatch, BracketResponse, BracketSide } from "@/types/tournament";
+import { getRoundLabel } from "./round-label";
+import type { BracketMatch, BracketResponse } from "@/types/tournament";
 
 // ── レイアウト定数 ─────────────────────────────────────────────────────────────
 // CARD_H はカード側にも height として適用する（ここだけ変えると配置とズレるため）。
@@ -47,19 +48,6 @@ interface BracketViewProps {
 
 // ── ユーティリティ ────────────────────────────────────────────────────────────
 
-function getRoundLabel(fromEnd: number, format: string, side?: BracketSide | null): string {
-  if (format === "round_robin") return `第${fromEnd}ラウンド`;
-  if (side === "losers") {
-    if (fromEnd === 1) return "敗者決勝";
-    return `敗者 R${fromEnd}`;
-  }
-  if (side === "grand_finals") return "グランドファイナル";
-  if (fromEnd === 1) return "決勝";
-  if (fromEnd === 2) return "準決勝";
-  if (fromEnd === 3) return "準々決勝";
-  return `Round ${fromEnd}`;
-}
-
 function buildLayout(rounds: { roundNum: number; matches: BracketMatch[] }[]): {
   layoutRounds: RoundData[];
   totalWidth: number;
@@ -81,7 +69,9 @@ function buildLayout(rounds: { roundNum: number; matches: BracketMatch[] }[]): {
     const fromEnd = rounds.length - ri;
     layoutRounds.push({
       roundNum,
-      label: getRoundLabel(fromEnd, "single_elimination", side),
+      // ri は描画している列の位置。勝者側・敗者側で別々に buildLayout を
+      // 呼ぶため、ここでの位置はそのブラケット内での順番になる。
+      label: getRoundLabel(ri + 1, fromEnd, "single_elimination", side),
       matches: posMatches,
     });
   });

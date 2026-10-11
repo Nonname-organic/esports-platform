@@ -151,7 +151,7 @@ function StatsTable({
                 <tr key={p.player_id} className={cn("hover:bg-white/3 transition-colors", i === 0 && "bg-yellow-500/3")}>
                   <td className="px-4 py-2.5">
                     <div className="flex items-center gap-1.5">
-                      {p.agent && <span className="rounded bg-white/5 px-1 text-[9px] text-slate-500">{p.agent.slice(0, 4)}</span>}
+                      {p.agent && <span className="rounded bg-white/5 px-1 text-[9px] text-slate-500 whitespace-nowrap shrink-0">{p.agent}</span>}
                       <span className="truncate font-medium text-slate-200 max-w-[80px]">{p.player_name}</span>
                     </div>
                   </td>

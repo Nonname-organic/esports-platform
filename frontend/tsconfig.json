@@ -35,6 +35,12 @@
     ".next/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    // ユニットテストは jest（next/jest の SWC 変換）で動かす。@types/jest を
+    // 入れていないため tsc からは describe / it / expect が未定義に見え、
+    // 型チェックの出力が実害のないエラーで埋まる。アプリ本体の型エラーを
+    // 読めるようにするため除外する。@types/jest を入れたらこの2行を外す。
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx"
   ]
 }
