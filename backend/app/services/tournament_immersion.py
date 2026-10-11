@@ -27,7 +27,15 @@ LIVE_TTL = 10
 UPCOMING_LIMIT = 5
 
 
-def _stream_platform(url: str) -> str:
+def _stream_platform(url: object) -> str:
+    """URL から配信プラットフォームを推定する。
+
+    引数の型を広く取っているのは、呼び出し元が rules JSONB 由来の値を
+    渡しうるため。JSONB は任意の JSON を受けるので、文字列以外が来ても
+    overview 全体を落とさないようにする。
+    """
+    if not isinstance(url, str):
+        return "other"
     u = url.lower()
     if "twitch" in u:
         return "twitch"
@@ -36,6 +44,52 @@ def _stream_platform(url: str) -> str:
     if "kick" in u:
         return "kick"
     return "other"
+
+
+def _stream_url_from_rules(rules: object) -> Optional[str]:
+    """大会の rules JSONB から配信URLを1本だけ取り出す。
+
+    保存形式が2つある。
+
+      - 作成・編集フォームが保存する形（現行・全件これ）:
+          rules["stream"] = {"is_streamed": bool,
+                             "twitch_url": str, "youtube_url": str}
+      - 文字列を直接置く形:
+          rules["stream_url"] = "https://..."
+        （書き込むコードは見つからないが、読む側が対応していたので残す）
+
+    以前はこの辞書をそのまま _stream_platform() に渡しており、
+    dict.lower() で AttributeError になって overview API が 500 を返して
+    いた。空の辞書ではなく {"is_streamed": false, ...} が入るため、配信を
+    設定していない大会でも真と判定されてここに入っていた。
+
+    Twitch を YouTube より優先する。入力欄・送信ペイロード・型定義・
+    _stream_platform() の判定順がいずれも twitch → youtube の並びで
+    揃っているため、それに合わせた（明文化された仕様は無い）。
+
+    is_streamed が明示的に False のときは配信なしとして扱う。フォームは
+    このチェックが入っているときだけURL入力欄を出すため、False は
+    「配信しない」の意思表示と読める。キー自体が無い場合は判断材料が
+    ないものとして、URL の有無だけを見る。
+    """
+    if not isinstance(rules, dict):
+        return None
+
+    candidate = rules.get("stream_url") or rules.get("stream")
+
+    if isinstance(candidate, dict):
+        if candidate.get("is_streamed") is False:
+            return None
+        for key in ("twitch_url", "youtube_url", "url"):
+            value = candidate.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        return None
+
+    if isinstance(candidate, str) and candidate.strip():
+        return candidate.strip()
+
+    return None
 
 
 class TournamentImmersionService:
@@ -87,10 +141,7 @@ class TournamentImmersionService:
 
         # Stream: rules JSONB > 現在試合の stream_url
         stream = None
-        rules = t.rules or {}
-        stream_url = None
-        if isinstance(rules, dict):
-            stream_url = rules.get("stream_url") or rules.get("stream")
+        stream_url = _stream_url_from_rules(t.rules)
         if not stream_url and ongoing and ongoing[0].stream_url:
             stream_url = ongoing[0].stream_url
         if stream_url:
