@@ -126,7 +126,10 @@ async def client(db: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     app.dependency_overrides[get_cache] = lambda: FakeRedisCache()
 
     async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
+        # Host が TrustedHostMiddleware の許可リストに載っている必要がある。
+        # "test" のような架空の名前を本番の許可リストへ入れたくないので、
+        # 内部呼び出しで既に許可されている localhost を使う
+        transport=ASGITransport(app=app), base_url="http://localhost"
     ) as c:
         yield c
 

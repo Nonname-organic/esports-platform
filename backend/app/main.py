@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 import structlog
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse, Response
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
@@ -99,6 +100,32 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(RateLimitMiddleware)
+
+
+def _allowed_hosts() -> list[str]:
+    """Host ヘッダとして受け付ける名前。
+
+    starlette は Host から request.url を組み立てるため、検証しないと
+    攻撃者が任意のホスト名を混ぜられる（GHSA-86qp-5c8j-p5mr）。
+    nginx の 443 ブロックは1つしか無く既定サーバーとして働くので、
+    未知の Host もそのままアプリまで届く。ここで止める。
+
+    値は ALLOWED_ORIGINS から取り出す。専用の環境変数を足すと、
+    設定し忘れた環境で黙って全許可に戻るため増やさない。
+    コンテナ内部からの呼び出し（ヘルスチェック・SSR・ワーカー）は
+    ホスト名が固定なので直接並べる。
+    """
+    from urllib.parse import urlparse
+
+    hosts = {urlparse(o).hostname for o in settings.ALLOWED_ORIGINS}
+    hosts.discard(None)
+    # docker-compose.yml: healthcheck は localhost:8000、frontend と
+    # scheduler/worker は api:8000 を見ている
+    hosts.update({"localhost", "127.0.0.1", "api"})
+    return sorted(hosts)
+
+
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=_allowed_hosts())
 # Outermost middleware: generates request_id, logs every request, records metrics.
 # Must be added last so it wraps all other middleware.
 app.add_middleware(ObservabilityMiddleware)
