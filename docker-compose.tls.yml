@@ -15,3 +15,7 @@ services:
       - ./nginx/nginx-tls.conf:/etc/nginx/nginx.conf:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
       - ./certbot-www:/var/www/certbot:ro
+      # アクセスログをホストへ出す。既定では stdout に流れ、Docker の
+      # ログファイル名にコンテナIDが入るためデプロイのたびにパスが変わり、
+      # fail2ban から安定して読めない
+      - ./logs/nginx:/var/log/nginx

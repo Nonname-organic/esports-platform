@@ -356,12 +356,45 @@ ConoHa は x86 なので、`build.yml` の `platforms` を `linux/amd64` のみ�
 
 ---
 
+## サーバー上で docker compose を叩くときの注意
+
+**必ず `/opt/app` で実行する。** このサーバーは `.env` に `COMPOSE_FILE` を
+持たせてあり、そこで初めて4つのオーバーレイが揃う。
+
+```
+COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml:docker-compose.tls.yml:docker-compose.conoha.yml
+```
+
+これが効かない状態（別ディレクトリ、`-f` を自分で並べて書き漏らす等）で
+`docker compose up` を実行すると、素の `docker-compose.yml` だけで解決され、
+
+- nginx が TLS 設定と証明書を失い、HTTPS が応答しなくなる
+- 依存関係で api / frontend もローカルビルドのイメージに置き換わる
+
+という壊れ方をする。実際に一度サイトを落としている。
+
+`COMPOSE_FILE` が効いていれば、`IMAGE_ORG` / `IMAGE_TAG` を渡さない
+`up` はイメージ解決に失敗してその場で止まる（黙って作り替えない）。
+イメージを入れ替える操作はデプロイに任せ、手で `up` しないこと。
+
+復旧させるときは、直近成功した Deploy を再実行するのが確実。
+
+```bash
+gh run rerun <直近の成功した Deploy の run-id> --repo Nonname-organic/esports-platform
+```
+
 ## トラブルシューティング
 
 ### ポート 80/443 に外から繋がらない
-ConoHa のセキュリティグループと OS の ufw の**両方**を確認（手順2）。
-`sudo ufw status` で 80/443 が ALLOW になっているか、
-ConoHa 管理画面でセキュリティグループが適用されているかを見ます。
+ConoHa のセキュリティグループを確認（手順2）。管理画面で対象の
+セキュリティグループがサーバーに適用されているかを見ます。
+
+ufw は**無効のまま運用している**。有効にすると SSH だけが落ちる。
+`/etc/default/ufw` が `MANAGE_BUILTINS=no` のため ufw は INPUT チェーンに
+自分への分岐を入れず、ポリシーだけ DROP になって許可ルールに到達しない。
+`MANAGE_BUILTINS=yes` にすると今度は FORWARD にも割り込み、既定 DROP で
+コンテナ間通信が切れる恐れがある。外部に開いているホスト側のサービスは
+sshd だけなので、絞り込みは ConoHa のセキュリティグループに任せている。
 
 ### `docker compose` が「command not found」
 Docker Compose v1（`docker-compose`）しか入っていません。v2 を入れ直します:
