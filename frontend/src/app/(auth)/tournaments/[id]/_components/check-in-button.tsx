@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Check, Clock, Loader2, LogIn } from "lucide-react";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthStore } from "@/store/auth-store";
+import { formatDateShort, formatTime, isSameDayJST } from "@/lib/utils";
 
 interface CheckInWindow {
   state: "open" | "before" | "after";
@@ -18,19 +19,19 @@ interface CheckInState {
   window?: CheckInWindow;
 }
 
-/** "8/30 13:00 〜 13:05" 形式。終了が同日なら時刻のみに省略する */
+/**
+ * "8/30 13:00 〜 13:05" 形式。終了が同日なら時刻のみに省略する。
+ *
+ * 同日判定も整形も日本時間で行う。閲覧者のタイムゾーンで判定すると、
+ * 日本時間では同日に収まるチェックイン枠が別日として出てしまう。
+ */
 function fmtWindow(start: string | null, end: string | null): string {
-  const fmt = (iso: string, timeOnly: boolean) => {
-    const d = new Date(iso);
-    const time = `${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
-    return timeOnly ? time : `${d.getMonth() + 1}/${d.getDate()} ${time}`;
-  };
   if (start && end) {
-    const sameDay = new Date(start).toDateString() === new Date(end).toDateString();
-    return `${fmt(start, false)} 〜 ${fmt(end, sameDay)}`;
+    const tail = isSameDayJST(start, end) ? formatTime(end) : formatDateShort(end);
+    return `${formatDateShort(start)} 〜 ${tail}`;
   }
-  if (start) return `${fmt(start, false)} から`;
-  if (end) return `${fmt(end, false)} まで`;
+  if (start) return `${formatDateShort(start)} から`;
+  if (end) return `${formatDateShort(end)} まで`;
   return "";
 }
 

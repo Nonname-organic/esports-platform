@@ -105,7 +105,7 @@ export function PlayerStatsTab({ match }: PlayerStatsTabProps) {
               )}>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
-                    {p.agent && <span className="rounded bg-white/5 px-1.5 text-[9px] text-slate-400">{p.agent.slice(0, 4)}</span>}
+                    {p.agent && <span className="rounded bg-white/5 px-1.5 text-[9px] text-slate-400 whitespace-nowrap shrink-0">{p.agent}</span>}
                     <div>
                       <p className="font-semibold text-white">{p.player_name}</p>
                       {/* ACSバー */}

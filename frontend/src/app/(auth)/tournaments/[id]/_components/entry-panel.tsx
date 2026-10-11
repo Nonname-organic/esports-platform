@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { CalendarClock, Check, Clock, Loader2, Send, Users } from "lucide-react";
 import { ApiError } from "@/lib/api-client";
+import { formatDateShort } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth-store";
 import { useMyTeams } from "@/features/teams/hooks/use-teams";
 import { useMyRegistration, useRegisterTeam } from "@/features/tournaments/hooks/use-tournaments";
@@ -42,11 +43,6 @@ const APPROVAL_NOTE: Record<string, string> = {
   lottery: "受付終了後に抽選し、当選チームのみ参加確定になります",
 };
 
-function fmt(iso: string | null | undefined): string {
-  if (!iso) return "未定";
-  const d = new Date(iso);
-  return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
-}
 
 interface EntryPanelProps {
   tournament: TournamentDetail;
@@ -83,7 +79,7 @@ export function EntryPanel({ tournament }: EntryPanelProps) {
       <p className="flex items-center gap-1.5">
         <CalendarClock className="h-3.5 w-3.5 text-slate-500" />
         受付期間: <span className="font-semibold text-white">
-          {fmt(tournament.registration_start_at)} 〜 {fmt(tournament.registration_end_at)}
+          {formatDateShort(tournament.registration_start_at)} 〜 {formatDateShort(tournament.registration_end_at)}
         </span>
       </p>
       {tournament.approval_mode && APPROVAL_NOTE[tournament.approval_mode] && (

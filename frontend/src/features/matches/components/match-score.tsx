@@ -203,8 +203,8 @@ function PlayerStatsTable({
                 <td className="py-1">
                   <div className="flex items-center gap-1.5">
                     {p.agent && (
-                      <span className="rounded bg-white/10 px-1 text-[10px] text-slate-400">
-                        {p.agent.slice(0, 4)}
+                      <span className="rounded bg-white/10 px-1 text-[10px] text-slate-400 whitespace-nowrap shrink-0">
+                        {p.agent}
                       </span>
                     )}
                     <span className="truncate font-medium text-white text-xs">
