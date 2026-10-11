@@ -30,6 +30,21 @@ Windows 同梱の游ゴシックを埋め込みます（無い場合はメイリ
 
 ## 画面キャプチャの撮り直し
 
+公開画面（ログイン不要）は本番から直接撮れます。`p*.png` がこれにあたります。
+
+```bash
+cd frontend
+npx playwright install chromium      # 初回のみ
+node scripts/capture-manual-figures.mjs
+python ../docs/manual/build_manual.py
+```
+
+ログインが必要な画面（`04` `06` `07` `08` `10` `11`）は下の手順で撮ります。
+デモデータを削除した本番では対象の大会が無いため、ローカルスタックで撮る
+必要があります。
+
+### ログインが必要な画面
+
 画面を変更したら、ローカルのスタックを起動した状態で撮り直します。
 
 ```bash
