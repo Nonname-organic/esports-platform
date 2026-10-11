@@ -88,6 +88,22 @@ jobs:
         run: |
           pip install ruff
           ruff check app tests --output-format=github
+      # pr-checks.yml から移設。検査条件（--ignore-missing-imports --strict）は
+      # そのまま維持しつつ、呼び出し方だけ直している。元はリポジトリ直下から
+      # `mypy backend/app` としていたため app/events と app/core/events.py が
+      # 同じモジュール名に解決され、型検査に到達する前に落ちていた。
+      #
+      # 現状 679件（101ファイル）。blocking にすると常時赤になり歯止めとして
+      # 働かないため advisory で始める。SQLAlchemy の DeclarativeBase が Any に
+      # なる件など構造的なものを含むので、潰すには型付けの計画が要る。
+      - name: Mypy (advisory)
+        working-directory: backend
+        continue-on-error: true
+        env:
+          MYPYPATH: .
+        run: |
+          pip install mypy
+          mypy --explicit-package-bases app --ignore-missing-imports --strict
 
   # ── 2. Backend tests: unit + integration + api + contract + coverage ──────────
   backend-tests:
