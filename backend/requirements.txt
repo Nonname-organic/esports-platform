@@ -49,7 +49,7 @@ python-slugify==8.0.4
 qrcode[pil]==8.0
 Pillow==12.2.0
 python-dateutil==2.9.0.post0
-pytz==2024.2
+pytz==2026.5
 
 # Scoreboard OCR（VALORANTスコアボードのスクリーンショット取り込み）
 # tesseract-ocr 本体と libgl1 は Dockerfile 側で apt install している
