@@ -60,21 +60,78 @@ jobs:
             # Pull new images (docker-compose.prod.yml overrides build: → image:)
             IMAGE_TAG="$IMAGE_TAG" IMAGE_ORG="$IMAGE_ORG" docker compose pull
 
-            # Restart services; new containers start before old ones stop
+            # イメージが変わったサービス（api / worker / scheduler / frontend）を
+            # 作り直す。compose の既定は旧コンテナを停止してから新コンテナを起動
+            # する動作なので、作り直している間はそのサービスが落ちる。直近のデプロイ
+            # 全体は34〜46秒で完了している（GHCRログイン・pull・up・readiness待ち・
+            # alembic の合計）が、サービス単位の停止時間は未測定。
+            #
+            # nginx 自体は作り直されず上がったままだが、コンテナ停止中は DNS 解決や
+            # プロキシ接続に失敗する可能性がある（resolver 127.0.0.11 経由で
+            # proxy_pass しているため）。実際の HTTP 応答コードは未検証。
+            # デモはダウンタイム許容（docs/phase1_architecture.md）。
             IMAGE_TAG="$IMAGE_TAG" IMAGE_ORG="$IMAGE_ORG" \
               docker compose up -d --remove-orphans
 
-            # Wait for API readiness (uses /health/live — process-alive check only).
-            # NOTE: api image has no curl — use in-container Python instead.
+            # API が応答するまで待つ。見るのは /health/ready で、DB と Redis への
+            # 到達性まで確認する。/health/live は固定で 200 を返すだけなので、
+            # 接続が壊れていても通ってしまい、ゲートとして機能しない。
+            # NOTE: api イメージに curl が無いためコンテナ内の Python を使う。
+            #
+            # 成否は READY で持つ。`cmd && break` は set -e の対象外で、12回すべて
+            # 失敗してもループを抜けて次へ進んでしまう（実際そうなっていた）。
+            # 応答本文と例外には接続先の情報が入りうるのでログへは出さない。
+            #
+            # 待ち時間は「試行回数」「プローブ1回の打ち切り」「期限での打ち切り」の
+            # 3つで抑える。実時間の厳密な上限は保証しない（理由は下）。
+            #   1. 試行は最大12回
+            #   2. プローブ1回を timeout で打ち切る。既定の timeout は SIGTERM を
+            #      送るだけで、無視されると待ち続ける（実測: 3秒指定でも対象が
+            #      自分で終わる120秒まで待った）。--kill-after で SIGKILL も入れる
+            #      と 3+3=6秒 で exit 137 になる。よって1回は最悪 5+5=10秒。
+            #   3. 期限(60秒)まで5秒を切ったら新しいプローブを始めない
+            #
+            # 「60秒で必ず終わる」とは書かない。期限は新しいプローブを始めるかの
+            # 判断にだけ使い、進行中のプローブは止めない。残り5秒で始めた1回が
+            # TERM を無視された場合、最大10秒かかるので全体は約65秒まで伸びる。
+            # さらに date +%s の整数秒による最大1秒のずれと、timeout 自身の
+            # 後片付けが残る。シグナルの届く範囲も区別しておく: timeout は既定で
+            # 対象を専用のプロセスグループに入れて送るので、ローカルの
+            # docker CLI とその子孫までは止められる（--foreground を付けると
+            # 子孫には届かない）。しかしコンテナ内の python は別の PID 名前空間で
+            # 動くローカルの子孫ではないため、ここからは止められない。あちらは
+            # python 側の timeout=5 で自分から終わる前提に頼っている（未検証）。
+            # 以上より実時間の上限は保証しない。
+            READY=0
+            TRIED=0
+            DEADLINE=$(( $(date +%s) + 60 ))
             for i in $(seq 1 12); do
-              docker compose exec -T api python -c \
-                "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/live', timeout=3)" \
-                && break
-              echo "Waiting for API... ($i/12)"
-              sleep 5
+              if [ $(( DEADLINE - $(date +%s) )) -lt 5 ]; then
+                echo "待機の期限に達したため試行を打ち切ります（試行 ${TRIED} 回）"
+                break
+              fi
+              TRIED=$i
+              if timeout --kill-after=5 5 docker compose exec -T api python -c \
+                "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready', timeout=5)" \
+                >/dev/null 2>&1; then
+                READY=1
+                break
+              fi
+              echo "Waiting for API readiness... ($i/12)"
+              # 最終試行のあとは眠らない。残り時間も超えない
+              REMAIN=$(( DEADLINE - $(date +%s) ))
+              if [ "$i" -lt 12 ] && [ "$REMAIN" -gt 0 ]; then
+                if [ "$REMAIN" -lt 5 ]; then sleep "$REMAIN"; else sleep 5; fi
+              fi
             done
 
-            # Run DB migrations after API is live
+            if [ "$READY" -ne 1 ]; then
+              echo "readiness が通りませんでした（試行 ${TRIED} 回 / 上限 12 回・期限 60 秒）。"
+              echo "マイグレーションは実行しません。"
+              exit 1
+            fi
+
+            # readiness が通ってからマイグレーションを流す
             docker compose exec -T api alembic upgrade head
 
             echo "Deploy $IMAGE_TAG complete"

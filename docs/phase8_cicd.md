@@ -221,8 +221,14 @@ Rollback: `git revert HEAD`, push → ArgoCD restores the previous image tag.
 
 **Why `workflow_run` instead of a single pipeline?**
 `workflow_run` lets deploy workflows trigger from the `Build & Push` completion
-without being part of the same YAML. Each environment can be re-triggered
-independently (`workflow_dispatch`) without re-running the build.
+without being part of the same YAML, so each environment's deploy can change
+without touching the build.
+
+Note that `deploy-demo.yml` has **no** `workflow_dispatch` trigger: a demo deploy
+only happens when a `Build & Push` run completes successfully. To deploy the same
+commit again, re-run that build, or re-run the earlier `Deploy — Demo` run (it
+replays the original `workflow_run` payload, so the image tag stays the same).
+`deploy-mvp.yml` and `deploy-production.yml` do expose `workflow_dispatch`.
 
 **Why push to both GHCR and ECR in one build?**
 ECS Fargate can pull from ECR natively without credentials config in the task

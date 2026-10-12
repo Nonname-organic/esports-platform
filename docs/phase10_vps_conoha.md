@@ -383,6 +383,43 @@ COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml:docker-compose.tls.yml:d
 gh run rerun <直近の成功した Deploy の run-id> --repo Nonname-organic/esports-platform
 ```
 
+### 切り戻しの判断
+
+切り戻しは **直近成功した Deploy run の再実行** で行う。Deploy はタグを
+`workflow_run.head_sha` から導出するので、再実行すればそのコミットの
+イメージに戻る。手で `docker compose up` してイメージを差し替えないこと
+（上に書いた壊れ方をする）。
+
+ただし **イメージを戻せば元に戻る、とは限らない**。デプロイは `up -d` の
+あとに `alembic upgrade head` を流すため、マイグレーションが成功した後に
+イメージだけ戻すと、旧コードが新しいスキーマを読む状態になる。
+
+| 戻す対象のデプロイ | 再実行だけで足りるか |
+|---|---|
+| マイグレーションを含まない | 足りる。スキーマは変化していない |
+| add-only（`server_default` 付きの列追加など） | **旧アプリとの後方互換性を確認できた場合に限り** 足りる。未確認なら足りないものとして扱う |
+| 列の削除・改名・型変更を含む | **足りない。** `alembic downgrade` が別途必要 |
+
+判定は、戻す範囲に `backend/alembic/versions/` の追加があるかで見る。
+
+```bash
+git diff --name-only <戻したいSHA>..<現在のSHA> -- backend/alembic/versions/
+```
+
+add-only を「後方互換」と判断してよいのは、次を**実際に確認できたとき**だけ。
+add-only という形だけでは根拠にならない。
+
+- 追加した列が `NOT NULL` なら `server_default` が付いている（015 の
+  `status_locked` が模範）
+- 旧アプリのモデル定義・クエリが、増えた列やテーブルを要求しない
+- 追加したテーブルを旧アプリが参照しない（外部キーの向きを含む）
+
+確認できなければ `alembic downgrade` を含む手順が必要で、再実行だけでは戻らない。
+
+なお PR #32（python-multipart の更新）はマイグレーションを含まないため1行目に
+該当し、再実行だけで完全に戻る。ただしこれは**そのPR固有の事実**であって、
+以後のデプロイへ一般化できる判断ではない。切り戻すたびに上の表で確認する。
+
 ## トラブルシューティング
 
 ### ポート 80/443 に外から繋がらない
