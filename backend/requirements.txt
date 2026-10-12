@@ -4,7 +4,7 @@ fastapi==0.120.4
 # fastapi 0.115 系は starlette<0.42 で頭打ちになり、未認証の Range ヘッダで
 # 成立する DoS (PYSEC-2026-1942) を塞げない。0.120 で上限が <0.50 に上がり
 # 0.49.1 を入れられる。残る勧告は starlette 1.x が要るため別途。
-starlette==0.49.1
+starlette==1.3.1
 uvicorn[standard]==0.30.6
 # アップロード（upload.py / スコアボード取り込み）が multipart を受ける。
 # 0.0.26 には multipart ヘッダ長の上限が無く、巨大なヘッダでCPUを食わせる
