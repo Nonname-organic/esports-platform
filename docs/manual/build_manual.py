@@ -89,7 +89,7 @@ def build(doc: Doc, toc_offset: int) -> None:
     doc.h2("2-1", "新規登録")
     doc.figure(
         "新規登録画面。アカウントの種類・ユーザー名・メールアドレス・パスワードを入力します",
-        "figures/03_register.png", max_h=320,
+        "figures/p14_register.png", max_h=320,
     )
     doc.steps([
         f"ブラウザで {URL} にアクセスします。",
@@ -135,7 +135,7 @@ def build(doc: Doc, toc_offset: int) -> None:
     doc.h1("3", "画面の見方")
     doc.figure(
         "トップページ。上部のヘッダーから大会一覧・スカウト・ランキング・統計に移動できます",
-        "figures/01_home_hero.png",
+        "figures/p01_home.png",
     )
     doc.para("画面上部のヘッダーから、主要な機能へ移動できます。")
     doc.table(
@@ -154,6 +154,11 @@ def build(doc: Doc, toc_offset: int) -> None:
     )
 
     # ══ 4 大会に参加する ═════════════════════════════════════════════════════
+    doc.figure(
+        "大会一覧。月・ゲーム・開催状況で絞り込めます",
+        "figures/p02_tournaments.png",
+    )
+
     doc.h1("4", "大会に参加する")
     doc.para("参加者（選手・チーム代表者）向けの操作です。")
 
@@ -532,6 +537,11 @@ def build(doc: Doc, toc_offset: int) -> None:
         "公開すると、選手側から閲覧・応募を受けられます。",
     ])
 
+    doc.figure(
+        "選手一覧。ロール・ランク・活動地域で絞り込んでチームを探せます",
+        "figures/p12_scout_players.png",
+    )
+
     doc.h2("6-3", "ランクでの絞り込み")
     doc.para(
         "ランクは「Iron 1」から「Radiant」までの25段階で指定できます。"
@@ -550,14 +560,41 @@ def build(doc: Doc, toc_offset: int) -> None:
     # ══ 7 戦績・ランキング・統計 ═════════════════════════════════════════════
     doc.h1("7", "戦績・ランキング・統計")
 
-    doc.h2("7-1", "ランキング")
+    doc.h2("7-1", "大会の結果を見る")
+    doc.para(
+        "大会詳細ページのタブから、トーナメント表・順位表・試合結果を確認できます。"
+        "試合が終わるたびに自動で反映され、ブラケットは30秒ごとに更新されます。"
+    )
+    doc.figure(
+        "Bracket タブ。勝ち上がりとスコアが一目で分かります",
+        "figures/p04_tournament_bracket.png",
+    )
+    doc.figure(
+        "Standings タブ。勝敗・勝率・ポイントで並びます",
+        "figures/p05_tournament_standings.png",
+    )
+    doc.para(
+        "試合名をクリックすると試合詳細が開きます。MVP・チーム比較・"
+        "選手ごとのACS・K/D/A・ファーストブラッド率まで確認できます。"
+    )
+    doc.figure(
+        "試合詳細。Player Stats タブで選手ごとの成績を見られます",
+        "figures/p09_match_overview.png",
+    )
+
+    doc.h2("7-2", "ランキング")
     doc.para(
         "ヘッダーの「ランキング」から、大会成績をもとにしたチーム・選手の"
         "総合ランキングを確認できます。大会での順位に応じてRP（ランクポイント）が"
         "加算され、RPに応じてTierが決まります。"
     )
 
-    doc.h2("7-2", "統計ダッシュボード")
+    doc.figure(
+        "ランキング。大会成績から算出したRPでTierが決まります",
+        "figures/p11_rankings.png",
+    )
+
+    doc.h2("7-3", "統計ダッシュボード")
     doc.para(
         "ヘッダーの「統計」から、試合データの分析を確認できます。"
         "ゲームタイトル・期間・大会で絞り込めます。"
@@ -581,7 +618,7 @@ def build(doc: Doc, toc_offset: int) -> None:
         kind="info",
     )
 
-    doc.h2("7-3", "選手プロフィール")
+    doc.h2("7-4", "選手プロフィール")
     doc.para(
         "選手名をクリックすると、その選手のプロフィールページが開きます。"
         "勝率・KDA・使用エージェント・試合履歴など、大会をまたいだ成績を確認できます。"
