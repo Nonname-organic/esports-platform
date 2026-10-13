@@ -4,6 +4,7 @@ import type { TournamentSummary } from "@/types/tournament";
 import { LiveProvider } from "@/features/live/provider/live-provider";
 import { HeroSection } from "@/components/hero/hero-section";
 import { LiveTournamentPreview } from "./live-tournament-preview";
+import { PreparingNotice } from "./preparing-notice";
 
 /**
  * ランディング（client）— シンプル導線。
@@ -17,8 +18,14 @@ export function LandingLive({ initialFeatured }: { initialFeatured: TournamentSu
       <HeroSection />
 
       {/* スクロール到達点（Hero の Explore Live Tournament から遷移） */}
+      {/* 大会が0件のときは LiveTournamentPreview が null を返すので、
+          代わりに準備中の告知を出す。トップが Hero だけにならないようにする。 */}
       <div id="live" className="mx-auto max-w-7xl scroll-mt-20 px-4 py-12">
-        <LiveTournamentPreview initial={initialFeatured} />
+        {initialFeatured.length > 0 ? (
+          <LiveTournamentPreview initial={initialFeatured} />
+        ) : (
+          <PreparingNotice />
+        )}
       </div>
     </LiveProvider>
   );

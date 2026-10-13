@@ -3,6 +3,9 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "プライバシーポリシー",
   description: "AXELIA における個人情報の取り扱いについて",
+  // 公開する3ページのうちの1つ（frontend/src/app/robots.ts の ALLOW と対応）
+  robots: { index: true, follow: true },
+  alternates: { canonical: "/privacy" },
 };
 
 const SECTIONS: { heading: string; body: string[]; list?: string[] }[] = [

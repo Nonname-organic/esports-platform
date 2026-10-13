@@ -1,10 +1,15 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { useLive } from "@/features/live/provider/live-provider";
 
 /**
  * Hero 背景をゆっくり浮遊する半透明ラベル（世界観演出のみ / クリック不可）。
  * transform/opacity のみの GPU アニメ。reduced-motion では静止。
+ *
+ * ラベルは固定文字列で、データに連動しない。大会が1件も無いときに
+ * LIVE / ENTRY OPEN / REGISTER NOW が浮いていると、開催中の大会や
+ * 受付中のエントリーがあるように読める。公開準備中はまるごと出さない。
  */
 
 const CARDS: { label: string; cls: string; pos: string; anim: string; delay: string }[] = [
@@ -16,6 +21,11 @@ const CARDS: { label: string; cls: string; pos: string; anim: string; delay: str
 ];
 
 export function FloatingLiveCards() {
+  const { totals } = useLive();
+
+  // 取得前（null）も出さない。0件のときに一瞬だけ見えるのを避ける。
+  if (!totals || totals.tournaments === 0) return null;
+
   return (
     <div className="pointer-events-none absolute inset-0 hidden overflow-hidden md:block" aria-hidden>
       {CARDS.map((c) => (
