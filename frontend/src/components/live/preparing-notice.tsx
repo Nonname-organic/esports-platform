@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 /**
- * 公開準備中の告知とサービス紹介。
+ * デモ環境である旨の告知とサービス紹介。
  *
  * 大会が0件のとき、Hero の直下には何も出なかった（LiveTournamentPreview が
  * 0件で null を返す）。トップページが Hero だけになり、何のサービスなのか、
@@ -10,26 +10,32 @@ import Link from "next/link";
  * 書かないことを決めてある:
  *   - 存在しない大会名・開催日
  *   - 参加チーム数や実績の示唆（登録チームには動作確認用のものが含まれる）
- *   - 未実装の機能を提供中と読める表現
+ *   - 大会の件数（このコンポーネントが出る条件は「開催中が0件」で、
+ *     他の状態の大会が無いことまでは意味しない。page.tsx の
+ *     getFeaturedTournaments は status=ongoing だけを引き、取得に失敗しても
+ *     空配列を返す）
  */
+
+/** ログインすれば今すぐ触れるもの。大会作成は主催者機能を自分で有効にできる。 */
 const AVAILABLE = [
   "アカウント登録とログイン",
   "チームの作成とメンバー管理",
   "選手プロフィールの登録",
+  "大会の作成と参加者の受付（主催者機能を有効にすると使えます）",
 ] as const;
 
-const PLANNED = [
-  "大会の募集・エントリー受付",
+/** 実装はあるが、対象の大会・試合が無いと結果が出ないもの。 */
+const NEEDS_TOURNAMENT = [
   "ブラケットの自動生成と試合結果の登録",
   "スコアボード画像からの成績取り込み",
-  "ランキングと統計の公開",
+  "ランキングと統計の集計",
 ] as const;
 
 export function PreparingNotice() {
   return (
     <section aria-labelledby="preparing-heading" className="mx-auto max-w-3xl">
       <p className="inline-flex items-center gap-2 rounded-full border border-amber-400/30 bg-amber-500/10 px-3 py-1 text-sm font-medium text-amber-200">
-        公開準備中
+        デモ環境
       </p>
 
       <h2 id="preparing-heading" className="mt-4 text-2xl font-bold sm:text-3xl">
@@ -42,10 +48,9 @@ export function PreparingNotice() {
       </p>
 
       <p className="mt-4 rounded-lg border border-slate-700 bg-slate-900/60 p-4 text-slate-200">
-        <strong className="font-semibold">現在、大会の募集・開催は行っていません。</strong>
+        <strong className="font-semibold">現在、運営が主催する大会は開催していません。</strong>
         <br />
-        掲載している大会はなく、参加者の受付も始めていません。機能の確認のために
-        作成したチーム・選手データが含まれます。
+        運営としての参加者の募集も行っていません。
       </p>
 
       <div className="mt-8 grid gap-6 sm:grid-cols-2">
@@ -67,16 +72,19 @@ export function PreparingNotice() {
 
         <div>
           <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
-            提供予定（準備中）
+            大会を作成すると使える機能
           </h3>
           <ul className="mt-3 space-y-2 text-sm text-slate-400">
-            {PLANNED.map((item) => (
+            {NEEDS_TOURNAMENT.map((item) => (
               <li key={item} className="flex gap-2">
                 <span aria-hidden="true">—</span>
                 {item}
               </li>
             ))}
           </ul>
+          <p className="mt-3 text-xs text-slate-500">
+            いずれも大会と試合のデータが必要です。
+          </p>
         </div>
       </div>
 

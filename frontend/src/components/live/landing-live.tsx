@@ -19,7 +19,7 @@ export function LandingLive({ initialFeatured }: { initialFeatured: TournamentSu
 
       {/* スクロール到達点（Hero の Explore Live Tournament から遷移） */}
       {/* 大会が0件のときは LiveTournamentPreview が null を返すので、
-          代わりに準備中の告知を出す。トップが Hero だけにならないようにする。 */}
+          代わりにデモ環境の告知を出す。トップが Hero だけにならないようにする。 */}
       <div id="live" className="mx-auto max-w-7xl scroll-mt-20 px-4 py-12">
         {initialFeatured.length > 0 ? (
           <LiveTournamentPreview initial={initialFeatured} />

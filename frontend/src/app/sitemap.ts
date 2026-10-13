@@ -5,7 +5,7 @@ import { SITE_URL } from "@/lib/site";
 /**
  * サイトマップ。
  *
- * 大会が0件の「準備中」なので、載せるのは静的な3ページだけ。
+ * 大会ページを公開対象にしていないので、載せるのは静的な3ページだけ。
  * 大会ページを公開する段になったら、ここに一覧を足す。
  */
 export default function sitemap(): MetadataRoute.Sitemap {

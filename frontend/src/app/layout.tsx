@@ -33,7 +33,7 @@ export const metadata: Metadata = {
     url: "/",
     title: "AXELIA | VALORANT大会プラットフォーム",
     description:
-      "VALORANT大会のエントリー・ブラケット生成・スコア管理・統計分析を一元化するプラットフォーム。現在は公開準備中で、大会の募集・開催は行っていません。",
+      "VALORANT大会のエントリー・ブラケット生成・スコア管理・統計分析を一元化するプラットフォーム。現在はデモ環境として公開しており、運営による大会の募集・開催は行っていません。",
   },
   twitter: { card: "summary_large_image" },
 };

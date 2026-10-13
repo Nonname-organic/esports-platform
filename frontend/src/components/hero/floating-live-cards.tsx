@@ -9,7 +9,7 @@ import { useLive } from "@/features/live/provider/live-provider";
  *
  * ラベルは固定文字列で、データに連動しない。大会が1件も無いときに
  * LIVE / ENTRY OPEN / REGISTER NOW が浮いていると、開催中の大会や
- * 受付中のエントリーがあるように読める。公開準備中はまるごと出さない。
+ * 受付中のエントリーがあるように読める。大会が0件のときはまるごと出さない。
  */
 
 const CARDS: { label: string; cls: string; pos: string; anim: string; delay: string }[] = [
