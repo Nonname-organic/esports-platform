@@ -110,15 +110,26 @@ def _allowed_hosts() -> list[str]:
     nginx の 443 ブロックは1つしか無く既定サーバーとして働くので、
     未知の Host もそのままアプリまで届く。ここで止める。
 
-    値は ALLOWED_ORIGINS から取り出す。専用の環境変数を足すと、
-    設定し忘れた環境で黙って全許可に戻るため増やさない。
+    基本は ALLOWED_HOSTS に書く。CORS の許可先（ALLOWED_ORIGINS）と
+    「APIがどの名前で呼ばれるか」は別物で、兼用すると Render のように
+    フロントと違うホスト名で来るヘルスチェックを弾いてしまう。
+
+    ALLOWED_HOSTS が空のときは ALLOWED_ORIGINS から導出する。設定し忘れた
+    環境で黙って全許可に戻らないよう、空を「全許可」とは解釈しない。
     コンテナ内部からの呼び出し（ヘルスチェック・SSR・ワーカー）は
-    ホスト名が固定なので直接並べる。
+    ホスト名が固定なので、どちらの場合も直接並べる。
     """
     from urllib.parse import urlparse
 
-    hosts = {urlparse(o).hostname for o in settings.ALLOWED_ORIGINS}
+    if settings.ALLOWED_HOSTS:
+        hosts = set(settings.ALLOWED_HOSTS)
+    else:
+        hosts = {urlparse(o).hostname for o in settings.ALLOWED_ORIGINS}
     hosts.discard(None)
+    hosts.discard("")
+    # 全許可は事故にしかならないので、設定で指定されても止める
+    if "*" in hosts:
+        raise ValueError("ALLOWED_HOSTS に * は使えない。ホスト名を列挙すること")
     # docker-compose.yml: healthcheck は localhost:8000、frontend と
     # scheduler/worker は api:8000 を見ている
     hosts.update({"localhost", "127.0.0.1", "api"})

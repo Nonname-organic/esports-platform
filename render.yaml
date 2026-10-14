@@ -49,3 +49,8 @@ services:
         sync: false
       - key: ALLOWED_ORIGINS
         sync: false
+      # Host ヘッダの許可リスト。Render のヘルスチェックは
+      # axelia-api.onrender.com で来るので、ここに入れないと
+      # TrustedHostMiddleware が 400 を返して /health が通らない。
+      - key: ALLOWED_HOSTS
+        sync: false
