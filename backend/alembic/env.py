@@ -13,7 +13,11 @@ import app.models  # noqa: F401 - ensure all models are imported
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers の既定 True だと、ここまでに import 済みの
+    # ロガー（alembic.ini が挙げていないもの全部）が disabled になる。
+    # テストは conftest のスキーマ構築でこの経路を通るため、以降 caplog が
+    # 何も拾えなくなる。マイグレーションのために他のロガーを黙らせる必要はない。
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 
