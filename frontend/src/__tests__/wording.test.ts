@@ -38,6 +38,7 @@ const RETIRED_HEADING = ["提供予定", "（準備中）"].join("");
 const NOTICE = "components/live/preparing-notice.tsx";
 const BANNER_FILE = "components/demo-banner.tsx";
 const LAYOUT = "app/layout.tsx";
+const CARDS_FILE = "components/hero/floating-live-cards.tsx";
 
 const BADGE = "デモ環境";
 const BANNER = "これはデモ環境です";
@@ -111,5 +112,13 @@ describe("デモ環境の文言", () => {
   it("サンプルデータの説明を DemoBanner と二重に持たない", () => {
     expect(read(BANNER_FILE)).toContain("動作確認用");
     expect(read(NOTICE)).not.toContain("機能の確認のために");
+  });
+
+  it("浮遊ラベルの表示判定に累計の大会数を使わない", () => {
+    // totals.tournaments は全期間の累計。終わった大会が1件あるだけで
+    // LIVE が浮く状態に戻らないよう、参照していないことを固定する
+    const cards = stripComments(read(CARDS_FILE));
+    expect(cards).not.toContain("totals");
+    expect(cards).toContain("shouldShowFloatingCards");
   });
 });
