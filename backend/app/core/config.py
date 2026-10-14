@@ -169,6 +169,20 @@ class Settings(BaseSettings):
             return [o.strip() for o in v.split(",")]
         return v
 
+    # Host ヘッダとして受け付ける名前。ALLOWED_ORIGINS とは別物で、
+    # 「このAPIがどの名前で呼ばれるか」を書く。CORS の許可先とは一致しない。
+    # Render は axelia-api.onrender.com でヘルスチェックに来るが、その名前は
+    # フロントのオリジンではないので ALLOWED_ORIGINS には入らない。
+    # 空のままなら ALLOWED_ORIGINS から導出する従来の挙動に落ちる（全許可にはしない）。
+    ALLOWED_HOSTS: Annotated[list[str], NoDecode] = []
+
+    @field_validator("ALLOWED_HOSTS", mode="before")
+    @classmethod
+    def parse_hosts(cls, v: str | list) -> list[str]:
+        if isinstance(v, str):
+            return [h.strip() for h in v.split(",") if h.strip()]
+        return v
+
     # Rate Limit
     RATE_LIMIT_REQUESTS: int = 100
     RATE_LIMIT_WINDOW_SECONDS: int = 60
