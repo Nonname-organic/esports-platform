@@ -3,6 +3,9 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "利用規約",
   description: "AXELIA の利用規約",
+  // 公開する3ページのうちの1つ（frontend/src/app/robots.ts の ALLOW と対応）
+  robots: { index: true, follow: true },
+  alternates: { canonical: "/terms" },
 };
 
 const CONTACT = "AXELIA Community（Discord）、またはメール info@axelia-esports.jp";

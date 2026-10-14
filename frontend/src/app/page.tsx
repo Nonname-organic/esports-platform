@@ -2,6 +2,16 @@ import { serverFetch } from "@/lib/api-client";
 import { LandingLive } from "@/components/live/landing-live";
 import type { ListResponse, TournamentSummary } from "@/types/tournament";
 
+import type { Metadata } from "next";
+
+// 公開する3ページのうちの1つ（frontend/src/app/robots.ts の ALLOW と対応）。
+// robots と canonical をルートの layout に置くと全ページへ降りてしまうため、
+// 公開するページだけがここで宣言する。
+export const metadata: Metadata = {
+  robots: { index: true, follow: true },
+  alternates: { canonical: "/" },
+};
+
 // ISR: 5分ごとに再生成
 export const revalidate = 300;
 

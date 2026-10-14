@@ -40,12 +40,15 @@ const nextConfig: NextConfig = {
         // これをしないと LFP/LFT 等の更新後もエッジが古いページを返し続ける。
         // _next/static（ハッシュ付き不変アセット）と _next/image は除外し、キャッシュを維持。
         source: "/((?!_next/static|_next/image|favicon.ico).*)",
-        headers: [
-          { key: "Cache-Control", value: "no-store, must-revalidate" },
-          // 限定公開デモ: SSR応答にも検索エンジン除外を付ける
-          // （robots.txt・noindexメタと合わせた多重防御。一般公開時に外す）
-          { key: "X-Robots-Tag", value: "noindex, nofollow" },
-        ],
+        headers: [{ key: "Cache-Control", value: "no-store, must-revalidate" }],
+      },
+      {
+        // 公開する3ページ（/ /terms /privacy）以外は SSR 応答にも noindex を付ける。
+        // nginx の add_header は上流のヘッダを消さないので、ここで付けたものは
+        // そのまま外へ出る。公開するページに付けないよう、ここで除外しておく。
+        // robots.ts の ALLOW と対応させること。
+        source: "/((?!$|terms$|privacy$|sitemap\.xml$|robots\.txt$|_next/static|_next/image|favicon.ico).*)",
+        headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
       },
     ];
   },

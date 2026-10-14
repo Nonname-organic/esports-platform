@@ -5,6 +5,7 @@ import { Providers } from "@/components/providers";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { DemoBanner } from "@/components/demo-banner";
+import { SITE_URL } from "@/lib/site";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -19,9 +20,22 @@ export const metadata: Metadata = {
   description:
     "VALORANT大会のエントリー・ブラケット生成・スコア管理・統計分析を一元化するプラットフォーム",
   keywords: ["eスポーツ", "大会", "VALORANT", "ヴァロラント", "ゲーム大会"],
-  // 限定公開デモ: 検索エンジンにインデックスさせない（robots.ts と二重指定）。
-  // 一般公開時にこの行と robots.ts を合わせて解除する
-  robots: { index: false, follow: false },
+  // OGP と canonical が相対パスを解決するための基点。
+  metadataBase: new URL(SITE_URL),
+  // robots と canonical はここに置かない。ルートに書くと全ページへ降りてきて、
+  // /terms や /privacy の canonical までトップを指し（重複扱いになる）、
+  // robots.txt で弾いているページにまで index を主張することになる。
+  // 公開する3ページだけが自分の metadata で宣言する。
+  openGraph: {
+    type: "website",
+    siteName: "AXELIA",
+    locale: "ja_JP",
+    url: "/",
+    title: "AXELIA | VALORANT大会プラットフォーム",
+    description:
+      "VALORANT大会のエントリー・ブラケット生成・スコア管理・統計分析を一元化するプラットフォーム。現在はデモ環境として公開しており、運営による大会の募集・開催は行っていません。",
+  },
+  twitter: { card: "summary_large_image" },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
