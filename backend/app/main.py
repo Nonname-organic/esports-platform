@@ -197,19 +197,28 @@ async def readiness():
 
     checks: dict[str, str] = {}
 
+    # 例外の文字列には接続先・ユーザー名が載る。このエンドポイントは未認証で
+    # 到達するので、外に出すのは "ok" / "error" だけにする。原因の切り分けは
+    # 運用手順どおり Neon / Upstash のダッシュボードで行う。
     try:
         async with AsyncSessionLocal() as session:
             await session.execute(text("SELECT 1"))
         checks["database"] = "ok"
     except Exception as exc:
-        checks["database"] = f"error: {exc}"
+        logger.warning(
+            "readiness_check_failed", component="database", error_type=type(exc).__name__
+        )
+        checks["database"] = "error"
 
     try:
         redis = await get_redis()
         await redis.ping()
         checks["cache"] = "ok"
     except Exception as exc:
-        checks["cache"] = f"error: {exc}"
+        logger.warning(
+            "readiness_check_failed", component="cache", error_type=type(exc).__name__
+        )
+        checks["cache"] = "error"
 
     all_ok = all(v == "ok" for v in checks.values())
     payload = {"status": "ready" if all_ok else "degraded", "checks": checks}
