@@ -198,8 +198,58 @@ class MatchService:
 
         await self._invalidate_match_cache(match_id)
 
+    async def _require_ban_pick_authority(
+        self, match, team_id: uuid.UUID, current_user: User
+    ) -> None:
+        """Ban/Pick を登録できる相手を絞る。
+
+        運営（ADMIN と大会の主催者）は、その試合に出る両チームぶんを入れられる。
+        チーム側は自分のチームぶんだけで、オーナーか現役キャプテンに限る。
+        一般メンバー・控え・コーチ・アナリストは入れられない。
+        スタッフ権限は Ban/Pick の対象に入れていない。
+        """
+        from app.core.exceptions import ForbiddenError
+        from app.models.enums import MemberRole, UserRole
+        from app.models.player import Player
+        from app.models.team import Team, TeamMember
+        from app.models.tournament import Tournament
+
+        if current_user.role == UserRole.ADMIN:
+            return
+
+        tournament = await self._db.get(Tournament, match.tournament_id)
+        if tournament is not None and tournament.organizer_id == current_user.id:
+            return
+
+        team = await self._db.get(Team, team_id)
+        if team is not None and team.owner_id == current_user.id:
+            return
+
+        # 現役キャプテンかどうかは「有効な所属行があるか」で見る。role を取り出す形に
+        # すると、同じチームに所属行が複数あったときに例外になる。
+        is_captain = (
+            await self._db.execute(
+                select(TeamMember.id)
+                .join(Player, Player.id == TeamMember.player_id)
+                .where(
+                    TeamMember.team_id == team_id,
+                    Player.user_id == current_user.id,
+                    TeamMember.left_at.is_(None),
+                    TeamMember.role == MemberRole.CAPTAIN,
+                )
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if is_captain is not None:
+            return
+
+        raise ForbiddenError(
+            "Ban/Pickを登録できるのは大会の運営か、"
+            "出場チームのオーナー・キャプテンだけです"
+        )
+
     async def register_ban_pick(
-        self, match_id: uuid.UUID, data: BanPickCreate
+        self, match_id: uuid.UUID, data: BanPickCreate, current_user: User
     ) -> None:
         match = await self._repo.get_by_id(match_id)
         if not match:
@@ -207,6 +257,16 @@ class MatchService:
 
         if match.status not in (MatchStatus.SCHEDULED, MatchStatus.ONGOING):
             raise BusinessRuleError("Ban/Pickを登録できる状態ではありません")
+
+        # 出場チームかどうかは権限の話より前に見る。無関係なチームのIDは
+        # 「権限が無い」ではなく「この試合の話ではない」ので、勝者チェック
+        # （register_result）と同じ扱いにする。
+        if data.team_id not in (match.team1_id, match.team2_id):
+            raise BusinessRuleError(
+                "Ban/Pickを登録できるのはこの試合に出場するチームだけです"
+            )
+
+        await self._require_ban_pick_authority(match, data.team_id, current_user)
 
         await self._repo.create_ban_pick(
             match_id=match_id,
