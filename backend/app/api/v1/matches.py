@@ -77,7 +77,7 @@ async def register_ban_pick(
     current_user: CurrentUser,
 ):
     service = MatchService(db, cache)
-    await service.register_ban_pick(match_id, data)
+    await service.register_ban_pick(match_id, data, current_user)
 
 
 @router.post("/{match_id}/games/{game_number}/player-stats", status_code=204)
