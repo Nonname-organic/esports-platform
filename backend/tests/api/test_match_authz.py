@@ -228,8 +228,18 @@ async def test_p02_008_retired_captain_denied(client: AsyncClient, db):
 @pytest.mark.security
 @pytest.mark.asyncio
 async def test_p02_009_viewer_denied(client: AsyncClient, db):
+    """ログインしているだけのユーザーは入れられない。
+
+    チームにも大会にも紐づいていないアカウントを使う。ロールは
+    TEAM_MANAGER にした。名前はチームを扱えそうに見えるが、この試合の
+    どちらのチームとも関係が無いので通ってはいけない、という確認になる。
+
+    UserRole.VIEWER は使えない。Python の enum には後方互換で残っているが、
+    DB の user_role は 001 で admin / organizer / team_manager / player の
+    4つとして作られており、viewer を INSERT すると PostgreSQL が弾く。
+    """
     w = await _world(db)
-    viewer = await f.make_user(db, role=UserRole.VIEWER)
+    viewer = await f.make_user(db, role=UserRole.TEAM_MANAGER)
     r = await client.post(
         PATH.format(match_id=w["match"].id), json=_body(w, team=w["team1"]),
         headers=_headers(viewer),
