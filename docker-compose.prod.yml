@@ -5,22 +5,29 @@
 #     docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 #
 # IMAGE_TAG and IMAGE_ORG are set by the CI deploy workflow via SSH env vars.
+#
+# latest タグは GHCR へ push され続けるが、ここからは参照しない。
+# フォールバックを廃止したのは、ビルドが一部のサービスだけ成功すると
+# サービスごとに latest の指す世代がずれるため（実際に起きた）。IMAGE_TAG は
+# デプロイ時に必ず明示すること。欠けるとタグが空になり、pull / up は
+# invalid reference format で止まる（config / ps / logs は従来どおり動く）。
+# 手でイメージを入れ替えず、既存のデプロイ手順に従うこと。
 version: "3.9"
 
 services:
   api:
-    image: ghcr.io/${IMAGE_ORG}/esports-platform-api:${IMAGE_TAG:-latest}
+    image: ghcr.io/${IMAGE_ORG}/esports-platform-api:${IMAGE_TAG}
     build: null
 
   worker:
-    image: ghcr.io/${IMAGE_ORG}/esports-platform-worker:${IMAGE_TAG:-latest}
+    image: ghcr.io/${IMAGE_ORG}/esports-platform-worker:${IMAGE_TAG}
     build: null
 
   # scheduler は api と同一イメージ（production ターゲット）を使う
   scheduler:
-    image: ghcr.io/${IMAGE_ORG}/esports-platform-api:${IMAGE_TAG:-latest}
+    image: ghcr.io/${IMAGE_ORG}/esports-platform-api:${IMAGE_TAG}
     build: null
 
   frontend:
-    image: ghcr.io/${IMAGE_ORG}/esports-platform-frontend:${IMAGE_TAG:-latest}
+    image: ghcr.io/${IMAGE_ORG}/esports-platform-frontend:${IMAGE_TAG}
     build: null
