@@ -253,7 +253,7 @@ cd /opt/app
 sed -i 's/YOUR_DOMAIN/app.axelia-esports.jp/g' nginx/nginx-tls.conf
 
 # TLS 構成で再起動
-IMAGE_ORG=<github-org小文字> docker compose \
+IMAGE_ORG=<github-org小文字> IMAGE_TAG=<sha-xxxxxxx> docker compose \
   -f docker-compose.yml -f docker-compose.prod.yml \
   -f docker-compose.tls.yml -f docker-compose.conoha.yml up -d
 ```
@@ -510,6 +510,7 @@ ConoHa 4GB では **`docker-compose.conoha.yml` を重ねてください**。
 ログローテーション（1コンテナ最大30MB）もこのファイルで有効になります。
 
 ```bash
+IMAGE_ORG=<github-org> IMAGE_TAG=<sha-xxxxxxx> \
 docker compose -f docker-compose.yml \
                -f docker-compose.prod.yml \
                -f docker-compose.tls.yml \
