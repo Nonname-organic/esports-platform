@@ -1,7 +1,11 @@
 """MATCH-AUTHZ — 試合操作の認可テスト。
 
-今回の対象は P0-2（Ban/Pick）だけ。試合結果の登録・進行（P0-1）はまだ
-ロールだけで通るため、ここでは検証しない。
+P0-2（Ban/Pick）と P0-1（試合進行・結果登録の主催者間認可）の両方を扱う。
+
+P0-1 の方針:
+  試合を変える4操作と、処理の重いスコアボード取り込みは、ADMIN か
+  その試合が属する大会の主催者だけが通る。ロールが organizer でも、
+  他人の大会の試合には触れない。
 
 Ban/Pick の方針:
   運営（ADMIN・大会の主催者）は両チームぶんを登録できる。
@@ -25,7 +29,17 @@ from app.models.enums import (
     TournamentStatus,
     UserRole,
 )
-from app.models.match import BanPick, Map, Match
+from app.models.domain_event import DomainEvent
+from app.models.match import (
+    BanPick,
+    Map,
+    Match,
+    MatchGame,
+    MatchResult,
+    PlayerMatchStats,
+)
+from app.services.match import MatchService
+from app.services.scoreboard_import import ScoreboardImportService
 from tests import factories as f
 
 PATH = "/api/v1/matches/{match_id}/banpick"
@@ -361,3 +375,312 @@ async def test_p02_017_ongoing_match_allowed(client: AsyncClient, db):
     )
     assert r.status_code == 204
     assert await _ban_pick_count(db, w["match"]) == 1
+
+
+# ══ P0-1: 試合進行・結果登録の主催者間認可 ══════════════════════════════════
+
+P_START = "/api/v1/matches/{id}/start"
+P_SCORE = "/api/v1/matches/{id}/games/1/score"
+P_STATS = "/api/v1/matches/{id}/games/1/player-stats"
+P_RESULT = "/api/v1/matches/{id}/result"
+P_OCR = "/api/v1/matches/{id}/scoreboard-ocr"
+P_STREAM = "/api/v1/matches/{id}/stream"
+
+# 操作名 → その操作が許される試合ステータス
+_OPS = {
+    "start": MatchStatus.SCHEDULED,
+    "score": MatchStatus.ONGOING,
+    "stats": MatchStatus.ONGOING,
+    "result": MatchStatus.ONGOING,
+}
+
+
+def _stats_body(w, *, player=None, team=None, kills=20) -> dict:
+    rows = []
+    if player is not None:
+        rows = [{
+            "player_id": str(player.id),
+            "team_id": str((team or w["team1"]).id),
+            "kills": kills, "deaths": 10, "assists": 5, "score": 300, "first_bloods": 3,
+        }]
+    return {
+        "map_id": str(w["map"].id), "team1_score": 13, "team2_score": 7,
+        "player_stats": rows,
+    }
+
+
+async def _call(client, op, match_id, headers, w):
+    """4操作のいずれかを HTTP で叩く。"""
+    url = {"start": P_START, "score": P_SCORE, "stats": P_STATS, "result": P_RESULT}[op]
+    url = url.format(id=match_id)
+    if op == "start":
+        return await client.patch(url, headers=headers)
+    body = {
+        "score": {"team1_score": 13, "team2_score": 7},
+        "stats": _stats_body(w),
+        "result": {"winner_id": str(w["team1"].id)},
+    }[op]
+    return await client.post(url, json=body, headers=headers)
+
+
+async def _counts(db) -> dict:
+    """結果登録が触りうるテーブルの件数。副作用の有無を測る。"""
+    async def n(model):
+        return (await db.execute(select(func.count()).select_from(model))).scalar_one()
+
+    return {
+        "results": await n(MatchResult),
+        "games": await n(MatchGame),
+        "player_stats": await n(PlayerMatchStats),
+        "events": await n(DomainEvent),
+    }
+
+
+async def _stat_kills(db, match) -> list[int]:
+    return list((await db.execute(
+        select(PlayerMatchStats.kills)
+        .join(MatchGame, MatchGame.id == PlayerMatchStats.match_game_id)
+        .where(MatchGame.match_id == match.id)
+        .order_by(PlayerMatchStats.kills)
+    )).scalars().all())
+
+
+# ── 許可されるケース ─────────────────────────────────────────────────────────
+
+
+@pytest.mark.security
+@pytest.mark.asyncio
+@pytest.mark.parametrize("op", list(_OPS))
+async def test_p01_001_organizer_allowed_on_own_match(client: AsyncClient, db, op):
+    w = await _world(db, status=_OPS[op])
+    r = await _call(client, op, w["match"].id, _headers(w["organizer"]), w)
+    assert r.status_code == 204, r.text
+
+
+@pytest.mark.security
+@pytest.mark.asyncio
+@pytest.mark.parametrize("op", list(_OPS))
+async def test_p01_002_admin_allowed_on_other_match(client: AsyncClient, db, admin_user, op):
+    w = await _world(db, status=_OPS[op])
+    r = await _call(client, op, w["match"].id, _headers(admin_user), w)
+    assert r.status_code == 204, r.text
+
+
+# ── 拒否されるケース ─────────────────────────────────────────────────────────
+
+
+@pytest.mark.security
+@pytest.mark.asyncio
+@pytest.mark.parametrize("op", list(_OPS))
+async def test_p01_003_other_organizer_denied(client: AsyncClient, db, op):
+    """P0-1 の本体。別の大会の主催者は他人の試合に触れない。"""
+    w = await _world(db, status=_OPS[op])
+    other = await f.make_user(db, role=UserRole.ORGANIZER)
+    r = await _call(client, op, w["match"].id, _headers(other), w)
+    assert r.status_code == 403, r.text
+
+
+@pytest.mark.security
+@pytest.mark.asyncio
+@pytest.mark.parametrize("op", list(_OPS))
+@pytest.mark.parametrize("role", [UserRole.PLAYER, UserRole.TEAM_MANAGER])
+async def test_p01_004_non_organizer_roles_denied(client: AsyncClient, db, op, role):
+    w = await _world(db, status=_OPS[op])
+    user = await f.make_user(db, role=role)
+    r = await _call(client, op, w["match"].id, _headers(user), w)
+    assert r.status_code == 403, r.text
+
+
+@pytest.mark.security
+@pytest.mark.asyncio
+@pytest.mark.parametrize("op", list(_OPS))
+async def test_p01_005_anonymous_denied(client: AsyncClient, db, op):
+    w = await _world(db, status=_OPS[op])
+    r = await _call(client, op, w["match"].id, {}, w)
+    assert r.status_code == 401, r.text
+
+
+@pytest.mark.security
+@pytest.mark.asyncio
+@pytest.mark.parametrize("op", list(_OPS))
+async def test_p01_006_unknown_match_is_404(client: AsyncClient, db, op):
+    """権限のある主催者でも、存在しない試合は 404。"""
+    w = await _world(db, status=_OPS[op])
+    r = await _call(client, op, uuid.uuid4(), _headers(w["organizer"]), w)
+    assert r.status_code == 404, r.text
+
+
+# ── 副作用が出ないことの確認 ─────────────────────────────────────────────────
+
+
+@pytest.mark.security
+@pytest.mark.asyncio
+async def test_p01_007_denied_result_has_no_side_effects(client: AsyncClient, db):
+    w = await _world(db, status=MatchStatus.ONGOING)
+    nxt = Match(
+        tournament_id=w["tour"].id, format=BOFormat.BO1,
+        status=MatchStatus.SCHEDULED, round_number=2, match_number=1,
+    )
+    db.add(nxt)
+    await db.flush()
+    w["match"].next_match_id = nxt.id
+    await db.flush()
+
+    before = await _counts(db)
+    other = await f.make_user(db, role=UserRole.ORGANIZER)
+    r = await client.post(
+        P_RESULT.format(id=w["match"].id),
+        json={"winner_id": str(w["team1"].id)}, headers=_headers(other),
+    )
+    assert r.status_code == 403, r.text
+
+    assert await _counts(db) == before
+    await db.refresh(w["match"])
+    await db.refresh(nxt)
+    assert w["match"].status == MatchStatus.ONGOING
+    assert w["match"].winner_id is None
+    assert (nxt.team1_id, nxt.team2_id) == (None, None)
+
+
+@pytest.mark.security
+@pytest.mark.asyncio
+async def test_p01_008_denied_result_never_enters_service(
+    client: AsyncClient, db, monkeypatch
+):
+    """認可はサービス層より前に落ちる。ロックも結果処理も始まらない。"""
+    w = await _world(db, status=MatchStatus.ONGOING)
+    reached = []
+
+    async def _boom(self, *args, **kwargs):
+        reached.append(1)
+
+    monkeypatch.setattr(MatchService, "register_result", _boom)
+
+    other = await f.make_user(db, role=UserRole.ORGANIZER)
+    r = await client.post(
+        P_RESULT.format(id=w["match"].id),
+        json={"winner_id": str(w["team1"].id)}, headers=_headers(other),
+    )
+    assert r.status_code == 403, r.text
+    assert reached == []
+
+
+@pytest.mark.security
+@pytest.mark.asyncio
+async def test_p01_009_denied_stats_keeps_existing_rows(client: AsyncClient, db):
+    """成績は毎回置き換える実装なので、拒否で既存が消えないことを確かめる。"""
+    w = await _world(db, status=MatchStatus.ONGOING)
+    user = await f.make_user(db, role=UserRole.PLAYER)
+    player = await f.make_player(db, user=user)
+    await f.add_member(db, team=w["team1"], player=player)
+
+    ok = await client.post(
+        P_STATS.format(id=w["match"].id),
+        json=_stats_body(w, player=player, kills=20), headers=_headers(w["organizer"]),
+    )
+    assert ok.status_code == 204, ok.text
+    assert await _stat_kills(db, w["match"]) == [20]
+
+    other = await f.make_user(db, role=UserRole.ORGANIZER)
+    bad = await client.post(
+        P_STATS.format(id=w["match"].id),
+        json=_stats_body(w), headers=_headers(other),
+    )
+    assert bad.status_code == 403, bad.text
+    assert await _stat_kills(db, w["match"]) == [20]
+
+
+# ── スコアボード取り込み（処理が重い経路） ───────────────────────────────────
+
+
+@pytest.mark.security
+@pytest.mark.asyncio
+async def test_p01_010_denied_ocr_never_reaches_parser(
+    client: AsyncClient, db, monkeypatch
+):
+    w = await _world(db, status=MatchStatus.ONGOING)
+    reached = []
+
+    async def _spy(self, *args, **kwargs):
+        reached.append(1)
+        return []
+
+    monkeypatch.setattr(ScoreboardImportService, "parse", _spy)
+
+    other = await f.make_user(db, role=UserRole.ORGANIZER)
+    r = await client.post(
+        P_OCR.format(id=w["match"].id),
+        files={"file": ("shot.png", b"\x89PNG\r\n\x1a\n", "image/png")},
+        headers=_headers(other),
+    )
+    assert r.status_code == 403, r.text
+    assert reached == []
+
+
+# ── 既存の配信URL認可が壊れていないこと ──────────────────────────────────────
+
+
+@pytest.mark.security
+@pytest.mark.asyncio
+async def test_p01_011_stream_url_authz_unchanged(client: AsyncClient, db):
+    """set_stream_url は今回触っていない。従来どおり本人のみ通る。"""
+    w = await _world(db)
+    body = {"stream_url": "https://twitch.tv/axelia"}
+
+    ok = await client.patch(
+        P_STREAM.format(id=w["match"].id), json=body, headers=_headers(w["organizer"]),
+    )
+    assert ok.status_code == 200, ok.text
+
+    other = await f.make_user(db, role=UserRole.ORGANIZER)
+    ng = await client.patch(
+        P_STREAM.format(id=w["match"].id), json=body, headers=_headers(other),
+    )
+    assert ng.status_code == 403, ng.text
+
+
+# ── route の付け忘れ検査 ─────────────────────────────────────────────────────
+
+# matches.py の非GET route は原則 _require_match_organizer を通す。
+# 例外は2つだけで、どちらもサービス層に専用の認可を持っている。
+_AUTHZ_EXEMPT = {
+    # Ban/Pick は運営だけでなくチーム側（オーナー・現役キャプテン）も登録するため、
+    # MatchService._require_ban_pick_authority が判定する（P0-2）。
+    "register_ban_pick",
+    # 配信URLは MatchService.set_stream_url が自前で主催者本人を確認する。
+    "set_stream_url",
+}
+
+
+def _dependency_calls(dependant) -> set:
+    found = set()
+    for sub in dependant.dependencies:
+        found.add(sub.call)
+        found |= _dependency_calls(sub)
+    return found
+
+
+@pytest.mark.security
+def test_p01_012_mutation_routes_require_match_organizer():
+    """新しい mutation route が認可なしで足されたら、ここで落ちる。
+
+    限界: この検査は matches.py の route だけを見る。将来、別の router から
+    MatchService の mutation メソッドを直接呼ぶ実装までは防げない。この残余
+    リスクは Design E として受容している。
+    """
+    from fastapi.routing import APIRoute
+
+    from app.api.v1.matches import _require_match_organizer, router
+
+    unguarded = []
+    for route in router.routes:
+        if not isinstance(route, APIRoute):
+            continue
+        if not (route.methods - {"GET", "HEAD", "OPTIONS"}):
+            continue
+        if route.name in _AUTHZ_EXEMPT:
+            continue
+        if _require_match_organizer not in _dependency_calls(route.dependant):
+            unguarded.append(route.name)
+
+    assert unguarded == [], f"認可 Dependency のない mutation route: {unguarded}"

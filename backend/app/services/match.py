@@ -72,6 +72,34 @@ class MatchService:
         await self._cache.set(cache_key, detail.model_dump(), ttl=60)
         return detail
 
+    async def require_organizer_authority(
+        self, match_id: uuid.UUID, current_user: User
+    ) -> None:
+        """この試合を運営として操作できるか確かめる。ADMIN か、その大会の主催者だけ。
+
+        試合を変更するメソッド自身には認可を置いていない。Bot は自前でキャプテン
+        判定を済ませてから同じメソッドを呼ぶため、ここで一律に主催者を要求すると
+        2者確認フローが通らなくなる。REST 経路は API 層の Dependency から
+        このメソッドを通して絞る。
+
+        shortcut: サービス層は無防備なまま。呼び出し元は matches.py と bot.py と
+        scripts/ だけで、bot.py は自前で認可している。別の呼び出し元を足すときは
+        そこで認可するか、ここを通すこと。
+        """
+        from app.core.exceptions import ForbiddenError
+        from app.models.enums import UserRole
+        from app.models.match import Match
+        from app.models.tournament import Tournament
+
+        match = await self._db.get(Match, match_id)
+        if not match:
+            raise NotFoundError("試合", str(match_id))
+
+        tournament = await self._db.get(Tournament, match.tournament_id)
+        if (current_user.role != UserRole.ADMIN
+                and (tournament is None or tournament.organizer_id != current_user.id)):
+            raise ForbiddenError("この大会の試合を操作する権限がありません")
+
     async def start_match(self, match_id: uuid.UUID, current_user: User) -> None:
         match = await self._repo.get_by_id(match_id)
         if not match:

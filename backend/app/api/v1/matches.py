@@ -1,11 +1,13 @@
 import uuid
+from typing import Annotated
 
-from fastapi import APIRouter, File, UploadFile
+from fastapi import APIRouter, Depends, File, UploadFile
 from pydantic import BaseModel, Field
 
 from app.core.dependencies import Cache, CurrentUser, DBSession, OrganizerUser
 from app.core.exceptions import ValidationError
 from app.models.enums import MatchStatus
+from app.models.user import User
 from app.schemas.common import ListResponse, Meta, Response
 from app.schemas.match import (
     BanPickCreate,
@@ -19,6 +21,26 @@ from app.services.match import MatchService
 from app.services.scoreboard_import import ScoreboardImportService
 
 router = APIRouter(prefix="/matches", tags=["試合管理"])
+
+
+async def _require_match_organizer(
+    match_id: uuid.UUID,
+    db: DBSession,
+    cache: Cache,
+    current_user: OrganizerUser,
+) -> User:
+    """この試合の運営だけを通す。ADMIN か、その試合が属する大会の主催者。
+
+    ロールしか見ない OrganizerUser では、別の大会の主催者が他人の試合を
+    操作できてしまう。試合を変える route と、処理の重い取り込み route は
+    こちらを使う。Dependency なので route 本体より先に走り、拒否された
+    リクエストはサービス層にも OCR にも届かない。
+    """
+    await MatchService(db, cache).require_organizer_authority(match_id, current_user)
+    return current_user
+
+
+MatchOrganizer = Annotated[User, Depends(_require_match_organizer)]
 
 
 @router.get("", response_model=ListResponse[MatchSummary])
@@ -49,7 +71,7 @@ async def start_match(
     match_id: uuid.UUID,
     db: DBSession,
     cache: Cache,
-    current_user: OrganizerUser,
+    current_user: MatchOrganizer,
 ):
     service = MatchService(db, cache)
     await service.start_match(match_id, current_user)
@@ -62,7 +84,7 @@ async def update_game_score(
     data: ScoreUpdate,
     db: DBSession,
     cache: Cache,
-    current_user: OrganizerUser,
+    current_user: MatchOrganizer,
 ):
     service = MatchService(db, cache)
     await service.update_game_score(match_id, game_number, data, current_user)
@@ -87,7 +109,7 @@ async def save_game_player_stats(
     data: GamePlayerStatsUpdate,
     db: DBSession,
     cache: Cache,
-    current_user: OrganizerUser,
+    current_user: MatchOrganizer,
 ):
     """1マップ分のスコアと選手成績を保存する（スコアボード取り込みの確定先）"""
     service = MatchService(db, cache)
@@ -98,7 +120,7 @@ async def save_game_player_stats(
 async def parse_scoreboard(
     match_id: uuid.UUID,
     db: DBSession,
-    current_user: OrganizerUser,
+    current_user: MatchOrganizer,
     file: UploadFile = File(...),
 ):
     """
@@ -121,7 +143,7 @@ async def register_result(
     data: MatchResultCreate,
     db: DBSession,
     cache: Cache,
-    current_user: OrganizerUser,
+    current_user: MatchOrganizer,
 ):
     service = MatchService(db, cache)
     await service.register_result(match_id, data, current_user)
