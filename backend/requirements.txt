@@ -34,7 +34,7 @@ email-validator==2.2.0
 
 # HTTP Client (for Discord / Riot API)
 httpx==0.27.2
-aiohttp==3.13.4
+aiohttp==3.14.4
 
 # Background Tasks
 celery==5.4.0
