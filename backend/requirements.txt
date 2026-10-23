@@ -61,7 +61,7 @@ pytesseract==0.3.13
 opencv-python-headless==4.10.0.84
 
 # Observability
-opentelemetry-api==1.28.2
+opentelemetry-api==1.45.1
 opentelemetry-sdk==1.28.2
 opentelemetry-exporter-otlp-proto-grpc==1.28.2
 opentelemetry-instrumentation-fastapi==0.49b2
