@@ -1,11 +1,11 @@
 # Web Framework
-fastapi==0.120.4
+fastapi==0.161.1
 # starlette は fastapi の間接依存だが、脆弱性の対象なので直接固定する。
 # fastapi 0.115 系は starlette<0.42 で頭打ちになり、未認証の Range ヘッダで
 # 成立する DoS (PYSEC-2026-1942) を塞げない。0.120 で上限が <0.50 に上がり
 # 0.49.1 を入れられる。残る勧告は starlette 1.x が要るため別途。
 starlette==0.49.1
-uvicorn[standard]==0.30.6
+uvicorn[standard]==0.54.0
 # アップロード（upload.py / スコアボード取り込み）が multipart を受ける。
 # 0.0.26 には multipart ヘッダ長の上限が無く、巨大なヘッダでCPUを食わせる
 # DoS が成立した。0.0.31 までの勧告をまとめて外すため 0.0.32 に上げる。
@@ -13,32 +13,32 @@ uvicorn[standard]==0.30.6
 python-multipart==0.0.32
 
 # Database
-sqlalchemy==2.0.36
-asyncpg==0.29.0
-alembic==1.14.0
-psycopg2-binary==2.9.10
+sqlalchemy==2.1.6
+asyncpg==0.32.0
+alembic==1.20.1
+psycopg2-binary==2.9.13
 
 # Cache
 redis==5.2.0
-hiredis==3.0.0
+hiredis==3.5.0
 
 # Auth
-python-jose[cryptography]==3.4.0
+python-jose[cryptography]==3.5.0
 passlib[bcrypt]==1.7.4
 bcrypt==4.2.0
 
 # Validation
-pydantic==2.9.2
-pydantic-settings==2.7.1  # >=2.7: NoDecode (ALLOWED_ORIGINS のカンマ区切り対応に使用)
-email-validator==2.2.0
+pydantic==2.14.1
+pydantic-settings==2.16.1  # >=2.7: NoDecode (ALLOWED_ORIGINS のカンマ区切り対応に使用)
+email-validator==2.3.0
 
 # HTTP Client (for Discord / Riot API)
-httpx==0.27.2
-aiohttp==3.13.4
+httpx==0.28.1
+aiohttp==3.14.5
 
 # Background Tasks
-celery==5.4.0
-arq==0.26.1
+celery==5.6.3
+arq==0.28.0
 
 # AWS SDK (boto3 は aioboto3 の依存として自動インストール)
 aioboto3==13.2.0
@@ -46,11 +46,11 @@ aioboto3==13.2.0
 # Data Analysis
 pandas==2.2.3
 polars==1.13.1
-numpy==2.1.3
+numpy==2.5.4
 
 # Utilities
 python-slugify==8.0.4
-qrcode[pil]==8.0
+qrcode[pil]==8.2
 Pillow==12.2.0
 python-dateutil==2.9.0.post0
 pytz==2024.2
@@ -61,21 +61,21 @@ pytesseract==0.3.13
 opencv-python-headless==4.10.0.84
 
 # Observability
-opentelemetry-api==1.28.2
-opentelemetry-sdk==1.28.2
-opentelemetry-exporter-otlp-proto-grpc==1.28.2
-opentelemetry-instrumentation-fastapi==0.49b2
-opentelemetry-instrumentation-sqlalchemy==0.49b2
-opentelemetry-instrumentation-redis==0.49b2
-opentelemetry-instrumentation-httpx==0.49b2
-prometheus-client==0.21.0
+opentelemetry-api==1.45.1
+opentelemetry-sdk==1.45.1
+opentelemetry-exporter-otlp-proto-grpc==1.45.1
+opentelemetry-instrumentation-fastapi==0.66b1
+opentelemetry-instrumentation-sqlalchemy==0.66b1
+opentelemetry-instrumentation-redis==0.66b1
+opentelemetry-instrumentation-httpx==0.66b1
+prometheus-client==0.26.0
 structlog==24.4.0
 
 # Testing
 pytest==8.3.3
 pytest-asyncio==0.24.0
 pytest-cov==6.0.0
-pytest-timeout==2.3.1
-httpx==0.27.2
-factory-boy==3.3.1
+pytest-timeout==2.4.0
+httpx==0.28.1
+factory-boy==3.3.3
 faker==30.8.2
