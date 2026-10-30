@@ -216,7 +216,13 @@ async def readiness():
     return JSONResponse(payload, status_code=200 if all_ok else 503)
 
 
-@app.get("/metrics", include_in_schema=False)
-async def prometheus_metrics():
-    """Prometheus scrape endpoint — read by ServiceMonitor in Kubernetes."""
-    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+# 既定では登録しない。未認証で到達すると、パス別のリクエスト数・エラー率・
+# レイテンシと稼働中のイメージタグが読める。未登録なら 404 になる。
+# 監視を入れるときは EXPOSE_METRICS=true にするが、それだけでは無認証のまま
+# 公開されるので、あわせて認証かネットワーク制限を決める必要がある。
+if settings.EXPOSE_METRICS:
+
+    @app.get("/metrics", include_in_schema=False)
+    async def prometheus_metrics():
+        """Prometheus scrape endpoint — read by ServiceMonitor in Kubernetes."""
+        return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)

@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     # /docs・/redoc・/openapi.json を公開するか。インターネット公開時は
     # 管理系を含む全エンドポイントが一覧できてしまうため既定で無効
     EXPOSE_API_DOCS: bool = False
+    # /metrics を公開するか。未認証で到達すると、パス別のリクエスト数・
+    # エラー率・レイテンシと、稼働中のイメージタグが読めるため既定で無効。
+    # 監視を入れる段では、有効化と同時に認証方式（共有秘密など）も決める。
+    # 有効化しただけでは無認証のまま公開される。
+    EXPOSE_METRICS: bool = False
 
     # Security
     SECRET_KEY: str = Field(..., min_length=32)
