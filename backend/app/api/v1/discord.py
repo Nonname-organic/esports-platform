@@ -93,7 +93,7 @@ async def setup_discord(
 ):
     """大会用Discordサーバーのテンプレート生成を依頼"""
     service = DiscordService(db, cache)
-    server = await service.setup_tournament(tournament_id, data.guild_id)
+    server = await service.setup_tournament(tournament_id, data.guild_id, current_user)
     return {"data": {
         "id": str(server.id),
         "tournament_id": str(server.tournament_id),

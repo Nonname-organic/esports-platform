@@ -15,9 +15,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.exceptions import BusinessRuleError, NotFoundError
+from app.core.exceptions import BusinessRuleError, ForbiddenError, NotFoundError
 from app.core.redis import RedisCache
 from app.models.discord import DiscordServer, DiscordChannel, DiscordLink
+from app.models.enums import UserRole
+from app.models.tournament import Tournament
+from app.models.user import User
 
 
 class DiscordEventPublisher:
@@ -61,8 +64,17 @@ class DiscordService:
         self._publisher = DiscordEventPublisher(cache)
 
     # ── 大会Discordセットアップ ──────────────────────────────────────────────
-    async def setup_tournament(self, tournament_id: uuid.UUID, guild_id: str) -> DiscordServer:
+    async def setup_tournament(
+        self, tournament_id: uuid.UUID, guild_id: str, current_user: User
+    ) -> DiscordServer:
         """大会用Discordサーバーのテンプレート生成をキューに依頼"""
+        tournament = await self._db.get(Tournament, tournament_id)
+        if not tournament:
+            raise NotFoundError("大会", str(tournament_id))
+        # 主催者ロールは本人が付けられるので、所有者かどうかを重複確認より前に確かめる
+        if current_user.role != UserRole.ADMIN and tournament.organizer_id != current_user.id:
+            raise ForbiddenError("この大会のDiscordを設定する権限がありません")
+
         existing = await self._db.scalar(
             select(DiscordServer).where(DiscordServer.tournament_id == tournament_id)
         )
