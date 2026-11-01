@@ -6,12 +6,18 @@ VALORANT / League of Legends / Apex Legends などの e-Sports 大会を一元�
 > AWS / Docker / Terraform / CI/CD の**実践的な使い方**と、  
 > フルスタック開発における**設計判断・技術選定の根拠**をポートフォリオとして提示することを目的に構築。
 
-[![CI](https://github.com/your-username/esports-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/your-username/esports-platform/actions)
+[![QA](https://github.com/Nonname-organic/esports-platform/actions/workflows/qa.yml/badge.svg?branch=main)](https://github.com/Nonname-organic/esports-platform/actions/workflows/qa.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-> **💰 運用コストについて**: 本 README のインフラ解説は AWS 12ヶ月無料枠を前提とした旧構成です。
-> 現行は **ConoHa VPS 4GB 1台に docker compose 全部載せ**（月2,000円前後 + Supabase Storage 無料枠）で、
+> **現行の稼働構成**: **ConoHa VPS 4GB 1台に docker compose 全部載せ**（月2,000円前後 + Supabase Storage 無料枠）。
 > 構築手順は [docs/phase10_vps_conoha.md](docs/phase10_vps_conoha.md) を参照してください。
+>
+> 以降の「インフラ設計とコスト戦略」「AWS 無料枠 制限・注意事項」および
+> セットアップの Terraform / AWS 手順は、**AWS 12ヶ月無料枠を前提とした旧構成の設計記録**です。
+> 現在は使っていません。ローカルで動かすだけなら AWS アカウントと Terraform は不要で、
+> docker compose だけで起動します。
+>
+> **公開状況**: 公開準備中です。大会の募集・開催は行っていません。
 
 ---
 
@@ -575,7 +581,7 @@ Route53 ホストゾーン: $0.50/月
 ### 1. クローン & 環境変数設定
 
 ```bash
-git clone https://github.com/your-username/esports-platform.git
+git clone https://github.com/Nonname-organic/esports-platform.git
 cd esports-platform
 cp backend/.env.example backend/.env
 ```
@@ -629,7 +635,7 @@ echo '/swapfile swap swap defaults 0 0' | sudo tee -a /etc/fstab
 ### 4. アプリケーション起動
 
 ```bash
-git clone https://github.com/your-username/esports-platform.git
+git clone https://github.com/Nonname-organic/esports-platform.git
 cd esports-platform
 cp backend/.env.example backend/.env && vim backend/.env
 
@@ -709,7 +715,7 @@ PR オープン時 (~8分):
 
 main マージ時 (~10分):
   ├── Docker Build (multi-stage)
-  ├── GHCR Push (ghcr.io/your-username/esports-*)
+  ├── GHCR Push (ghcr.io/nonname-organic/esports-platform-*)
   └── EC2 SSH Deploy (docker-compose pull && up -d)
 ```
 
