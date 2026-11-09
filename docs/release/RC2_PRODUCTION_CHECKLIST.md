@@ -139,7 +139,7 @@ unset NEW
 | 当日 | 5xx | `docker compose logs --since 1h api \| sed -E 's/\x1b\[[0-9;]*m//g' \| grep -c 'status_code=5'` | 0 に近いこと。色の制御文字を除かないと数えられない |
 | 当日 | 接続あふれ | `docker compose logs --since 1h \| grep -c -i 'too many clients'` | 0 |
 | 当日 | OCR | `docker compose logs --since 1h api \| sed -E 's/\x1b\[[0-9;]*m//g' \| grep -c 'scoreboard-ocr.*status_code=429'`、`docker stats --no-stream` | 429 が続かない。api のメモリが上限（1GB）に近づかない |
-| 当日 | worker・scheduler | `docker compose logs --since 1h worker scheduler \| tail -20` | 例外が続いていない |
+| 当日 | worker・scheduler | `docker compose logs --since 1h worker scheduler \| tail -20` | 例外が続いていない。api の起動時に passlib の「(trapped) error reading bcrypt version」の Traceback が 1 回出るのは既知（動作に影響しない） |
 | 当日 | メール | 自分のアドレスでパスワード再設定を 1 回実行 | 届く（SMTP 設定時） |
 | 当日 | Discord・Riot | 連携画面を開く | 「未設定」の案内が出る（初期公開では無効） |
 | 翌朝 | バックアップ | `ls -lt backups \| head -3`、保存先の一覧 | 当日の 03:15 UTC の分がある |
