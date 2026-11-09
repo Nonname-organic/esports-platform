@@ -263,8 +263,9 @@ class MatchService:
         抜けた選手の成績は直せる。同じ選手を1マップに2回入れると二重に数えるので断る。
 
         shortcut: 所属はチームのオーナー・キャプテンが本人の承諾なしに作れるため、大会と
-        出場チームの両方を持つ利用者は、試合の前に他人を所属させて成績を書ける。所属の
-        承諾制か参加登録時の名簿の固定が入ったら、ここをその名簿で確かめる形に替える。
+        出場チームの両方を持つ利用者は、試合の前か試合中（再開して試合中に戻した後を含む）に
+        他人を所属させて成績を書ける。所属の承諾制か参加登録時の名簿の固定が入ったら、
+        ここをその名簿で確かめる形に替える。
         """
         if not stats:
             return
@@ -292,7 +293,7 @@ class MatchService:
             )).all()
         }
         if any((ps.team_id, ps.player_id) not in members for ps in stats):
-            raise BusinessRuleError("チームに所属していない選手の成績は登録できません")
+            raise BusinessRuleError("試合の間にそのチームに所属していなかった選手の成績は登録できません")
 
     async def _require_ban_pick_authority(
         self, match, team_id: uuid.UUID, current_user: User
