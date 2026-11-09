@@ -42,10 +42,6 @@ const STATE_VIEW: Record<RegistrationState, { label: string; note: string; tone:
   },
 };
 
-// 組み合わせ生成前で、まだ申請が生きている間だけ辞退できる
-const WITHDRAWABLE_STATUS = ["pending", "approved", "waitlisted"];
-const WITHDRAWABLE_TOURNAMENT = ["registration_open", "registration_closed", "check_in"];
-
 const APPROVAL_NOTE: Record<string, string> = {
   manual: "主催者が申請を1件ずつ確認して承認します",
   auto: "先着順で即時に参加が確定します（定員超過後は補欠）",
@@ -116,8 +112,8 @@ export function EntryPanel({ tournament }: EntryPanelProps) {
           </p>
         )}
         <p className="mt-2 text-[11px] leading-relaxed text-slate-500">{view.note}</p>
-        {WITHDRAWABLE_STATUS.includes(registration.status)
-          && WITHDRAWABLE_TOURNAMENT.includes(tournament.status) && (
+        {/* 辞退できるか（申請の状態・大会の段階・オーナーかキャプテンか）はサーバーが判定する */}
+        {registration.can_withdraw && (
           <button
             type="button"
             disabled={withdraw.isPending}

@@ -4,12 +4,12 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Query
-from sqlalchemy import select
+from sqlalchemy import case, select
 
 from app.core.check_in_window import check_in_window_state
 from app.core.discord_invite import normalize_discord_invite
 from app.core.dependencies import Cache, CurrentUser, DBSession, OrganizerUser
-from app.core.exceptions import BusinessRuleError, NotFoundError
+from app.core.exceptions import BusinessRuleError, ForbiddenError, NotFoundError
 from app.core.storage import sign_attachments, resign_stored_url
 from app.models.enums import GameType, RegistrationStatus, TournamentStatus
 from app.models.tournament import Tournament
@@ -25,7 +25,7 @@ from app.schemas.tournament import (
     TournamentSummary,
     TournamentUpdate,
 )
-from app.services.tournament import TournamentService
+from app.services.tournament import LIVE_REGISTRATION, WITHDRAWABLE_STAGES, TournamentService
 
 router = APIRouter(prefix="/tournaments", tags=["大会管理"])
 
@@ -405,7 +405,9 @@ async def _user_registration(db, tournament_id: uuid.UUID, user):
     if not team_ids:
         return None
     from app.models.tournament import TournamentRegistration
-    # 所属チームが同じ大会に複数登録していても 500 にしない（先に申請した方を返す）
+    # 所属チームが同じ大会に複数登録していても 500 にしない。生きている登録（審査中・承認・補欠）を
+    # 辞退・見送りより先に、その中では先に申請した方を返す（辞退済みのチームに隠れないように）
+    live = TournamentRegistration.status.in_(LIVE_REGISTRATION)
     return (
         await db.execute(
             select(TournamentRegistration)
@@ -413,7 +415,7 @@ async def _user_registration(db, tournament_id: uuid.UUID, user):
                 TournamentRegistration.tournament_id == tournament_id,
                 TournamentRegistration.team_id.in_(team_ids),
             )
-            .order_by(TournamentRegistration.registered_at)
+            .order_by(case((live, 0), else_=1), TournamentRegistration.registered_at)
         )
     ).scalars().first()
 
@@ -436,11 +438,20 @@ async def my_registration(
     if not reg:
         return {"data": {"registered": False}}
     team = await db.get(Team, reg.team_id)
+    service = TournamentService(db, cache)
+    # 辞退ボタンを出すか。TournamentService.withdraw と同じ条件（組み合わせ生成後は押されてから断る）
+    can_withdraw = reg.status in LIVE_REGISTRATION and tournament.status in WITHDRAWABLE_STAGES
+    if can_withdraw:
+        try:
+            await service._require_team_authority(reg.team_id, current_user)
+        except (ForbiddenError, NotFoundError):
+            can_withdraw = False
     return {"data": {
         "registered": True,
         "status": reg.status.value,
         "team_id": str(reg.team_id),
         "team_name": team.name if team else None,
+        "can_withdraw": can_withdraw,
     }}
 
 

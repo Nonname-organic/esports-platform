@@ -80,6 +80,12 @@ def bracket_scores(match) -> dict[str, int | None]:
 # ラウンド番号ではなく終盤からの距離で表す。
 BO_ROUND_KEYS = {"final": 0, "semifinal": 1, "quarterfinal": 2}
 
+# 生きている参加登録（辞退・見送り以外）と、チームが自分で辞退できる大会の段階（組み合わせの生成前）
+LIVE_REGISTRATION = (RegistrationStatus.PENDING, RegistrationStatus.APPROVED, RegistrationStatus.WAITLISTED)
+WITHDRAWABLE_STAGES = (
+    TournamentStatus.REGISTRATION_OPEN, TournamentStatus.REGISTRATION_CLOSED, TournamentStatus.CHECK_IN,
+)
+
 
 def resolve_bo_format(tournament, round_number: int, rounds_count: int,
                       default: str = "BO3") -> str:
@@ -318,14 +324,10 @@ class TournamentService:
         if not tournament:
             raise NotFoundError("大会", str(tournament_id))
         reg = await _user_registration(self._db, tournament_id, current_user)
-        if not reg or reg.status in (RegistrationStatus.WITHDRAWN, RegistrationStatus.REJECTED):
+        if not reg or reg.status not in LIVE_REGISTRATION:
             raise NotFoundError("登録", "取り下げられる参加申請がありません")
         await self._require_team_authority(reg.team_id, current_user)
-        if tournament.status not in (
-            TournamentStatus.REGISTRATION_OPEN,
-            TournamentStatus.REGISTRATION_CLOSED,
-            TournamentStatus.CHECK_IN,
-        ) or await self._repo.get_brackets_with_matches(tournament_id):
+        if tournament.status not in WITHDRAWABLE_STAGES or await self._repo.get_brackets_with_matches(tournament_id):
             raise BusinessRuleError("組み合わせの生成後は辞退できません。主催者に連絡してください")
 
         before = reg.status.value

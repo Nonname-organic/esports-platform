@@ -139,25 +139,27 @@ function RegistrationRow({
         <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-semibold", statusColor)}>
           {statusLabel}
         </span>
-        {/* 審査中に加え、補欠（自動承認の定員超過分）も繰り上げ承認できる */}
-        {(reg.status === "pending" || reg.status === "waitlisted") && (
+        {/* 審査中に加え、補欠（自動承認の定員超過分）も繰り上げ承認できる。辞退済みは承認し直すと取り消せる */}
+        {(reg.status === "pending" || reg.status === "waitlisted" || reg.status === "withdrawn") && (
           <div className="flex gap-1.5">
             <button
               onClick={() => onApprove(reg.id)}
               disabled={isPending}
               className="rounded-lg bg-green-500/10 p-1.5 text-green-400 hover:bg-green-500/20 transition-colors disabled:opacity-50"
-              title={reg.status === "waitlisted" ? "繰り上げ承認" : "承認"}
+              title={reg.status === "waitlisted" ? "繰り上げ承認" : reg.status === "withdrawn" ? "辞退を取り消して承認" : "承認"}
             >
               <CheckCircle2 className="h-4 w-4" />
             </button>
-            <button
-              onClick={() => onReject(reg.id)}
-              disabled={isPending}
-              className="rounded-lg bg-red-500/10 p-1.5 text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-50"
-              title="却下"
-            >
-              <XCircle className="h-4 w-4" />
-            </button>
+            {reg.status !== "withdrawn" && (
+              <button
+                onClick={() => onReject(reg.id)}
+                disabled={isPending}
+                className="rounded-lg bg-red-500/10 p-1.5 text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-50"
+                title="却下"
+              >
+                <XCircle className="h-4 w-4" />
+              </button>
+            )}
           </div>
         )}
       </div>

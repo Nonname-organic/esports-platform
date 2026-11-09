@@ -30,6 +30,8 @@ export interface MyRegistration {
   status?: RegistrationState;
   team_id?: string;
   team_name?: string | null;
+  /** 辞退できるか（申請が生きていて、組み合わせ生成前で、本人がオーナー・キャプテン）。サーバーが判定する */
+  can_withdraw?: boolean;
 }
 
 export interface RegistrationInfo {
