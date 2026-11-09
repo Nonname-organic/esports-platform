@@ -7,6 +7,7 @@ OCRの読み取り結果はそのまま保存せず、必ず運営が確認・�
 """
 from __future__ import annotations
 
+import asyncio
 import re
 import uuid
 from collections import Counter
@@ -18,7 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import NotFoundError, RateLimitError
 from app.models.match import Match
 from app.models.player import Player
 from app.models.team import Team, TeamMember
@@ -26,6 +27,9 @@ from app.services import scoreboard_ocr
 
 # この類似度を下回る候補は「未確定」として運営に選ばせる
 _NAME_MATCH_THRESHOLD = 0.55
+# 同時に解析する画像の数。1件で最大約50MB（scoreboard_ocr の上限）を使うので、
+# 続けて送られても API（メモリ上限 1GB・1プロセス）を使い切らないよう絞る
+_OCR_SLOTS = asyncio.Semaphore(2)
 
 
 @dataclass
@@ -182,7 +186,10 @@ class ScoreboardImportService:
         # OCRは1枚あたり10秒以上かかるCPU処理。await せずに直接呼ぶと
         # イベントループを占有し、その間APIサーバー全体が応答しなくなるため
         # 必ずスレッドプールへ逃がす
-        parsed, _img = await run_in_threadpool(scoreboard_ocr.parse_scoreboard, image)
+        if _OCR_SLOTS.locked():  # 待たせずに断る（待ち行列の間も画像を抱え続けないように）
+            raise RateLimitError()
+        async with _OCR_SLOTS:
+            parsed, _img = await run_in_threadpool(scoreboard_ocr.parse_scoreboard, image)
         roster = await self._load_roster(match)
         warnings = list(parsed.warnings)
         if not roster:

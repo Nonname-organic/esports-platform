@@ -17,6 +17,7 @@ VALORANTスコアボードのスクリーンショットから選手成績を抽
 """
 from __future__ import annotations
 
+import io
 import logging
 import re
 from dataclasses import dataclass, field
@@ -25,6 +26,7 @@ from typing import Optional
 import cv2
 import numpy as np
 import pytesseract
+from PIL import Image
 
 from app.core.exceptions import ValidationError
 from app.services import agent_catalog
@@ -33,6 +35,14 @@ logger = logging.getLogger(__name__)
 
 # OCR前に画像をこの幅へ正規化する
 _TARGET_WIDTH = 1920
+# 展開する前に寸法で止める上限。4K（3840x2160、約830万画素）の倍まで受け付ける。
+# BGR で展開すると1画素3バイトなので、上限の画像でも約50MBに収まる
+_MAX_SIDE = 8192
+_MAX_PIXELS = 16_777_216
+_ALLOWED_FORMATS = ("PNG", "JPEG", "WEBP")
+# Pillow はこの値の2倍を超える画像を、ヘッダーを読んだ時点（WebP は展開用の領域を確保する前）で
+# DecompressionBombError にする。その上限を _MAX_PIXELS に揃える
+Image.MAX_IMAGE_PIXELS = _MAX_PIXELS // 2
 # 行として扱う最小の高さ（正規化後ピクセル）
 _MIN_BAND_HEIGHT = 20
 # 行の境目とみなす地色の変化量（BGR差の合計）
@@ -114,11 +124,36 @@ def has_japanese() -> bool:
         return False
 
 
+def _check_header(raw: bytes) -> None:
+    """画素を展開せずにヘッダーだけを読み、形式と寸法を確かめる。
+
+    圧縮した画像のファイルサイズは小さくても、展開後の大きさは寸法で決まる
+    （数百KBの PNG が展開すると1GBを超えることがある）。cv2.imdecode は寸法の
+    分だけメモリを確保してから展開するので、その前に止める。
+    """
+    try:
+        with Image.open(io.BytesIO(raw)) as im:  # ヘッダーだけを読む（画素はまだ展開しない）
+            fmt, (w, h) = im.format, im.size
+    except Image.DecompressionBombError:
+        raise ValidationError(f"画像の画素数が大きすぎます（{_MAX_PIXELS:,}画素まで）") from None
+    except Exception:  # noqa: BLE001 - 壊れた・未対応の画像は、理由を問わず読めない画像として断る
+        raise ValidationError(
+            "画像を読み込めませんでした。PNG または JPEG のスクリーンショットをアップロードしてください"
+        ) from None
+    if fmt not in _ALLOWED_FORMATS:
+        raise ValidationError("PNG・JPEG・WebP のスクリーンショットのみ対応しています")
+    if w > _MAX_SIDE or h > _MAX_SIDE or w * h > _MAX_PIXELS:
+        raise ValidationError(
+            f"画像の解像度が大きすぎます（{w}x{h}）。一辺{_MAX_SIDE}px・{_MAX_PIXELS:,}画素までにしてください"
+        )
+
+
 def _decode(raw: bytes) -> np.ndarray:
     if not raw:
         raise ValidationError("画像が空です")
     if len(raw) > 20 * 1024 * 1024:
         raise ValidationError("画像サイズが大きすぎます（20MBまで）")
+    _check_header(raw)
 
     img = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
     if img is None:

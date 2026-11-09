@@ -133,8 +133,9 @@ async def parse_scoreboard(
     if file.content_type not in ("image/png", "image/jpeg", "image/webp"):
         raise ValidationError("PNG・JPEG・WebP のスクリーンショットのみ対応しています")
 
-    contents = await file.read()
-    # nginx の上限は添付ファイル（10MB）に合わせてあるため、OCR は従来どおり 5MB で止める
+    # nginx の上限は添付ファイル（10MB）に合わせてあるため、OCR は従来どおり 5MB で止める。
+    # 上限を1バイト超える分までしか読まない（大きなファイルを丸ごとメモリに載せない）
+    contents = await file.read(settings.MAX_UPLOAD_SIZE_BYTES + 1)
     if len(contents) > settings.MAX_UPLOAD_SIZE_BYTES:
         raise ValidationError("スクリーンショットは5MB以下にしてください")
     service = ScoreboardImportService(db)
