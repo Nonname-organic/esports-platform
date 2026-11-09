@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime, timezone
 
 import boto3
-from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy import ColumnElement, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -271,14 +271,16 @@ class MatchService:
         if len(set(players)) != len(players):
             raise BusinessRuleError("同じ選手の成績が重複しています")
 
-        since = match.started_at or datetime.now(timezone.utc)
+        still_member: ColumnElement[bool] = TeamMember.left_at.is_(None)
+        if match.started_at is not None:  # 開始時刻が無い試合は、今の所属だけを見る
+            still_member = or_(still_member, TeamMember.left_at >= match.started_at)
         members = {
             (r.team_id, r.player_id)
             for r in (await self._db.execute(
                 select(TeamMember.team_id, TeamMember.player_id).where(
                     TeamMember.team_id.in_(teams),
                     TeamMember.player_id.in_(players),
-                    or_(TeamMember.left_at.is_(None), TeamMember.left_at >= since),
+                    still_member,
                 )
             )).all()
         }
