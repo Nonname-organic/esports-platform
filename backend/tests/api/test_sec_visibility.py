@@ -261,6 +261,11 @@ class TestPrivateTournamentsStayOutOfAggregates:
         assert [(r["player_id"], r["games"], r["avg_kills"]) for r in ranking] == [(str(player.id), 1, 10.0)]
         overview = (await client.get("/api/v1/analytics/winrate?game=VALORANT")).json()["data"]["overview"]
         assert (overview["total_tournaments"], overview["total_matches"]) == (1, 1)
+        stats_url = f"/api/v1/analytics/players/{player.id}/stats?game=VALORANT"
+        mine_stats = (await client.get(stats_url)).json()["data"]  # 監査 S7-1: 以前は全大会を数えていた
+        assert (mine_stats["games_played"], mine_stats["total_kills"]) == (1, 10)
+        one = (await client.get(f"{stats_url}&tournament_id={private.id}")).json()["data"]
+        assert (one["games_played"], one["total_kills"]) == (1, 40)
 
         # 大会を指定した集計と大会の詳細は、これまでどおり大会の ID で見られる（主催者・管理者の画面）
         res = await client.get(f"/api/v1/analytics/players?game=VALORANT&tournament_id={private.id}")
@@ -269,3 +274,32 @@ class TestPrivateTournamentsStayOutOfAggregates:
             for tour in (private, limited):
                 res = await client.get(f"/api/v1/tournaments/{tour.id}", headers=headers)
                 assert res.status_code == 200, res.text
+
+
+class _MemoCache:
+    """値を覚えるキャッシュ（テストの既定のキャッシュは何も覚えない）。"""
+
+    def __init__(self):
+        self.data: dict = {}
+
+    async def get(self, key): return self.data.get(key)
+    async def set(self, key, value, ttl=None): self.data[key] = value
+    async def delete(self, key): self.data.pop(key, None)
+
+
+@pytest.mark.asyncio
+async def test_大会を指定した選手スタッツのキャッシュを指定しない閲覧者に返さない(db):
+    from app.models.enums import GameType, PeriodType
+    from app.services.analytics import AnalyticsService
+
+    owner = await f.make_user(db)
+    player = await f.make_player(db, user=owner)
+    teams = [await f.make_team(db, owner=owner, name=f"S7c {i} {_now().microsecond}") for i in range(4)]
+    await f.add_member(db, team=teams[0], player=player)
+    await _final(db, owner, teams, player, kills=10)
+    private = await _final(db, owner, teams, player, kills=40, visibility="private")
+    svc = AnalyticsService(db, _MemoCache())
+    first = await svc.get_player_stats(player.id, GameType.VALORANT, PeriodType.ALL_TIME, private.id)
+    assert first.total_kills == 40
+    later = await svc.get_player_stats(player.id, GameType.VALORANT, PeriodType.ALL_TIME)
+    assert later.total_kills == 10  # 非公開大会の値をキャッシュから返さない
