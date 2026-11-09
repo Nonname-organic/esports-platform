@@ -29,7 +29,7 @@ import httpx  # noqa: E402
 from sqlalchemy import select, text  # noqa: E402
 
 from app.core.database import AsyncSessionLocal  # noqa: E402
-from app.core.security import create_access_token  # noqa: E402
+from app.core.security import issue_tokens  # noqa: E402
 from app.models.team import Team  # noqa: E402
 from app.models.user import User  # noqa: E402
 
@@ -84,12 +84,16 @@ async def load_actors():
             .where(Team.owner_id.is_not(None), Team.is_active.is_(True))
             .order_by(Team.name).limit(6)
         )).all()
+        # トークンはログインと同じ形で作る（パスワードの印が無いと 401 になる）
+        owners = {u.id: u for u in (await db.execute(
+            select(User).where(User.id.in_([oid for *_, oid in rows]))
+        )).scalars()}
         teams = [{
             "id": str(tid), "name": name, "tag": tag,
-            "token": create_access_token(subject=str(oid)),
+            "token": issue_tokens(owners[oid])[0],
         } for tid, name, tag, oid in rows]
         return {"username": org.username,
-                "token": create_access_token(subject=str(org.id))}, teams
+                "token": issue_tokens(org)[0]}, teams
 
 
 def hdr(token: str) -> dict:
