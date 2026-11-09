@@ -20,7 +20,7 @@ from app.models.team import Team, TeamMember
 from app.models.tournament import Tournament
 from app.models.user import User
 from app.schemas.match import MatchResultCreate
-from app.services.match import MatchService
+from app.services.match import MatchService, lock_match
 
 OPEN = ("pending", "disputed")
 
@@ -31,9 +31,10 @@ class MatchReportService:
         self._cache = cache
 
     async def _load(
-        self, match_id: uuid.UUID,
+        self, match_id: uuid.UUID, *, for_update: bool = True,
     ) -> tuple[Match, Tournament | None, MatchResultReport | None]:
-        match = await self._db.get(Match, match_id)
+        # 報告・確認・異議は試合の行をロックし、主催者の確定や再開と1件ずつ処理する
+        match = await lock_match(self._db, match_id) if for_update else await self._db.get(Match, match_id)
         if not match:
             raise NotFoundError("試合", str(match_id))
         tournament = await self._db.get(Tournament, match.tournament_id)
@@ -61,23 +62,39 @@ class MatchReportService:
                    TeamMember.role == MemberRole.CAPTAIN, TeamMember.left_at.is_(None))
         )).scalars().first()
 
+    async def _is_member(self, match: Match, user: User) -> bool:
+        """対戦チームのどちらかに在籍しているか（役割は問わない）。"""
+        teams = [t for t in (match.team1_id, match.team2_id) if t]
+        return bool(teams) and bool(await self._db.scalar(
+            select(TeamMember.team_id)
+            .join(Player, Player.id == TeamMember.player_id)
+            .where(TeamMember.team_id.in_(teams), Player.user_id == user.id, TeamMember.left_at.is_(None))
+            .limit(1)
+        ))
+
     async def state(self, match_id: uuid.UUID, user: User) -> dict[str, Any]:
-        match, tournament, report = await self._load(match_id)
+        match, tournament, report = await self._load(match_id, for_update=False)
         team = await self._team_of(match, user)
         manager = self._is_manager(tournament, user)
         open_report = report if report and report.status in OPEN else None
         reportable = match.status in (MatchStatus.SCHEDULED, MatchStatus.ONGOING) and bool(
             match.team1_id and match.team2_id)
         is_opponent = bool(team and open_report and open_report.reported_by_team_id != team)
+        # 異議中はチームからは報告し直せない（主催者は結果の登録で裁定できる）
+        disputed = report is not None and report.status == "disputed"
+        # 異議の理由は当事者（両チームのオーナー・メンバー）と主催者・管理者にだけ返す
+        reason = report.dispute_reason if report is not None else None
+        if reason and not (manager or team is not None or await self._is_member(match, user)):
+            reason = None
         return {
             "report": None if report is None else {
                 "status": report.status,
                 "winner_id": str(report.winner_id),
                 "reported_by_team_id": str(report.reported_by_team_id),
-                "dispute_reason": report.dispute_reason,
+                "dispute_reason": reason,
             },
             "my_team_id": str(team) if team else None,
-            "can_report": reportable and (team is not None or manager),
+            "can_report": reportable and (manager or (team is not None and not disputed)),
             "can_confirm": reportable and open_report is not None
             and open_report.status == "pending" and (is_opponent or manager),
             "can_dispute": reportable and open_report is not None

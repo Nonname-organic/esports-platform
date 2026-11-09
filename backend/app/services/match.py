@@ -44,6 +44,19 @@ async def ensure_can_manage_match(db: AsyncSession, match: Match, user: User) ->
         raise ForbiddenError("この大会の試合を操作する権限がありません")
 
 
+async def lock_match(db: AsyncSession, match_id: uuid.UUID) -> Match | None:
+    """試合の行をコミットまでロックし、最新の状態で読み直す。
+
+    開始・スコア・成績・結果の確定・再開・チームの報告を、同じ試合について1件ずつ
+    処理する。並行した操作で状態の更新が消えたり、成績が二重に入ったりしないように
+    する（ロックを待った後は、相手が確定した状態を読んでから判定する）。
+    """
+    return (await db.execute(
+        select(Match).where(Match.id == match_id).with_for_update()
+        .execution_options(populate_existing=True)
+    )).scalar_one_or_none()
+
+
 class MatchService:
     def __init__(self, db: AsyncSession, cache: RedisCache):
         self._repo = MatchRepository(db)
@@ -107,7 +120,7 @@ class MatchService:
         self, match_id: uuid.UUID, current_user: User, *, authorized: bool = False,
     ) -> None:
         """authorized=True は、呼び出し側で権限を確認済みの経路（Bot の結果確定）専用。"""
-        match = await self._repo.get_by_id(match_id)
+        match = await lock_match(self._db, match_id)
         if not match:
             raise NotFoundError("試合", str(match_id))
         if not authorized:
@@ -137,7 +150,7 @@ class MatchService:
         data: ScoreUpdate,
         current_user: User,
     ) -> None:
-        match = await self._repo.get_by_id(match_id)
+        match = await lock_match(self._db, match_id)
         if not match:
             raise NotFoundError("試合", str(match_id))
         await ensure_can_manage_match(self._db, match, current_user)
@@ -189,7 +202,7 @@ class MatchService:
         試合を完了させずマップ単位で確定できるようにしてある。撮り直しや修正に
         備えて、同一ゲームの選手成績は追記ではなく毎回置き換える。
         """
-        match = await self._repo.get_by_id(match_id)
+        match = await lock_match(self._db, match_id)
         if not match:
             raise NotFoundError("試合", str(match_id))
         await ensure_can_manage_match(self._db, match, current_user)
@@ -329,6 +342,7 @@ class MatchService:
             raise ConflictError("結果を処理中です。しばらく待ってから再試行してください")
 
         try:
+            await lock_match(self._db, match_id)
             match = await self._repo.get_full_detail(match_id)
             if not match:
                 raise NotFoundError("試合", str(match_id))
@@ -369,7 +383,8 @@ class MatchService:
                         ended_at=datetime.now(timezone.utc),
                     )
                     if game_stat.player_stats:
-                        await self._repo.bulk_create_player_stats([
+                        # 再開後の登録し直しや、マップごとに保存済みの成績と重ならないよう置き換える
+                        await self._repo.replace_player_stats(game.id, [
                             {
                                 "match_game_id": game.id,
                                 "player_id": ps.player_id,
@@ -463,9 +478,10 @@ class MatchService:
         勝者・敗者を送り込んだ次の試合がまだ始まっていない場合に限り、送り込んだ
         チームを取り除いてから戻す。始まっていれば、その試合から先に直す必要がある。
         """
-        from app.models.match import Match, MatchResult
+        from app.models.match import MatchResult
+        from app.models.match_report import MatchResultReport
 
-        match = await self._db.get(Match, match_id)
+        match = await lock_match(self._db, match_id)
         if not match:
             raise NotFoundError("試合", str(match_id))
         await ensure_can_manage_match(self._db, match, current_user)
@@ -479,7 +495,7 @@ class MatchService:
         for next_id, team_id in moves:
             if not next_id or not team_id:
                 continue
-            nxt = await self._db.get(Match, next_id)
+            nxt = await lock_match(self._db, next_id)
             if nxt is None:
                 continue
             if nxt.status != MatchStatus.SCHEDULED:
@@ -492,6 +508,11 @@ class MatchService:
                 nxt.team2_id = None
 
         await self._db.execute(delete(MatchResult).where(MatchResult.match_id == match_id))
+        # チームの報告・確認・異議は、再開した試合と、チームを外した次の試合から消して最初からにする。
+        # 残すと、相手が入れ替わった後の古い報告を、片方のチームの確認だけで確定できてしまう
+        await self._db.execute(delete(MatchResultReport).where(
+            MatchResultReport.match_id.in_([match_id, *(nxt.id for nxt, _ in targets)])
+        ))
         match.status = MatchStatus.ONGOING
         match.winner_id = None
         match.ended_at = None
