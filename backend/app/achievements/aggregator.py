@@ -30,6 +30,7 @@ from app.models.team import Team
 from app.models.tournament import Tournament, TournamentRegistration
 from app.models.tournament_report import TournamentReport
 from app.reports.aggregator import TournamentReportAggregator
+from app.repositories.tournament import publicly_listed
 from app.services.career_service import CareerAggregationService
 
 ACHIEVEMENT_CACHE_TTL = 600      # 10分
@@ -74,6 +75,7 @@ class AchievementAggregator:
                 TournamentRegistration.team_id == team_id,
                 TournamentRegistration.status == RegistrationStatus.APPROVED,
                 Tournament.status == TournamentStatus.COMPLETED,
+                publicly_listed(),  # 限定公開・非公開の大会は公開の実績カードに出さない（S7）
             )
         )).all()
 

@@ -20,6 +20,7 @@ from app.models.match import BanPick, Map, Match, MatchGame, PlayerMatchStats
 from app.models.player import Player
 from app.models.team import Team, TeamMember
 from app.models.tournament import Tournament
+from app.repositories.tournament import publicly_listed
 
 TTL = 300  # 5分
 
@@ -47,6 +48,10 @@ class AnalyticsDashboardService:
         conds = [Tournament.game == game, Match.status == MatchStatus.COMPLETED]
         if tournament_id:
             conds.append(Match.tournament_id == tournament_id)
+        else:
+            # 大会をまたぐ集計には、限定公開・非公開・下書きの大会を混ぜない（S7）。
+            # 大会を指定した集計は、これまでどおり大会の詳細ページと同じ扱い
+            conds.append(publicly_listed())
         df, dt = _parse_dt(date_from), _parse_dt(date_to)
         occurred = func.coalesce(Match.started_at, Match.created_at)
         if df:
@@ -426,6 +431,8 @@ class AnalyticsDashboardService:
         conds = [Tournament.game == game]
         if tournament_id:
             conds.append(Match.tournament_id == tournament_id)
+        else:
+            conds.append(publicly_listed())  # _match_conds と同じ（S7）
         rows = (await self._db.execute(
             select(
                 Map.display_name,

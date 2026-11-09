@@ -23,6 +23,7 @@ from app.models.tournament import Tournament, TournamentRegistration
 from app.models.tournament_report import TournamentReport
 from app.rankings.tiers import MVP_RP, next_tier_for, placement_rp, tier_for, tier_progress
 from app.reports.aggregator import TournamentReportAggregator
+from app.repositories.tournament import publicly_listed
 from app.seasons.utils import season_label
 from app.seasons.utils import season_window as _season_window
 
@@ -90,7 +91,10 @@ class RankingAggregator:
     async def _compute(self, *, game: Optional[str], season: str) -> list[dict]:
         start, end = _season_window(season)
 
-        q = select(Tournament.id, Tournament.end_at).where(Tournament.status == TournamentStatus.COMPLETED)
+        # 限定公開・非公開の大会は公開ランキングに数えない（S7）
+        q = select(Tournament.id, Tournament.end_at).where(
+            Tournament.status == TournamentStatus.COMPLETED, publicly_listed()
+        )
         if game:
             try:
                 q = q.where(Tournament.game == GameType(game))
@@ -290,6 +294,7 @@ class RankingAggregator:
                 TournamentRegistration.team_id == team_id,
                 TournamentRegistration.status == RegistrationStatus.APPROVED,
                 Tournament.status == TournamentStatus.COMPLETED,
+                publicly_listed(),  # _compute と同じ（S7）
             )
         )
         if start and end:

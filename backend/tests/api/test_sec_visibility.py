@@ -187,3 +187,85 @@ class TestPrivateTournamentsStayOut:
         res = await client.get(f"/api/v1/players/{player.id}/history")
         assert res.status_code == 200, res.text
         assert [h["tournament_id"] for h in res.json()["data"]] == [str(public.id)]
+
+
+# ── RC3（S7）: 限定公開・非公開の大会を、実績カード・ランキング・通算成績・分析に数えない ──
+async def _final(db, owner, teams, player, *, kills, **kw):
+    """teams[0] が決勝で teams[1] に勝って優勝した完了大会（4チーム・選手成績つき）。"""
+    tour = await f.make_tournament(db, organizer=owner, status=TournamentStatus.COMPLETED, **kw)
+    for t in teams:
+        await f.register_team(db, tournament=tour, team=t)
+    match = Match(tournament_id=tour.id, round_number=1, match_number=1, status=MatchStatus.COMPLETED,
+                  team1_id=teams[0].id, team2_id=teams[1].id, winner_id=teams[0].id, ended_at=_now())
+    db.add(match)
+    await db.flush()
+    game = MatchGame(match_id=match.id, game_number=1, team1_score=13, team2_score=5, winner_id=teams[0].id)
+    db.add(game)
+    await db.flush()
+    db.add(PlayerMatchStats(match_game_id=game.id, player_id=player.id, team_id=teams[0].id,
+                            kills=kills, deaths=10, assists=0, created_at=_now()))
+    db.add(TournamentReport(tournament_id=tour.id, data={
+        "champion": {"team_id": str(teams[0].id), "team_name": teams[0].name},
+        "runner_up": {"team_id": str(teams[1].id), "team_name": teams[1].name},
+        "standings": [{"team_id": str(t.id), "wins": int(i == 0), "losses": int(i == 1)}
+                      for i, t in enumerate(teams)],
+    }))
+    await db.flush()
+    return tour
+
+
+class TestPrivateTournamentsStayOutOfAggregates:
+    @pytest.mark.asyncio
+    async def test_実績カード_ランキング_通算成績_分析は公開大会だけを数える(self, client: AsyncClient, db, admin_token):
+        owner = await f.make_user(db)
+        player = await f.make_player(db, user=owner)
+
+        async def teams(prefix):
+            return [await f.make_team(db, owner=owner, name=f"S7 {prefix}{i} {_now().microsecond}") for i in range(4)]
+
+        pub, priv, lim = await teams("pub"), await teams("priv"), await teams("lim")
+        star = pub[0]  # 3大会すべてで優勝するチーム
+        await f.add_member(db, team=star, player=player)
+        public = await _final(db, owner, pub, player, kills=10)
+        private = await _final(db, owner, [star, *priv[1:]], player, kills=40, visibility="private")
+        limited = await _final(db, owner, [star, *lim[1:]], player, kills=40, visibility="limited")
+        hidden_ids = {str(t.id) for t in priv[1:] + lim[1:]}
+
+        card = (await client.get(f"/api/v1/teams/{star.id}/achievement-card")).json()["data"]
+        assert [t["tournament_id"] for t in card["recent_titles"]] == [str(public.id)]
+        assert (card["championships"], card["tournaments"], card["matches"], card["wins"]) == (1, 1, 1, 1)
+
+        rank = (await client.get(f"/api/v1/teams/{star.id}/rank-card")).json()["data"]
+        assert [h["tournament_id"] for h in rank["history"]] == [str(public.id)]
+        assert (rank["championships"], rank["tournaments"]) == (1, 1)
+
+        board = (await client.get("/api/v1/rankings/global?limit=100")).json()["data"]
+        assert {e["team_id"] for e in board} == {str(t.id) for t in pub}  # 非公開だけの出場チームは載らない
+        mine = next(e for e in board if e["team_id"] == str(star.id))
+        assert (mine["tournaments"], mine["championships"]) == (1, 1)
+        players = (await client.get("/api/v1/rankings/players?limit=100")).json()["data"]
+        assert [p["player_id"] for p in players] == [str(player.id)]
+        assert players[0]["rp"] == mine["rp"]  # 所属チームの公開大会の RP だけ
+
+        career = (await client.get(f"/api/v1/teams/{star.id}/career")).json()["data"]
+        assert (career["total_matches"], career["championships"], career["tournaments_played"]) == (1, 1, 1)
+        assert [r["team_id"] for r in career["rivals"]] == [str(pub[1].id)]  # 非公開大会の対戦相手を出さない
+        assert not hidden_ids & {r["team_id"] for r in career["rivals"]}
+        stats = (await client.get(f"/api/v1/teams/{star.id}/stats")).json()["data"]
+        assert (stats["total_matches"], stats["game_wins"], stats["game_losses"], stats["tournaments_played"]) == (1, 1, 0, 1)
+
+        pc = (await client.get(f"/api/v1/players/{player.id}/career")).json()["data"]
+        assert (pc["total_matches"], pc["tournaments_played"], pc["avg_kills"]) == (1, 1, 10.0)
+
+        ranking = (await client.get("/api/v1/analytics/players?game=VALORANT")).json()["data"]
+        assert [(r["player_id"], r["games"], r["avg_kills"]) for r in ranking] == [(str(player.id), 1, 10.0)]
+        overview = (await client.get("/api/v1/analytics/winrate?game=VALORANT")).json()["data"]["overview"]
+        assert (overview["total_tournaments"], overview["total_matches"]) == (1, 1)
+
+        # 大会を指定した集計と大会の詳細は、これまでどおり大会の ID で見られる（主催者・管理者の画面）
+        res = await client.get(f"/api/v1/analytics/players?game=VALORANT&tournament_id={private.id}")
+        assert [(r["games"], r["avg_kills"]) for r in res.json()["data"]] == [(1, 40.0)]
+        for headers in (auth_headers(_token(owner)), auth_headers(admin_token)):
+            for tour in (private, limited):
+                res = await client.get(f"/api/v1/tournaments/{tour.id}", headers=headers)
+                assert res.status_code == 200, res.text
