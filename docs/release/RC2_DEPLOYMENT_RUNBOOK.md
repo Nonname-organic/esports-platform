@@ -4,6 +4,7 @@
 - [phase10 の「RC1 本番公開の手順」](../phase10_vps_conoha.md#rc1-本番公開の手順2026-11)を置き換える
 - 設定の中身と確認コマンドは [RC2_PRODUCTION_CHECKLIST.md](RC2_PRODUCTION_CHECKLIST.md)、切り戻しは [RC2_ROLLBACK_RUNBOOK.md](RC2_ROLLBACK_RUNBOOK.md)
 - 秘密情報の値は、どの手順でも画面・ログ・コマンドの引数に出さない
+- RC3 を出すときも、この手順をそのまま使う。RC2 との違い（デプロイ後に全利用者が一度ログインし直しになる、公開の集計のキャッシュ、切り戻し中のセッション）は [RC3_RELEASE_NOTES.md](RC3_RELEASE_NOTES.md) の「本番への反映について」
 
 ## 0. 全体の流れと承認
 
