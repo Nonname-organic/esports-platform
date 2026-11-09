@@ -351,6 +351,10 @@ ConoHa は x86 なので、`build.yml` の `platforms` を `linux/amd64` のみ�
 
 ## RC1 本番公開の手順（2026-11）
 
+> **RC2 で置き換えた。** 公開は [RC2_DEPLOYMENT_RUNBOOK.md](release/RC2_DEPLOYMENT_RUNBOOK.md)、
+> 切り戻しは [RC2_ROLLBACK_RUNBOOK.md](release/RC2_ROLLBACK_RUNBOOK.md) に従う。この節は RC1 時点の記録として残す。
+> Deploy workflow は 2026-10-12 から無効で、main へのマージだけでは本番に出ない。下の「11. ロールバック」は使わない。
+
 RC1（[リリースノート](release/RC1_RELEASE_NOTES.md)）を公開するときの手順。デプロイは従来どおり
 main へのマージで自動に走り（Build & Push → Deploy）、**Deploy の最後にマイグレーション 028〜030 が自動で適用される**。
 つまりマージした時点で本番 DB が変わる。各コマンドには、ローカルの使い捨て環境で確かめたかを書いた。
@@ -440,22 +444,10 @@ Deploy は設定検査と readiness で自動的に止まる。止まった状�
 
 ### 11. ロールバック
 
-**イメージを戻す**（通常はこれだけ）: 手順 3 で控えた直近成功の Deploy を再実行する。
-
-```bash
-gh run rerun <手順3の run-id> --repo Nonname-organic/esports-platform
-```
-
-DB は 030 のままでよい。RC1 より前のコード（`1ddefd7`）を 030 のスキーマで起動し、大会の一覧・詳細・ブラケット、
-試合、募集（`player_seeks` の行を含む）、通知の API が正常に応答することをローカルで確認した
-（029 の表は旧コードが参照せず、030 は列を広げただけ、028 はデータの補正のみ）。
-「切り戻しの判断」の表に当てはめると、028〜030 は「旧アプリとの後方互換性を確認できた」場合にあたる。
-
-**DB も戻す**（別途承認を取ってから）:
-
-- 028 だけ戻す: 「マイグレーション 028 を戻すとき」
-- 030 を戻す: 「マイグレーション 030 を戻すとき」（`player_seeks` の行を先に退避する）
-- バックアップから戻す: `./scripts/restore-db.sh <手順2のファイル>`。バックアップ以降の書き込みは失われる
+RC2 で訂正した。以前ここにあった「直近成功の Deploy を再実行する」は使えない（Deploy workflow が無効の間は
+再実行できず、再実行できるのも最初の実行から 30 日まで）。DB を戻す手順（`alembic downgrade`）も使わない。
+イメージの版と digest を指定して戻す [RC2_ROLLBACK_RUNBOOK.md](release/RC2_ROLLBACK_RUNBOOK.md) に従う。
+DB は 030 のままでよい（旧コードは 030 のスキーマで動く）。
 
 ### 12. 復旧後の確認
 
@@ -710,50 +702,29 @@ docker compose exec -T postgres psql -U esports_user -d restore_test -tAc "$Q" >
 diff /tmp/src.txt /tmp/dst.txt && echo "件数・版とも一致"
 ```
 
-### マイグレーション 028（大会の公開設定の補正）を戻すとき
+### マイグレーション 028〜030 は戻さない（RC2 で訂正）
 
-028 は、作成画面で「非公開」「限定公開」を選んだのに列が `public` のままだった大会を直す。
-書き換え前の値は `tournament_visibility_backup_028` に残るので、適用後に戻す必要が出たら次のどちらかを使う。
+以前この節にあった `alembic downgrade 027`（028 だけを戻す）と、030 を戻す手順は使わない。
 
-```bash
-# 1) マイグレーションで戻す（適用後に主催者が設定を変えた大会には触れない）
-docker compose exec api alembic downgrade 027
+- `alembic downgrade 027` は、030・029・028 をまとめて戻す。029 の表（`match_result_reports`）が消えるので、
+  新しいイメージでは結果の登録がすべて 500 になる。旧イメージは 030 を知らないので、その中では実行もできない
+- 030 を戻すには `player_seeks` の投稿を消す必要がある。応募（`recruitment_applications`）が ON DELETE CASCADE で
+  一緒に消え、元に戻せない
 
-# 2) 特定の大会だけ戻す
-docker compose exec -T postgres psql -U esports_user -d esports_db -c "
-  UPDATE tournaments t SET visibility = b.previous_visibility
-    FROM tournament_visibility_backup_028 b
-   WHERE b.tournament_id = t.id AND t.id = '<大会ID>';"
-```
+切り戻しは、DB をそのままにしてイメージだけを前の版へ戻す。旧コード（027 まで）は 030 のスキーマで動く。
+手順は [RC2_ROLLBACK_RUNBOOK.md](release/RC2_ROLLBACK_RUNBOOK.md) を参照する。
 
-適用前に対象を控えておく場合（読み取りのみ）:
+- 旧イメージで動かした期間の後に新しいイメージへ戻したら、028 の補正を流し直す（同じ文書の SQL。
+  028 の UPDATE をそのまま流すと、その間に主催者が公開へ戻した大会が非公開に戻ってしまうので使わない）
+- 028 の補正で公開範囲が主催者の意図と違ってしまった大会は、SQL ではなく、主催者か管理者が編集画面で設定し直す
+  （列と `rules` の両方が書かれる。列だけを SQL で戻すと、次に補正を流したときにまた変わる）
+
+補正の対象を控えておく場合（読み取りのみ）:
 
 ```bash
 docker compose exec -T postgres psql -U esports_user -d esports_db -c "
   SELECT id, name, visibility, rules->>'visibility' FROM tournaments
    WHERE visibility = 'public' AND rules->>'visibility' IN ('limited', 'private');"
-```
-
-### マイグレーション 030（募集種別の列幅）を戻すとき
-
-030 は `recruitment_posts.post_type` を varchar(10)→(20) に広げる。`player_seeks`（12文字）の行が残っていると
-downgrade は失敗し、トランザクションごと元に戻る（版は 030 のまま、データも残る）。先に退避してから戻す。
-この順序（失敗して元に戻ること、退避後に戻せること、030 に上げ直して書き戻せること）は postgres 15 の
-使い捨て DB で確認済み。
-
-```bash
-# 1) 退避して消す（1つのトランザクションで実行される）
-docker compose exec -T postgres psql -U esports_user -d esports_db -c "
-  CREATE TABLE recruitment_posts_player_seeks_backup AS
-    SELECT * FROM recruitment_posts WHERE post_type = 'player_seeks';
-  DELETE FROM recruitment_posts WHERE post_type = 'player_seeks';"
-
-# 2) 戻す
-docker compose exec api alembic downgrade 029
-
-# 3) あとで 030 へ上げ直したら書き戻す
-docker compose exec -T postgres psql -U esports_user -d esports_db -c "
-  INSERT INTO recruitment_posts SELECT * FROM recruitment_posts_player_seeks_backup;"
 ```
 
 ---
