@@ -1,14 +1,14 @@
 import uuid
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, File, UploadFile
+from fastapi import APIRouter, Depends, File, UploadFile
 from pydantic import BaseModel, Field
 
 from app.core.config import settings
 from app.core.dependencies import Cache, CurrentUser, DBSession, OrganizerUser
-from app.core.exceptions import NotFoundError, ValidationError
+from app.core.exceptions import ValidationError
 from app.models.enums import MatchStatus
-from app.models.match import Match
+from app.models.user import User
 from app.schemas.common import ListResponse, Meta, Response
 from app.schemas.match import (
     BanPickCreate,
@@ -18,10 +18,30 @@ from app.schemas.match import (
     MatchSummary,
     ScoreUpdate,
 )
-from app.services.match import MatchService, ensure_can_manage_match
+from app.services.match import MatchService
 from app.services.scoreboard_import import ScoreboardImportService
 
 router = APIRouter(prefix="/matches", tags=["試合管理"])
+
+
+async def _require_match_organizer(
+    match_id: uuid.UUID,
+    db: DBSession,
+    cache: Cache,
+    current_user: OrganizerUser,
+) -> User:
+    """この試合の運営だけを通す。ADMIN か、その試合が属する大会の主催者。
+
+    ロールしか見ない OrganizerUser では、別の大会の主催者が他人の試合を
+    操作できてしまう。試合を変える route と、処理の重い取り込み route は
+    こちらを使う。Dependency なので route 本体より先に走り、拒否された
+    リクエストはサービス層にも OCR にも届かない。
+    """
+    await MatchService(db, cache).require_organizer_authority(match_id, current_user)
+    return current_user
+
+
+MatchOrganizer = Annotated[User, Depends(_require_match_organizer)]
 
 
 @router.get("", response_model=ListResponse[MatchSummary])
@@ -52,7 +72,7 @@ async def start_match(
     match_id: uuid.UUID,
     db: DBSession,
     cache: Cache,
-    current_user: OrganizerUser,
+    current_user: MatchOrganizer,
 ):
     service = MatchService(db, cache)
     await service.start_match(match_id, current_user)
@@ -65,7 +85,7 @@ async def update_game_score(
     data: ScoreUpdate,
     db: DBSession,
     cache: Cache,
-    current_user: OrganizerUser,
+    current_user: MatchOrganizer,
 ):
     service = MatchService(db, cache)
     await service.update_game_score(match_id, game_number, data, current_user)
@@ -90,7 +110,7 @@ async def save_game_player_stats(
     data: GamePlayerStatsUpdate,
     db: DBSession,
     cache: Cache,
-    current_user: OrganizerUser,
+    current_user: MatchOrganizer,
 ):
     """1マップ分のスコアと選手成績を保存する（スコアボード取り込みの確定先）"""
     service = MatchService(db, cache)
@@ -101,7 +121,7 @@ async def save_game_player_stats(
 async def parse_scoreboard(
     match_id: uuid.UUID,
     db: DBSession,
-    current_user: OrganizerUser,
+    current_user: MatchOrganizer,
     file: UploadFile = File(...),
 ):
     """
@@ -112,12 +132,6 @@ async def parse_scoreboard(
     """
     if file.content_type not in ("image/png", "image/jpeg", "image/webp"):
         raise ValidationError("PNG・JPEG・WebP のスクリーンショットのみ対応しています")
-
-    # OCR は重い処理なので、権限を確かめてから画像を読む
-    match = await db.get(Match, match_id)
-    if not match:
-        raise NotFoundError("試合", str(match_id))
-    await ensure_can_manage_match(db, match, current_user)
 
     contents = await file.read()
     # nginx の上限は添付ファイル（10MB）に合わせてあるため、OCR は従来どおり 5MB で止める
@@ -133,7 +147,7 @@ async def register_result(
     data: MatchResultCreate,
     db: DBSession,
     cache: Cache,
-    current_user: OrganizerUser,
+    current_user: MatchOrganizer,
 ):
     service = MatchService(db, cache)
     await service.register_result(match_id, data, current_user)
@@ -209,6 +223,6 @@ async def dispute_result_report(
 
 
 @router.post("/{match_id}/reopen", status_code=204)
-async def reopen_match(match_id: uuid.UUID, db: DBSession, cache: Cache, current_user: OrganizerUser) -> None:
+async def reopen_match(match_id: uuid.UUID, db: DBSession, cache: Cache, current_user: MatchOrganizer) -> None:
     """確定済みの結果を取り消して進行中へ戻す（次の試合が未開始の場合のみ）。"""
     await MatchService(db, cache).reopen_match(match_id, current_user)

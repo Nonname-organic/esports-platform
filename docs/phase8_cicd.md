@@ -78,7 +78,9 @@ latest
 ```
 
 The `sha-` prefix makes tags human-readable in deploy logs and ECS task history.
-`latest` is used as the fallback reference in docker-compose.prod.yml.
+`latest` is pushed alongside the `sha-` tag, but nothing deploys from it:
+docker-compose.prod.yml does not fall back to `latest`, so IMAGE_TAG must be
+given explicitly on every deploy.
 
 Both GHCR and ECR receive the same tag in a single `docker buildx build` run
 (no second push step — two `--tag` values pointing to different registries).

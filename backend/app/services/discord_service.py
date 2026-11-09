@@ -68,12 +68,15 @@ class DiscordService:
         self._publisher = DiscordEventPublisher(cache)
 
     # ── 大会Discordセットアップ ──────────────────────────────────────────────
-    async def setup_tournament(self, tournament_id: uuid.UUID, guild_id: str, user: User) -> DiscordServer:
+    async def setup_tournament(
+        self, tournament_id: uuid.UUID, guild_id: str, current_user: User
+    ) -> DiscordServer:
         """大会用Discordサーバーのテンプレート生成をキューに依頼（大会の主催者・管理者のみ）"""
         tournament = await self._db.get(Tournament, tournament_id)
         if not tournament:
             raise NotFoundError("大会", str(tournament_id))
-        if user.role != UserRole.ADMIN and tournament.organizer_id != user.id:
+        # 主催者ロールは本人が付けられるので、所有者かどうかを重複確認より前に確かめる
+        if current_user.role != UserRole.ADMIN and tournament.organizer_id != current_user.id:
             raise ForbiddenError("この大会のDiscordを設定する権限がありません")
         existing = await self._db.scalar(
             select(DiscordServer).where(DiscordServer.tournament_id == tournament_id)
@@ -81,7 +84,7 @@ class DiscordService:
         if existing:
             raise BusinessRuleError("この大会のDiscordは既にセットアップ済みです")
         # 他人のサーバーへ Bot にチャンネルやロールを作らせないよう、管理権限を Discord に確かめる
-        await self._require_guild_manager(user.id, guild_id)
+        await self._require_guild_manager(current_user.id, guild_id)
 
         server = DiscordServer(
             tournament_id=tournament_id,
