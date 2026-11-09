@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -48,7 +50,7 @@ def create_access_token(subject: str, extra: dict[str, Any] | None = None) -> st
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
-def create_refresh_token(subject: str) -> str:
+def create_refresh_token(subject: str, extra: dict[str, Any] | None = None) -> str:
     expire = datetime.now(timezone.utc) + timedelta(
         days=settings.REFRESH_TOKEN_EXPIRE_DAYS
     )
@@ -57,8 +59,36 @@ def create_refresh_token(subject: str) -> str:
         "exp": expire,
         "iat": datetime.now(timezone.utc),
         "type": REFRESH_TOKEN_TYPE,
+        **(extra or {}),
     }
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
+def password_stamp(hashed_password: str) -> str:
+    """パスワードのハッシュから作る印（S9）。トークンの "pwv" に入れる。
+
+    トークンを使うたびに今のハッシュの印と比べる。パスワードを変える・再設定すると
+    ハッシュが変わるので、それより前に発行したトークンは、他の端末のものも含めて
+    通らなくなる。HMAC なので、トークンの中身からハッシュは分からない。
+    """
+    key = settings.SECRET_KEY.encode()
+    return hmac.new(key, hashed_password.encode(), hashlib.sha256).hexdigest()[:32]
+
+
+SESSION_REVOKED = "セッションが無効になりました。もう一度ログインしてください"
+
+
+def stamp_matches(payload: dict[str, Any], hashed_password: str) -> bool:
+    """印の無いトークン（この仕組みより前に発行したもの）も通さない。"""
+    stamp = payload.get("pwv")
+    return isinstance(stamp, str) and hmac.compare_digest(stamp, password_stamp(hashed_password))
+
+
+def issue_tokens(user: Any) -> tuple[str, str]:
+    """ログインと更新で渡すアクセストークンとリフレッシュトークン。"""
+    stamp = {"pwv": password_stamp(user.hashed_password)}
+    access = create_access_token(str(user.id), {"role": user.role.value, **stamp})
+    return access, create_refresh_token(str(user.id), stamp)
 
 
 def decode_token(token: str) -> dict[str, Any]:

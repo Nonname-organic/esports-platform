@@ -7,12 +7,13 @@ from app.core.exceptions import AlreadyExistsError, UnauthorizedError
 from app.core.redis import CacheKeys, CacheTTL, RedisCache
 from app.core.security import (
     REFRESH_TOKEN_TYPE,
+    SESSION_REVOKED,
     JWTError,
-    create_access_token,
-    create_refresh_token,
     decode_token,
     hash_password,
     hash_password_async,
+    issue_tokens,
+    stamp_matches,
     verify_password_async,
     verify_token_type,
 )
@@ -67,11 +68,7 @@ class AuthService:
         if not await verify_password_async(data.password, user.hashed_password):
             raise UnauthorizedError("メールアドレスまたはパスワードが正しくありません")
 
-        access_token = create_access_token(
-            subject=str(user.id),
-            extra={"role": user.role.value},
-        )
-        refresh_token = create_refresh_token(subject=str(user.id))
+        access_token, refresh_token = issue_tokens(user)
 
         # Refresh Token を Redis に保存（無効化可能にするため）
         jti = str(uuid.uuid4())
@@ -113,12 +110,11 @@ class AuthService:
         user = result.scalar_one_or_none()
         if not user:
             raise UnauthorizedError("ユーザーが存在しません")
+        # パスワードを変えた・再設定した後は、それ以前のリフレッシュトークンで更新させない（S9）
+        if not stamp_matches(payload, user.hashed_password):
+            raise UnauthorizedError(SESSION_REVOKED)
 
-        access_token = create_access_token(
-            subject=str(user.id),
-            extra={"role": user.role.value},
-        )
-        new_refresh_token = create_refresh_token(subject=str(user.id))
+        access_token, new_refresh_token = issue_tokens(user)
 
         from app.core.config import settings
 

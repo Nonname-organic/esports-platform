@@ -12,7 +12,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 
 from app.core.config import settings
-from app.core.security import create_access_token
+from app.core.security import issue_tokens
 from app.models.riot import RiotProfile
 from app.services import riot_service
 from app.services.riot_service import RiotAPIClient
@@ -21,7 +21,7 @@ from tests.conftest import auth_headers
 
 
 def _token(user) -> str:
-    return create_access_token(str(user.id), {"role": user.role.value})
+    return issue_tokens(user)[0]
 
 
 async def _player(db, **kw):

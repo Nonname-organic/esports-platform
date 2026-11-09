@@ -6,14 +6,14 @@
 import pytest
 from httpx import AsyncClient
 
-from app.core.security import create_access_token
+from app.core.security import issue_tokens
 from app.models.enums import MemberRole
 from tests import factories as f
 from tests.conftest import auth_headers
 
 
 def _h(user) -> dict:
-    return auth_headers(create_access_token(str(user.id), {"role": user.role.value}))
+    return auth_headers(issue_tokens(user)[0])
 
 
 def _post(**kw) -> dict:

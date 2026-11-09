@@ -8,7 +8,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 
-from app.core.security import create_access_token
+from app.core.security import issue_tokens
 from app.models.enums import GameType, MatchStatus, TournamentStatus, UserRole
 from app.models.match import Map, Match, MatchResult
 from app.services.tournament import TournamentService
@@ -24,7 +24,7 @@ class _Cache:
 
 
 def _token(user) -> str:
-    return create_access_token(str(user.id), {"role": user.role.value})
+    return issue_tokens(user)[0]
 
 
 async def _ongoing_match(db):

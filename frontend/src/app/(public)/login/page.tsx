@@ -78,6 +78,11 @@ function LoginForm() {
           onSubmit={handleSubmit}
           className="rounded-2xl border border-white/10 bg-slate-900 p-6 space-y-4"
         >
+          {!error && searchParams.get("password_changed") && (
+            <div role="status" className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+              パスワードを変更しました。新しいパスワードでログインしてください
+            </div>
+          )}
           {error && (
             <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
               {error}

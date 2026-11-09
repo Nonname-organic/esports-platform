@@ -7,14 +7,14 @@ from httpx import AsyncClient
 
 from app.api.v1 import auth as auth_api
 from app.core import email as mailer
-from app.core.security import create_access_token
+from app.core.security import issue_tokens
 from app.workers.handlers import notification as notif
 from tests import factories as f
 from tests.conftest import auth_headers
 
 
 def _h(user) -> dict:
-    return auth_headers(create_access_token(str(user.id), {"role": user.role.value}))
+    return auth_headers(issue_tokens(user)[0])
 
 
 class TestProfileUpdate:

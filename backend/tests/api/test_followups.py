@@ -2,7 +2,7 @@
 import pytest
 from httpx import AsyncClient
 
-from app.core.security import create_access_token
+from app.core.security import issue_tokens
 from app.services.tag_service import TagService
 from tests import factories as f
 from tests.conftest import auth_headers
@@ -14,7 +14,7 @@ async def test_選手からの募集_player_seeksを掲載できる(client: Asyn
     player = await f.make_player(db, user=user, in_game_name="Seeker")
     res = await client.post(
         "/api/v1/scout/recruitment",
-        headers=auth_headers(create_access_token(str(user.id), {"role": user.role.value})),
+        headers=auth_headers(issue_tokens(user)[0]),
         json={"post_type": "player_seeks", "player_id": str(player.id), "game": "VALORANT",
               "title": "チームを探しています"},
     )

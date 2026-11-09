@@ -14,7 +14,7 @@ from sqlalchemy import select
 
 from app.core.config import settings
 from app.core.dependencies import get_cache
-from app.core.security import create_access_token
+from app.core.security import issue_tokens
 from app.main import app
 from app.models.discord import DiscordLink, DiscordServer
 from app.models.enums import UserRole
@@ -33,7 +33,7 @@ class _MemCache:
 
 
 def _token(user) -> str:
-    return create_access_token(str(user.id), {"role": user.role.value})
+    return issue_tokens(user)[0]
 
 
 @pytest.fixture

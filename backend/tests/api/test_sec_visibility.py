@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 import pytest
 from httpx import AsyncClient
 
-from app.core.security import create_access_token
+from app.core.security import issue_tokens
 from app.models.enums import MatchStatus, TournamentStatus
 from app.models.match import Match, MatchGame, PlayerMatchStats
 from app.models.player_lft import PlayerLFT
@@ -26,7 +26,7 @@ def _now():
 
 
 def _token(user) -> str:
-    return create_access_token(str(user.id), {"role": user.role.value})
+    return issue_tokens(user)[0]
 
 
 class TestPlayerStatsPublic:

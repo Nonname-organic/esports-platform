@@ -81,8 +81,10 @@ export default function SettingsPage() {
     setPwState({ loading: true });
     try {
       await apiClient.patch("/api/v1/auth/password", { current_password: curPw, new_password: newPw });
-      setPwState({ loading: false, ok: "パスワードを変更しました" });
-      setCurPw(""); setNewPw("");
+      // 変更前に発行したトークンは、この端末のものも含めてサーバー側で使えなくなる。
+      // 新しいパスワードでログインし直してもらう
+      logout();
+      window.location.replace("/login?password_changed=1");
     } catch (e) {
       setPwState({ loading: false, err: e instanceof ApiError ? e.message : "変更に失敗しました" });
     }

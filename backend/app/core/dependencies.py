@@ -1,5 +1,5 @@
 import uuid
-from typing import Annotated, Optional
+from typing import Annotated, Any, Optional
 
 import redis.asyncio as aioredis
 from fastapi import Depends, Header, HTTPException, status
@@ -13,8 +13,10 @@ from app.core.exceptions import ForbiddenError, UnauthorizedError
 from app.core.redis import CacheKeys, RedisCache, get_redis
 from app.core.security import (
     ACCESS_TOKEN_TYPE,
+    SESSION_REVOKED,
     JWTError,
     decode_token,
+    stamp_matches,
     verify_token_type,
 )
 from app.models.enums import UserRole
@@ -26,10 +28,10 @@ async def get_cache(redis: aioredis.Redis = Depends(get_redis)) -> RedisCache:
     return RedisCache(redis)
 
 
-async def get_current_user_id(
+async def get_access_payload(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-    cache: RedisCache | None = Depends(get_cache),  # 現状は未使用（任意認証からは None で呼ぶ）
-) -> uuid.UUID:
+) -> dict[str, Any]:
+    """アクセストークンを検証して中身を返す（sub は UUID として読めることを確認済み）。"""
     if credentials is None:
         raise UnauthorizedError()
 
@@ -46,23 +48,28 @@ async def get_current_user_id(
         raise UnauthorizedError()
 
     try:
-        return uuid.UUID(user_id_str)
+        uuid.UUID(user_id_str)
     except ValueError:
         raise UnauthorizedError()
+    return payload
 
 
 async def get_current_user(
-    user_id: uuid.UUID = Depends(get_current_user_id),
+    payload: dict[str, Any] = Depends(get_access_payload),
     db: AsyncSession = Depends(get_db, scope="function"),
 ) -> "User":  # type: ignore[name-defined]  # noqa: F821
     from sqlalchemy import select
 
     from app.models.user import User
 
+    user_id = uuid.UUID(payload["sub"])
     result = await db.execute(select(User).where(User.id == user_id, User.is_active == True))
     user = result.scalar_one_or_none()
     if user is None:
         raise UnauthorizedError("ユーザーが存在しないか無効化されています")
+    # パスワードを変えた・再設定した後は、それ以前に発行したトークンを通さない（S9）
+    if not stamp_matches(payload, user.hashed_password):
+        raise UnauthorizedError(SESSION_REVOKED)
     # イベント/監査が actor を引数無しで取得できるよう、リクエストコンテキストへ載せる。
     from app.core.context import set_actor
     set_actor(str(user.id))
@@ -77,7 +84,7 @@ async def get_optional_user(
     if credentials is None:
         return None
     try:
-        return await get_current_user(await get_current_user_id(credentials, None), db)
+        return await get_current_user(await get_access_payload(credentials), db)
     except UnauthorizedError:
         return None
 

@@ -14,7 +14,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import func, select
 
-from app.core.security import create_access_token
+from app.core.security import issue_tokens
 from app.models.discord import DiscordLink
 from app.models.enums import (
     GameType,
@@ -50,7 +50,7 @@ class _Cache:
 
 
 def _h(user) -> dict:
-    return {"Authorization": f"Bearer {create_access_token(str(user.id), {'role': user.role.value})}"}
+    return {"Authorization": f"Bearer {issue_tokens(user)[0]}"}
 
 
 async def _setup(db, *, n=4, fmt=TournamentFormat.SINGLE_ELIMINATION, generate=True):

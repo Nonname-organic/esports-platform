@@ -15,7 +15,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 
-from app.core.security import create_access_token
+from app.core.security import issue_tokens
 from app.models.discord import DiscordServer
 from app.models.enums import UserRole
 from app.services.discord_service import DiscordEventPublisher, DiscordService
@@ -27,7 +27,7 @@ FORBIDDEN_DETAIL = "この大会のDiscordを設定する権限がありませ�
 
 
 def _headers(user) -> dict:
-    return {"Authorization": f"Bearer {create_access_token(str(user.id), {'role': user.role.value})}"}
+    return {"Authorization": f"Bearer {issue_tokens(user)[0]}"}
 
 
 @pytest.fixture
