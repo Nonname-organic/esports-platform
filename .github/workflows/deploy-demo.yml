@@ -60,6 +60,12 @@ jobs:
             # Pull new images (docker-compose.prod.yml overrides build: → image:)
             IMAGE_TAG="$IMAGE_TAG" IMAGE_ORG="$IMAGE_ORG" docker compose pull
 
+            # 新しいイメージで本番設定を先に検査する（REQUIRE_STRONG_SECRETS）。
+            # DB パスワードが空・既定値、SECRET_KEY が見本値ならここで止まり、
+            # 稼働中のコンテナは入れ替えない。値は表示されない
+            IMAGE_TAG="$IMAGE_TAG" IMAGE_ORG="$IMAGE_ORG" \
+              docker compose run --rm --no-deps -T api python -c "import app.core.config"
+
             # イメージが変わったサービス（api / worker / scheduler / frontend）を
             # 作り直す。compose の既定は旧コンテナを停止してから新コンテナを起動
             # する動作なので、作り直している間はそのサービスが落ちる。直近のデプロイ

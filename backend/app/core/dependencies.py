@@ -4,7 +4,6 @@ from typing import Annotated, Optional
 import redis.asyncio as aioredis
 from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,7 +11,12 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.exceptions import ForbiddenError, UnauthorizedError
 from app.core.redis import CacheKeys, RedisCache, get_redis
-from app.core.security import ACCESS_TOKEN_TYPE, decode_token, verify_token_type
+from app.core.security import (
+    ACCESS_TOKEN_TYPE,
+    JWTError,
+    decode_token,
+    verify_token_type,
+)
 from app.models.enums import UserRole
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -24,7 +28,7 @@ async def get_cache(redis: aioredis.Redis = Depends(get_redis)) -> RedisCache:
 
 async def get_current_user_id(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-    cache: RedisCache = Depends(get_cache),
+    cache: RedisCache | None = Depends(get_cache),  # 現状は未使用（任意認証からは None で呼ぶ）
 ) -> uuid.UUID:
     if credentials is None:
         raise UnauthorizedError()
@@ -49,10 +53,11 @@ async def get_current_user_id(
 
 async def get_current_user(
     user_id: uuid.UUID = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> "User":  # type: ignore[name-defined]  # noqa: F821
-    from app.models.user import User
     from sqlalchemy import select
+
+    from app.models.user import User
 
     result = await db.execute(select(User).where(User.id == user_id, User.is_active == True))
     user = result.scalar_one_or_none()
@@ -62,6 +67,19 @@ async def get_current_user(
     from app.core.context import set_actor
     set_actor(str(user.id))
     return user
+
+
+async def get_optional_user(
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
+) -> "User | None":  # type: ignore[name-defined]  # noqa: F821
+    """公開エンドポイントで閲覧者を知るための任意認証。トークンが無い・無効なら None。"""
+    if credentials is None:
+        return None
+    try:
+        return await get_current_user(await get_current_user_id(credentials, None), db)
+    except UnauthorizedError:
+        return None
 
 
 def require_roles(*roles: UserRole):
@@ -87,7 +105,7 @@ async def verify_bot_secret(
 
 async def resolve_discord_user(
     x_discord_user_id: Optional[str] = Header(default=None, alias="X-Discord-User-Id"),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> "Optional[User]":  # type: ignore[name-defined]  # noqa: F821
     """X-Discord-User-Id → DiscordLink → User を解決（未連携ならNone）。
 
@@ -108,9 +126,14 @@ async def resolve_discord_user(
 
 # よく使う型エイリアス
 CurrentUser = Annotated["User", Depends(get_current_user)]  # type: ignore[name-defined]  # noqa: F821
+OptionalUser = Annotated["User | None", Depends(get_optional_user)]  # type: ignore[name-defined]  # noqa: F821
 BotAuth = Annotated[None, Depends(verify_bot_secret)]
 BotActor = Annotated["Optional[User]", Depends(resolve_discord_user)]  # type: ignore[name-defined]  # noqa: F821
-DBSession = Annotated[AsyncSession, Depends(get_db)]
+# scope="function": get_db のコミットを「応答を返す前」に行う。既定（request）だと
+# 応答を送った後にコミットされ、直後の別リクエスト（登録→自動ログインなど）が
+# 未コミットのデータを読めない・コミット失敗が成功応答のまま届く、という不整合になる。
+# get_db を使う依存はすべて同じ scope に揃える（揃えないと別セッションになる）。
+DBSession = Annotated[AsyncSession, Depends(get_db, scope="function")]
 Cache = Annotated[RedisCache, Depends(get_cache)]
 AdminUser = Annotated["User", Depends(require_roles(UserRole.ADMIN))]  # type: ignore[name-defined]  # noqa: F821
 OrganizerUser = Annotated[

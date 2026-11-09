@@ -7,6 +7,12 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.core.config import settings
 from app.core.exceptions import RateLimitError
 from app.core.redis import get_redis
+from app.core.security import (
+    ACCESS_TOKEN_TYPE,
+    JWTError,
+    decode_token,
+    verify_token_type,
+)
 
 logger = structlog.get_logger()
 
@@ -28,6 +34,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         "/auth/reset-password": 5,
         "/auth/refresh": 20,
     }
+
+    # 総当たりの的になる認証系は、ヘッダに何が付いていても常に IP で数える
+    IP_ONLY_SUFFIXES = ("/auth/login", "/auth/register", "/auth/forgot-password", "/auth/reset-password")
 
     async def dispatch(self, request: Request, call_next) -> Response:
         path = request.url.path
@@ -85,9 +94,15 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     def _get_identifier(self, request: Request) -> str:
         auth = request.headers.get("authorization", "")
-        if auth.startswith("Bearer "):
-            # トークンの末尾16文字をIDとして使用（デコードコスト回避）
-            return f"token:{auth[-16:]}"
+        if auth.startswith("Bearer ") and not request.url.path.endswith(self.IP_ONLY_SUFFIXES):
+            # 署名を検証できたアクセストークンだけをユーザーとして数える（HS256 なので安い）。
+            # 未検証の値で数えると、毎回でたらめなトークンを付けるだけで制限をすり抜けられる
+            try:
+                payload = decode_token(auth[7:])
+            except JWTError:
+                payload = {}
+            if verify_token_type(payload, ACCESS_TOKEN_TYPE) and payload.get("sub"):
+                return f"user:{payload['sub']}"
         # X-Forwarded-For はクライアントが先頭に任意の値を入れられる
         # （nginx は追記するだけ）。偽の値を回すと制限をすり抜けられるため、
         # nginx が $remote_addr から立てる X-Real-IP を優先する

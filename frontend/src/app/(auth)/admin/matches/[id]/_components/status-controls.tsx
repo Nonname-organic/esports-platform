@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Play, CheckCircle, XCircle, AlertTriangle, Shield } from "lucide-react";
+import { matchApi } from "@/features/matches/api/match-api";
 import { cn } from "@/lib/utils";
 import type { MatchDetail } from "@/types/match";
 import type { useMatchAdmin } from "@/features/matches/hooks/use-match-admin";
@@ -16,6 +18,11 @@ export function StatusControls({ match, startMatch, registerResult }: StatusCont
   const [showComplete, setShowComplete] = useState(false);
   const [winnerId, setWinnerId] = useState<string>("");
   const [isForfeit, setIsForfeit] = useState(false);
+  const qc = useQueryClient();
+  const reopen = useMutation({
+    mutationFn: () => matchApi.reopen(match.id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["matches"] }),
+  });
 
   const handleComplete = async () => {
     if (!winnerId) return;
@@ -25,11 +32,30 @@ export function StatusControls({ match, startMatch, registerResult }: StatusCont
 
   if (match.status === "completed" || match.status === "cancelled") {
     return (
-      <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900 px-4 py-3">
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-slate-900 px-4 py-3">
         <CheckCircle className="h-4 w-4 text-slate-500" />
         <span className="text-sm text-slate-500">
           {match.status === "completed" ? "試合は終了しています" : "試合は中止されました"}
         </span>
+        {match.status === "completed" && (
+          <button
+            type="button"
+            disabled={reopen.isPending}
+            onClick={() => {
+              if (window.confirm("確定した結果を取り消して試合を進行中に戻しますか？（次の試合が始まっていると戻せません）")) {
+                reopen.mutate();
+              }
+            }}
+            className="ml-auto rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-300 hover:text-white disabled:opacity-50"
+          >
+            {reopen.isPending ? "処理中..." : "結果を取り消して再開"}
+          </button>
+        )}
+        {reopen.isError && (
+          <p role="alert" className="w-full text-xs text-red-400">
+            {reopen.error instanceof Error ? reopen.error.message : "再開に失敗しました"}
+          </p>
+        )}
       </div>
     );
   }

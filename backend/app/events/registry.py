@@ -63,8 +63,12 @@ class Ev:
     TOURNAMENT_MATCH_RESULT_UPDATED = "tournament.match.result_updated"
     TOURNAMENT_REGISTRATION_APPROVED = "tournament.registration.approved"
     TOURNAMENT_REGISTRATION_REJECTED = "tournament.registration.rejected"
+    TOURNAMENT_REGISTRATION_WITHDRAWN = "tournament.registration.withdrawn"
     TOURNAMENT_CHECKIN_PERFORMED= "tournament.checkin.performed"
     TOURNAMENT_COMPLETED        = "tournament.completed"
+    # User（管理者による操作の監査）
+    USER_STATUS_CHANGED         = "user.status.changed"
+    USER_ROLE_CHANGED           = "user.role.changed"
 
 
 # ── Registry（SSOT） ───────────────────────────────────────────────────────
@@ -74,6 +78,9 @@ _AUDIT = EventSpec(visibility=Visibility.INTERNAL, dispatch=False)
 
 
 REGISTRY: dict[str, EventSpec] = {
+    Ev.USER_STATUS_CHANGED: _AUDIT,
+    Ev.USER_ROLE_CHANGED: _AUDIT,
+    Ev.TOURNAMENT_REGISTRATION_WITHDRAWN: _AUDIT,
     # Team（すべて純監査）
     Ev.TEAM_CREATED: _AUDIT,
     Ev.TEAM_UPDATED: _AUDIT,

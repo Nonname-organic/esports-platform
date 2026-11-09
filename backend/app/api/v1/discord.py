@@ -7,11 +7,21 @@ Discord連携 API
 import secrets
 import string
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from sqlalchemy import select
 
-from app.core.dependencies import Cache, CurrentUser, DBSession, OrganizerUser
+from app.core.dependencies import (
+    Cache,
+    CurrentUser,
+    DBSession,
+    OptionalUser,
+    OrganizerUser,
+)
+from app.models.enums import UserRole
+from app.models.tournament import Tournament
 from app.schemas.common import Response
 from app.services.discord_service import DiscordService
 
@@ -21,11 +31,12 @@ LINK_CODE_TTL = 300  # 連携コードの有効期間（秒）
 
 
 class SetupRequest(BaseModel):
-    guild_id: str
+    guild_id: str = Field(..., pattern=r"^\d{1,20}$", description="DiscordサーバーID（数字のみ）")
 
 
 class OAuthCallbackRequest(BaseModel):
     code: str
+    state: str = Field(..., min_length=1, max_length=128)
 
 
 @router.post("/link-code")
@@ -44,7 +55,7 @@ async def issue_link_code(db: DBSession, cache: Cache, current_user: CurrentUser
 async def oauth_login_url(db: DBSession, cache: Cache, current_user: CurrentUser):
     """Discord認可URLを返す"""
     service = DiscordService(db, cache)
-    return {"data": {"url": service.oauth_login_url()}}
+    return {"data": {"url": await service.oauth_login_url(current_user.id)}}
 
 
 @router.post("/oauth/callback")
@@ -53,7 +64,7 @@ async def oauth_callback(
 ):
     """OAuth codeを交換してDiscordアカウントを紐付け"""
     service = DiscordService(db, cache)
-    link = await service.exchange_oauth_code(current_user.id, data.code)
+    link = await service.exchange_oauth_code(current_user.id, data.code, data.state)
     return {"data": {
         "discord_user_id": link.discord_user_id,
         "discord_username": link.discord_username,
@@ -93,7 +104,7 @@ async def setup_discord(
 ):
     """大会用Discordサーバーのテンプレート生成を依頼"""
     service = DiscordService(db, cache)
-    server = await service.setup_tournament(tournament_id, data.guild_id)
+    server = await service.setup_tournament(tournament_id, data.guild_id, current_user)
     return {"data": {
         "id": str(server.id),
         "tournament_id": str(server.tournament_id),
@@ -103,16 +114,16 @@ async def setup_discord(
 
 
 @router.get("/setup/{tournament_id}")
-async def get_discord_setup(tournament_id: uuid.UUID, db: DBSession, cache: Cache):
-    """大会のDiscord設定状態"""
+async def get_discord_setup(
+    tournament_id: uuid.UUID, db: DBSession, cache: Cache, viewer: OptionalUser,
+) -> dict[str, dict[str, Any] | None]:
+    """大会のDiscord設定状態（サーバー・ロール等のIDは大会の主催者と管理者にだけ返す）"""
     service = DiscordService(db, cache)
     server = await service.get_server(tournament_id)
     if not server:
         return {"data": None}
-    return {"data": {
-        "id": str(server.id),
-        "guild_id": server.guild_id,
-        "status": server.status,
-        "role_ids": server.role_ids,
-        "category_ids": server.category_ids,
-    }}
+    data: dict[str, Any] = {"id": str(server.id), "status": server.status}
+    organizer_id = await db.scalar(select(Tournament.organizer_id).where(Tournament.id == tournament_id))
+    if viewer and (viewer.role == UserRole.ADMIN or viewer.id == organizer_id):
+        data |= {"guild_id": server.guild_id, "role_ids": server.role_ids, "category_ids": server.category_ids}
+    return {"data": data}

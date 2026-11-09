@@ -48,21 +48,21 @@ class ScoutTeamCard(BaseModel):
 # ── Recruitment ───────────────────────────────────────────────────────────────
 class RecruitmentCreate(BaseModel):
     post_type: str = Field(..., pattern=r"^(team_seeks|player_seeks)$")
-    team_id: Optional[str] = None
-    player_id: Optional[str] = None
-    game: str
+    team_id: Optional[uuid.UUID] = None
+    player_id: Optional[uuid.UUID] = None
+    game: str = Field(..., max_length=20)
     title: str = Field(..., min_length=2, max_length=200)
-    description: Optional[str] = Field(None, max_length=2000)
+    description: Optional[str] = Field(default=None, max_length=2000)
     required_roles: Optional[list[str]] = None
-    min_rank: Optional[str] = None
+    min_rank: Optional[str] = Field(default=None, max_length=50)
     regions: Optional[list[str]] = None
 
 
 class RecruitmentUpdate(BaseModel):
-    title: Optional[str] = Field(None, min_length=2, max_length=200)
-    description: Optional[str] = Field(None, max_length=2000)
+    title: Optional[str] = Field(default=None, min_length=2, max_length=200)
+    description: Optional[str] = Field(default=None, max_length=2000)
     required_roles: Optional[list[str]] = None
-    min_rank: Optional[str] = None
+    min_rank: Optional[str] = Field(default=None, max_length=50)
     regions: Optional[list[str]] = None
     is_open: Optional[bool] = None
 
@@ -85,11 +85,11 @@ class RecruitmentPostSchema(BaseModel):
 
 
 class ApplicationCreate(BaseModel):
-    post_id: str
+    post_id: uuid.UUID
     kind: str = Field(default="apply", pattern=r"^(apply|invite)$")
-    message: Optional[str] = Field(None, max_length=1000)
-    player_id: Optional[str] = None
-    team_id: Optional[str] = None
+    message: Optional[str] = Field(default=None, max_length=1000)
+    player_id: Optional[uuid.UUID] = None
+    team_id: Optional[uuid.UUID] = None
 
 
 class ApplicationSchema(BaseModel):

@@ -10,7 +10,6 @@ export default function DiscordLinkPage() {
   const { ready, authed } = useRequireAuth();
   const { data: link, isLoading, refetch } = useDiscordLink();
 
-  if (!ready || !authed) return null;
   const issue = useIssueLinkCode();
   const [code, setCode] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -47,6 +46,9 @@ export default function DiscordLinkPage() {
       setOauthLoading(false);
     }
   };
+
+  // フックを全部呼んだ後で抜ける（途中で return するとログアウト時にフック数が変わって落ちる）
+  if (!ready || !authed) return null;
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8">

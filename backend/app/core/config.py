@@ -1,8 +1,11 @@
+import re
 from functools import lru_cache
 from typing import Annotated, Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+from sqlalchemy.engine import make_url
+from sqlalchemy.exc import ArgumentError
 
 
 class Settings(BaseSettings):
@@ -10,6 +13,8 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        # 設定エラーの文面に入力値を載せない（SECRET_KEY 等がそのまま起動ログに出るため）
+        hide_input_in_errors=True,
     )
 
     # App
@@ -28,6 +33,9 @@ class Settings(BaseSettings):
 
     # Security
     SECRET_KEY: str = Field(..., min_length=32)
+    # 本番（docker-compose.prod.yml）で true にする。DB のパスワードが空・既定値、
+    # SECRET_KEY が見本・テスト用の値なら起動しない（読み込み時に enforce_production_settings で確かめる）
+    REQUIRE_STRONG_SECRETS: bool = False
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     ALGORITHM: str = "HS256"
@@ -119,6 +127,9 @@ class Settings(BaseSettings):
     # Set to Cloudflare R2 endpoint for $0 demo, leave None for native AWS S3.
     # Example: "https://<account-id>.r2.cloudflarestorage.com"
     S3_ENDPOINT_URL: str | None = None
+    # 分析イベントの夜間書き出し先（daily_s3_export）。未設定なら書き出さない。
+    # 以前は画像用の S3_BUCKET_NAME を endpoint なしで使い、AWS S3 へ向かっていた
+    ANALYTICS_EXPORT_BUCKET: str = ""
 
     # Queue — SQS (default) or Redis list (USE_REDIS_QUEUE=true for free-tier demo)
     USE_REDIS_QUEUE: bool = False
@@ -133,7 +144,7 @@ class Settings(BaseSettings):
 
     # Discord
     # ── メール送信（パスワードリセット等） ──────────────────────────────────
-    # SMTP_HOST 未設定の環境では送信せずログへ本文を出力する
+    # SMTP_HOST 未設定の環境では送信しない（本文は LOG_LEVEL=DEBUG のときだけログに出す）
     SMTP_HOST: str | None = None
     SMTP_PORT: int = 587
     SMTP_USER: str | None = None
@@ -208,9 +219,38 @@ class Settings(BaseSettings):
     IMAGE_TAG: str = "local"
 
 
+# 本番で使ってはいけない値（compose の既定値・.env.example と CI の見本値）
+_WEAK_DB_PASSWORDS = {"", "esports_pass", "password", "postgres", "changeme"}
+_PLACEHOLDER_SECRET = re.compile(r"change|example|your[-_]|dummy|placeholder|ci-test|replace", re.IGNORECASE)
+
+
+def production_problems(s: Settings) -> list[str]:
+    """本番で使ってはいけない設定を、値を含まない文で返す。"""
+    problems: list[str] = []
+    password: str | None = s.DB_PASSWORD
+    if s.DATABASE_URL:
+        try:
+            password = make_url(s.DATABASE_URL).password
+        except (ArgumentError, ValueError):  # 解釈できない URL は未設定と同じに扱う
+            password = None
+    if (password or "") in _WEAK_DB_PASSWORDS:
+        problems.append("DB のパスワードが未設定か既定値です")
+    if _PLACEHOLDER_SECRET.search(s.SECRET_KEY):
+        problems.append("SECRET_KEY が見本・テスト用の値です")
+    return problems
+
+
+def enforce_production_settings(s: Settings) -> None:
+    """REQUIRE_STRONG_SECRETS=true のとき、本番で使ってはいけない設定なら起動を止める。"""
+    if s.REQUIRE_STRONG_SECRETS and (problems := production_problems(s)):
+        # 値は例外の文面に入れない（起動ログにそのまま出る）
+        raise RuntimeError("本番設定の不備: " + " / ".join(problems))
+
+
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
 
 
 settings = get_settings()
+enforce_production_settings(settings)

@@ -15,6 +15,7 @@ from app.models.match import Match
 from app.models.player import Player
 from app.models.team import Team
 from app.models.tournament import Tournament
+from app.repositories.tournament import publicly_listed
 from app.search.base import SearchHit
 
 
@@ -67,7 +68,7 @@ class TournamentSearchProvider:
         sim = func.similarity(Tournament.name, q)
         rows = (await db.execute(
             select(Tournament, sim.label("score"))
-            .where(Tournament.is_public == True, Tournament.name.ilike(_like(q)))
+            .where(publicly_listed(), Tournament.name.ilike(_like(q)))
             .order_by(sim.desc())
             .limit(limit)
         )).all()
@@ -90,7 +91,7 @@ class MatchSearchProvider:
             .join(Tournament, Tournament.id == Match.tournament_id)
             .outerjoin(T1, T1.id == Match.team1_id)
             .outerjoin(T2, T2.id == Match.team2_id)
-            .where(Tournament.is_public == True,
+            .where(publicly_listed(),
                    or_(T1.name.ilike(_like(q)), T2.name.ilike(_like(q))))
             .order_by(Match.created_at.desc())
             .limit(limit)

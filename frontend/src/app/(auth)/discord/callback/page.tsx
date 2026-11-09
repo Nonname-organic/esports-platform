@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Check, Loader2, XCircle } from "lucide-react";
 import { discordApi } from "@/features/discord/api/discord-api";
@@ -8,17 +8,23 @@ import { discordApi } from "@/features/discord/api/discord-api";
 export default function DiscordCallbackPage() {
   const [state, setState] = useState<"loading" | "ok" | "error">("loading");
   const [message, setMessage] = useState("");
+  const sent = useRef(false);
 
   useEffect(() => {
+    // state は1回しか使えない。StrictMode の effect 二重実行で2回送ると後の方が必ず失敗する
+    if (sent.current) return;
+    sent.current = true;
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code");
-    if (!code) {
+    // state は認可URL発行時にサーバーが本人に紐付けた値。そのまま返す
+    const oauthState = params.get("state");
+    if (!code || !oauthState) {
       setState("error");
       setMessage("認可コードが見つかりません。");
       return;
     }
     discordApi
-      .oauthCallback(code)
+      .oauthCallback(code, oauthState)
       .then((res) => {
         setState("ok");
         setMessage(`@${res.data.discord_username ?? res.data.discord_user_id} と連携しました。`);

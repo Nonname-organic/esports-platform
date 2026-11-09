@@ -73,7 +73,7 @@ for (const screen of SCREENS) {
     const resp = await p.goto(screen.path, { waitUntil: "networkidle" });
     // 認可リダイレクト等で到達不能なら記録してスキップ（撮影しない）
     if (resp && resp.status() >= 400) {
-      testInfo.annotations.push({ type: "warn", value: `${screen.path} -> HTTP ${resp.status()}` });
+      testInfo.annotations.push({ type: "warn", description: `${screen.path} -> HTTP ${resp.status()}` });
       if (ctx) await ctx.close();
       test.skip(true, `unreachable ${screen.path}`);
       return;

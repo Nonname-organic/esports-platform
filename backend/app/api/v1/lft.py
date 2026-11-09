@@ -1,15 +1,16 @@
 """LFT (Looking for Team) - 選手募集 API"""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select, func
 
-from app.core.dependencies import CurrentUser, DBSession
+from app.core.dependencies import CurrentUser, DBSession, OptionalUser
 from app.core.ranks import ranks_in_range
+from app.models.enums import UserRole
 from app.models.player import Player
 from app.models.player_lft import PlayerLFT
 from app.models.user import User
@@ -21,6 +22,7 @@ router = APIRouter(prefix="/lft", tags=["LFT 選手募集"])
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
+# 文字列長は DB の列長に合わせる（超えると 500 になっていた）
 class LFTCreate(BaseModel):
     status: str = Field(default="open", pattern=r"^(open|negotiating|closed)$")
     roles: list[str] = Field(..., min_length=1)
@@ -28,32 +30,32 @@ class LFTCreate(BaseModel):
     peak_rank: str = Field(..., min_length=1, max_length=50)
     region: str = Field(..., min_length=1, max_length=50)
     activity_time: list[str] = Field(default=[])
-    experience: Optional[str] = None
-    premier: Optional[str] = None
+    experience: Optional[str] = Field(None, max_length=30)
+    premier: Optional[str] = Field(None, max_length=20)
     agents: list[str] = Field(default=[])
     description: Optional[str] = Field(None, max_length=1000)
     conditions: Optional[str] = Field(None, max_length=500)
     discord: Optional[str] = Field(None, max_length=100)
     twitter: Optional[str] = Field(None, max_length=100)
-    deadline: Optional[str] = None
+    deadline: Optional[date] = None
     is_public: bool = True
 
 
 class LFTUpdate(BaseModel):
     status: Optional[str] = Field(None, pattern=r"^(open|negotiating|closed)$")
     roles: Optional[list[str]] = None
-    current_rank: Optional[str] = None
-    peak_rank: Optional[str] = None
-    region: Optional[str] = None
+    current_rank: Optional[str] = Field(None, min_length=1, max_length=50)
+    peak_rank: Optional[str] = Field(None, min_length=1, max_length=50)
+    region: Optional[str] = Field(None, min_length=1, max_length=50)
     activity_time: Optional[list[str]] = None
-    experience: Optional[str] = None
-    premier: Optional[str] = None
+    experience: Optional[str] = Field(None, max_length=30)
+    premier: Optional[str] = Field(None, max_length=20)
     agents: Optional[list[str]] = None
     description: Optional[str] = Field(None, max_length=1000)
     conditions: Optional[str] = Field(None, max_length=500)
     discord: Optional[str] = Field(None, max_length=100)
     twitter: Optional[str] = Field(None, max_length=100)
-    deadline: Optional[str] = None
+    deadline: Optional[date] = None
     is_public: Optional[bool] = None
 
 
@@ -189,9 +191,10 @@ async def get_my_lft(db: DBSession, current_user: CurrentUser):
 
 
 @router.get("/{lft_id}", response_model=Response[LFTSchema])
-async def get_lft(lft_id: uuid.UUID, db: DBSession):
+async def get_lft(lft_id: uuid.UUID, db: DBSession, viewer: OptionalUser) -> Response[LFTSchema]:
     r = (await db.execute(select(PlayerLFT).where(PlayerLFT.id == lft_id))).scalar_one_or_none()
-    if not r:
+    # 非公開の LFT は本人と管理者以外には存在ごと見せない
+    if not r or not (r.is_public or (viewer and (viewer.id == r.user_id or viewer.role == UserRole.ADMIN))):
         raise HTTPException(status_code=404, detail="LFTが見つかりません")
     player = (await db.execute(select(Player).where(Player.id == r.player_id))).scalar_one_or_none()
     if not player:
@@ -211,9 +214,6 @@ async def create_lft(data: LFTCreate, db: DBSession, current_user: CurrentUser):
         raise HTTPException(status_code=409, detail="既にLFTが登録されています。編集してください。")
 
     now = datetime.now(timezone.utc)
-    from datetime import date as date_type
-    deadline = date_type.fromisoformat(data.deadline) if data.deadline else None
-
     r = PlayerLFT(
         id=uuid.uuid4(),
         player_id=player.id,
@@ -231,7 +231,7 @@ async def create_lft(data: LFTCreate, db: DBSession, current_user: CurrentUser):
         conditions=data.conditions,
         discord=data.discord,
         twitter=data.twitter,
-        deadline=deadline,
+        deadline=data.deadline,
         is_public=data.is_public,
         created_at=now,
         updated_at=now,
@@ -252,9 +252,6 @@ async def update_my_lft(data: LFTUpdate, db: DBSession, current_user: CurrentUse
         raise HTTPException(status_code=404, detail="LFTが見つかりません")
 
     for field, value in data.model_dump(exclude_none=True).items():
-        if field == "deadline" and value:
-            from datetime import date as date_type
-            value = date_type.fromisoformat(value)
         setattr(r, field, value)
     r.updated_at = datetime.now(timezone.utc)
     await db.commit()

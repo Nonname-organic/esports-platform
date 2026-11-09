@@ -34,15 +34,16 @@ async def handle_stats_export(db: AsyncSession) -> int:
 
     Returns the total number of events exported.
     """
-    if not settings.S3_BUCKET_NAME:
-        logger.info("S3_BUCKET_NAME not configured — skipping export")
+    if not settings.ANALYTICS_EXPORT_BUCKET:
+        logger.info("ANALYTICS_EXPORT_BUCKET not configured — skipping export")
         return 0
 
     repo = AnalyticsRepository(db)
     total_exported = 0
 
     session = aioboto3.Session()
-    async with session.client("s3", region_name=settings.AWS_REGION) as s3:
+    async with session.client("s3", region_name=settings.AWS_REGION,
+                              endpoint_url=settings.S3_ENDPOINT_URL or None) as s3:
         while True:
             events = await repo.get_unprocessed_events(limit=_BATCH_SIZE)
             if not events:
@@ -75,7 +76,7 @@ async def handle_stats_export(db: AsyncSession) -> int:
 
                 key = f"{_S3_PREFIX}/{partition}/{uuid.uuid4()}.jsonl"
                 await s3.put_object(
-                    Bucket=settings.S3_BUCKET_NAME,
+                    Bucket=settings.ANALYTICS_EXPORT_BUCKET,
                     Key=key,
                     Body=ndjson.getvalue().encode("utf-8"),
                     ContentType="application/x-ndjson",
@@ -83,7 +84,7 @@ async def handle_stats_export(db: AsyncSession) -> int:
                 logger.info(
                     "Exported %d events → s3://%s/%s",
                     len(partition_events),
-                    settings.S3_BUCKET_NAME,
+                    settings.ANALYTICS_EXPORT_BUCKET,
                     key,
                 )
 

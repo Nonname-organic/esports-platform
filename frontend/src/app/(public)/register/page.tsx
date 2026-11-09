@@ -184,10 +184,10 @@ export default function RegisterPage() {
 
           {/* ユーザー名 */}
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-400">
+            <label htmlFor="reg-username" className="mb-1.5 block text-sm font-medium text-slate-400">
               ユーザー名 <span className="text-slate-600">（3〜50文字、英数字・_・-）</span>
             </label>
-            <input
+            <input id="reg-username"
               type="text"
               value={form.username}
               onChange={set("username")}
@@ -211,10 +211,10 @@ export default function RegisterPage() {
 
           {/* メールアドレス */}
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-400">
+            <label htmlFor="reg-email" className="mb-1.5 block text-sm font-medium text-slate-400">
               メールアドレス
             </label>
-            <input
+            <input id="reg-email"
               type="email"
               value={form.email}
               onChange={set("email")}
@@ -228,11 +228,11 @@ export default function RegisterPage() {
 
           {/* パスワード */}
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-400">
+            <label htmlFor="reg-password" className="mb-1.5 block text-sm font-medium text-slate-400">
               パスワード
             </label>
             <div className="relative">
-              <input
+              <input id="reg-password"
                 type={showPassword ? "text" : "password"}
                 value={form.password}
                 onChange={set("password")}
@@ -273,11 +273,11 @@ export default function RegisterPage() {
 
           {/* パスワード確認 */}
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-400">
+            <label htmlFor="reg-password-confirm" className="mb-1.5 block text-sm font-medium text-slate-400">
               パスワード（確認）
             </label>
             <div className="relative">
-              <input
+              <input id="reg-password-confirm"
                 type={showConfirm ? "text" : "password"}
                 value={form.confirm}
                 onChange={set("confirm")}

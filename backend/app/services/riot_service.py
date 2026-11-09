@@ -20,15 +20,19 @@ import asyncio
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
+from urllib.parse import quote
 
 import httpx
 from sqlalchemy import select, delete
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.exceptions import BusinessRuleError, NotFoundError
+from app.core.exceptions import BusinessRuleError, ConflictError, ForbiddenError, NotFoundError
 from app.core.redis import RedisCache
+from app.models.enums import UserRole
 from app.models.player import Player
+from app.models.user import User
 from app.models.riot import RiotProfile, RiotMatch
 
 
@@ -68,7 +72,8 @@ class RiotAPIClient:
         if not self.enabled:
             return None
         await self._rate_limit()
-        url = f"https://{self._account_region}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/{game_name}/{tag_line}"
+        name, tag = quote(game_name, safe=""), quote(tag_line, safe="")
+        url = f"https://{self._account_region}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/{name}/{tag}"
         async with httpx.AsyncClient(timeout=10) as client:
             res = await client.get(url, headers=self._headers())
             if res.status_code == 200:
@@ -106,40 +111,49 @@ class RiotService:
         self._client = RiotAPIClient(cache)
 
     # ── Riot ID 紐付け ─────────────────────────────────────────────────────────
-    async def link(self, player_id: uuid.UUID, riot_id: str) -> RiotProfile:
+    async def require_own_player(self, player_id: uuid.UUID, user: User) -> None:
+        """link / sync の前に呼ぶ（定期同期ワーカーは本人がいないので sync 自体には持たせない）。"""
         player = await self._db.scalar(select(Player).where(Player.id == player_id))
         if not player:
             raise NotFoundError("プレイヤー", str(player_id))
+        if player.user_id != user.id and user.role != UserRole.ADMIN:
+            raise ForbiddenError("自分のプレイヤーのみRiot連携を操作できます")
 
-        if "#" not in riot_id:
+    async def link(self, player_id: uuid.UUID, riot_id: str) -> RiotProfile:
+        game_name, _, tag_line = riot_id.partition("#")
+        game_name, tag_line = game_name.strip(), tag_line.strip()
+        # 名前は Riot API の URL パスに入る。quote はドットを変換しないため、
+        # "." ".." だけの名前はパス階層をたどれてしまう。空・ドットのみ・列長超過は弾く
+        if not game_name.strip(".") or not tag_line.strip(".") or len(game_name) > 50 or len(tag_line) > 10:
             raise BusinessRuleError("Riot IDは Name#TAG 形式で入力してください")
-        game_name, tag_line = riot_id.split("#", 1)
 
         # PUUID解決（APIキーがあれば）
-        puuid = await self._client.resolve_puuid(game_name.strip(), tag_line.strip())
+        puuid = await self._client.resolve_puuid(game_name, tag_line)
 
         existing = await self._db.scalar(
             select(RiotProfile).where(RiotProfile.player_id == player_id)
         )
         now = datetime.now(timezone.utc)
         if existing:
-            existing.game_name = game_name.strip()
-            existing.tag_line = tag_line.strip()
+            existing.game_name = game_name
+            existing.tag_line = tag_line
             existing.puuid = puuid or existing.puuid
             existing.region = settings.RIOT_VAL_REGION
-            await self._db.flush()
             profile = existing
         else:
             profile = RiotProfile(
                 player_id=player_id,
-                game_name=game_name.strip(),
-                tag_line=tag_line.strip(),
+                game_name=game_name,
+                tag_line=tag_line,
                 puuid=puuid,
                 region=settings.RIOT_VAL_REGION,
                 created_at=now,
             )
             self._db.add(profile)
+        try:
             await self._db.flush()
+        except IntegrityError:  # puuid は一意。別プレイヤーが紐付け済みのアカウントなら 500 ではなく 409
+            raise ConflictError("このRiotアカウントは既に別のプレイヤーに紐付いています")
 
         return profile
 

@@ -1,13 +1,31 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { adminApi } from "../api/admin-api";
+import { adminApi, type AdminUserItem } from "../api/admin-api";
 
 export const adminKeys = {
   all: ["admin"] as const,
   dashboard: () => [...adminKeys.all, "dashboard"] as const,
   notifications: () => [...adminKeys.all, "notifications"] as const,
+  users: (q: string) => [...adminKeys.all, "users", q] as const,
 };
+
+export function useAdminUsers(q: string) {
+  return useQuery({
+    queryKey: adminKeys.users(q),
+    queryFn: () => adminApi.listUsers(q),
+    select: (res) => res.data,
+  });
+}
+
+export function useUpdateAdminUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: string; is_active?: boolean; role?: AdminUserItem["role"] }) =>
+      adminApi.updateUser(id, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [...adminKeys.all, "users"] }),
+  });
+}
 
 export function useAdminDashboard() {
   return useQuery({

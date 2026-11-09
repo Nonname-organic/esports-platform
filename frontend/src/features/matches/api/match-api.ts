@@ -45,6 +45,17 @@ export const matchApi = {
     },
   ): Promise<void> => apiClient.post(`/api/v1/matches/${id}/result`, data),
 
+  // 対戦チームによる結果報告 → 相手チームの確認（主催者は報告で即確定）
+  reportState: (id: string): Promise<{ data: ResultReportState }> =>
+    apiClient.get(`/api/v1/matches/${id}/report`),
+  report: (id: string, winnerId: string): Promise<{ data: { status: string } }> =>
+    apiClient.post(`/api/v1/matches/${id}/report`, { winner_id: winnerId }),
+  confirmReport: (id: string): Promise<{ data: { status: string } }> =>
+    apiClient.post(`/api/v1/matches/${id}/report/confirm`),
+  disputeReport: (id: string, reason: string): Promise<{ data: { status: string } }> =>
+    apiClient.post(`/api/v1/matches/${id}/report/dispute`, { reason }),
+  reopen: (id: string): Promise<void> => apiClient.post(`/api/v1/matches/${id}/reopen`),
+
   registerBanPick: (
     id: string,
     data: { team_id: string; action: "ban" | "pick"; map_id: string; order: number },
@@ -82,3 +93,16 @@ export const matchApi = {
     return apiClient.upload(`/api/v1/matches/${id}/scoreboard-ocr`, form);
   },
 };
+
+export interface ResultReportState {
+  report: {
+    status: "pending" | "confirmed" | "disputed" | "superseded";
+    winner_id: string;
+    reported_by_team_id: string;
+    dispute_reason: string | null;
+  } | null;
+  my_team_id: string | null;
+  can_report: boolean;
+  can_confirm: boolean;
+  can_dispute: boolean;
+}

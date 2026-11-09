@@ -7,7 +7,7 @@ import { ApiError } from "@/lib/api-client";
 import { formatDateShort } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth-store";
 import { useMyTeams } from "@/features/teams/hooks/use-teams";
-import { useMyRegistration, useRegisterTeam } from "@/features/tournaments/hooks/use-tournaments";
+import { useMyRegistration, useRegisterTeam, useWithdrawRegistration } from "@/features/tournaments/hooks/use-tournaments";
 import type { RegistrationState } from "@/features/tournaments/api/tournament-api";
 import type { TournamentDetail } from "@/types/tournament";
 
@@ -35,7 +35,16 @@ const STATE_VIEW: Record<RegistrationState, { label: string; note: string; tone:
     note: "今回はご参加いただけません。次の大会へのエントリーをお待ちしています",
     tone: "text-red-400",
   },
+  withdrawn: {
+    label: "辞退済み",
+    note: "この大会への参加を辞退しました。再度参加する場合は主催者に連絡してください",
+    tone: "text-slate-400",
+  },
 };
+
+// 組み合わせ生成前で、まだ申請が生きている間だけ辞退できる
+const WITHDRAWABLE_STATUS = ["pending", "approved", "waitlisted"];
+const WITHDRAWABLE_TOURNAMENT = ["registration_open", "registration_closed", "check_in"];
 
 const APPROVAL_NOTE: Record<string, string> = {
   manual: "主催者が申請を1件ずつ確認して承認します",
@@ -62,6 +71,7 @@ export function EntryPanel({ tournament }: EntryPanelProps) {
   const { data: registration } = useMyRegistration(tournamentId, authed);
   const { data: teams } = useMyTeams(authed);
   const register = useRegisterTeam(tournamentId);
+  const withdraw = useWithdrawRegistration(tournamentId);
 
   const [teamId, setTeamId] = useState("");
   const [notes, setNotes] = useState("");
@@ -106,6 +116,26 @@ export function EntryPanel({ tournament }: EntryPanelProps) {
           </p>
         )}
         <p className="mt-2 text-[11px] leading-relaxed text-slate-500">{view.note}</p>
+        {WITHDRAWABLE_STATUS.includes(registration.status)
+          && WITHDRAWABLE_TOURNAMENT.includes(tournament.status) && (
+          <button
+            type="button"
+            disabled={withdraw.isPending}
+            onClick={() => {
+              if (window.confirm("この大会への参加を辞退しますか？（取り消しは主催者への連絡が必要です）")) {
+                withdraw.mutate();
+              }
+            }}
+            className="mt-3 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-300 hover:text-white disabled:opacity-50"
+          >
+            {withdraw.isPending ? "処理中..." : "参加を辞退する"}
+          </button>
+        )}
+        {withdraw.isError && (
+          <p role="alert" className="mt-2 text-xs text-red-400">
+            {withdraw.error instanceof Error ? withdraw.error.message : "辞退に失敗しました"}
+          </p>
+        )}
       </div>
     );
   }

@@ -31,7 +31,6 @@ export default function TeamCreatePage() {
   const { ready, authed } = useRequireAuth();
   const router = useRouter();
 
-  if (!ready || !authed) return null;
   const createTeam = useCreateTeam();
 
   const {
@@ -61,6 +60,9 @@ export default function TeamCreatePage() {
     // 作成後はチーム管理画面（メンバー管理）へ
     router.push(`/teams/${res.data.id}/members`);
   });
+
+  // フックを全部呼んだ後で抜ける（途中で return するとログアウト時にフック数が変わって落ちる）
+  if (!ready || !authed) return null;
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-10">

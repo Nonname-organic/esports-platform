@@ -25,6 +25,8 @@ class TournamentCreate(BaseModel):
     description: str | None = None
     attachments: list[dict] | None = None
     is_public: bool = True
+    # 未指定なら rules.visibility（作成画面はそこへ入れて送る）、それも無ければ public
+    visibility: str | None = Field(default=None, pattern="^(public|limited|private)$")
     require_check_in: bool = False
     # 参加申請の承認方式: manual（主催者が個別承認）/ auto（先着順で自動承認）
     approval_mode: str = Field(default="manual", pattern="^(manual|auto|lottery)$")
@@ -83,7 +85,7 @@ class TournamentUpdate(BaseModel):
     season: str | None = Field(default=None, max_length=50)
     split: str | None = Field(default=None, max_length=50)
     tier: str | None = Field(default=None, max_length=20)
-    visibility: str | None = Field(default=None, max_length=20)
+    visibility: str | None = Field(default=None, pattern="^(public|limited|private)$")
     seeding_type: str | None = Field(default=None, max_length=20)
     age_restriction: dict | None = None
     region_restriction: dict | None = None

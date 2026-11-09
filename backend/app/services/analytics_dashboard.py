@@ -337,7 +337,9 @@ class AnalyticsDashboardService:
             .join(MatchGame, PlayerMatchStats.match_game_id == MatchGame.id)
             .join(Match, MatchGame.match_id == Match.id)
             .join(Tournament, Match.tournament_id == Tournament.id)
-            .where(*c)
+            # 詳細スタッツを非公開にした選手は公開ランキングに載せない
+            .join(Player, Player.id == PlayerMatchStats.player_id)
+            .where(*c, Player.stats_public.is_(True))
             .group_by(PlayerMatchStats.player_id)
             .order_by(func.avg((PlayerMatchStats.kills + PlayerMatchStats.assists) / func.nullif(PlayerMatchStats.deaths, 0)).desc().nullslast())
             .limit(limit)
@@ -364,7 +366,7 @@ class AnalyticsDashboardService:
             out.append({
                 "rank": i,
                 "player_id": str(r.player_id),
-                "player_name": (p.real_name or p.in_game_name) if p else "Unknown",
+                "player_name": p.in_game_name if p else "Unknown",  # 本名は公開しない
                 "in_game_name": p.in_game_name if p else None,
                 "team_name": t[0] if t else None,
                 "team_tag": t[1] if t else None,

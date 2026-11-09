@@ -138,8 +138,14 @@ class TournamentService:
             slug = f"{slug_base}-{counter}"
             counter += 1
 
+        fields = data.model_dump(exclude_none=True)
+        # 作成画面は公開設定を rules.visibility にだけ入れて送る。列へ写さないと
+        # 「非公開」を選んでも一覧・検索に出てしまう
+        requested = fields.pop("visibility", None) or (data.rules or {}).get("visibility")
+        fields["visibility"] = requested if requested in ("public", "limited", "private") else "public"
+
         tournament = await self._repo.create(
-            **data.model_dump(exclude_none=True),
+            **fields,
             slug=slug,
             organizer_id=organizer.id,
         )
@@ -300,6 +306,34 @@ class TournamentService:
                 after={"registration_id": str(reg.id), "team_id": str(team_id), "auto_approved": True},
             )
         return status
+
+    async def withdraw(self, tournament_id: uuid.UUID, current_user: User) -> RegistrationStatus:
+        """自チームの参加申請を取り下げる（チームのオーナー・キャプテン、ブラケット生成前のみ）。
+
+        生成後に抜けると組み合わせが崩れるため、その段階では主催者に任せる。
+        """
+        from app.api.v1.tournaments import _user_registration
+
+        tournament = await self._repo.get_by_id(tournament_id)
+        if not tournament:
+            raise NotFoundError("大会", str(tournament_id))
+        reg = await _user_registration(self._db, tournament_id, current_user)
+        if not reg or reg.status in (RegistrationStatus.WITHDRAWN, RegistrationStatus.REJECTED):
+            raise NotFoundError("登録", "取り下げられる参加申請がありません")
+        await self._require_team_authority(reg.team_id, current_user)
+        if tournament.status not in (
+            TournamentStatus.REGISTRATION_OPEN,
+            TournamentStatus.REGISTRATION_CLOSED,
+            TournamentStatus.CHECK_IN,
+        ) or await self._repo.get_brackets_with_matches(tournament_id):
+            raise BusinessRuleError("組み合わせの生成後は辞退できません。主催者に連絡してください")
+
+        before = reg.status.value
+        reg = await self._repo.update_registration_status(reg, RegistrationStatus.WITHDRAWN)
+        await self._emit(Ev.TOURNAMENT_REGISTRATION_WITHDRAWN, tournament_id, before={"status": before},
+                         after={"registration_id": str(reg.id), "team_id": str(reg.team_id)})
+        await self._cache.delete(CacheKeys.TOURNAMENT_DETAIL.replace("{id}", str(tournament_id)))
+        return reg.status
 
     async def generate_bracket(
         self, tournament_id: uuid.UUID, current_user: User

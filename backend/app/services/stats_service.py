@@ -21,6 +21,7 @@ from app.models.player import Player
 from app.models.team import Team
 from app.models.tournament import Tournament, TournamentRegistration
 from app.models.tournament_report import TournamentReport
+from app.repositories.tournament import publicly_listed
 
 STATS_CACHE_TTL = 15          # 秒（ライブ感優先の短TTL）
 ONLINE_WINDOW_MIN = 30        # オンライン概算の対象窓（分）
@@ -115,7 +116,7 @@ class StatsService:
                 Tournament.end_at, Tournament.prize_pool, Tournament.prize_currency, Tournament.banner_url,
             )
             .join(Tournament, Tournament.id == TournamentReport.tournament_id)
-            .where(Tournament.status == TournamentStatus.COMPLETED)
+            .where(Tournament.status == TournamentStatus.COMPLETED, publicly_listed())
             .order_by(TournamentReport.generated_at.desc())
             .limit(limit)
         )).all()

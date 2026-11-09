@@ -197,19 +197,22 @@ async def readiness():
 
     checks: dict[str, str] = {}
 
+    # 未認証で叩けるため、例外の中身（接続先ホスト名など）は返さずログにだけ残す
     try:
         async with AsyncSessionLocal() as session:
             await session.execute(text("SELECT 1"))
         checks["database"] = "ok"
     except Exception as exc:
-        checks["database"] = f"error: {exc}"
+        logger.warning("readiness_database_error", exc=str(exc))
+        checks["database"] = "error"
 
     try:
         redis = await get_redis()
         await redis.ping()
         checks["cache"] = "ok"
     except Exception as exc:
-        checks["cache"] = f"error: {exc}"
+        logger.warning("readiness_cache_error", exc=str(exc))
+        checks["cache"] = "error"
 
     all_ok = all(v == "ok" for v in checks.values())
     payload = {"status": "ready" if all_ok else "degraded", "checks": checks}

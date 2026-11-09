@@ -12,6 +12,7 @@ import { cn, formatDate } from "@/lib/utils";
 import type { MatchDetail, WSMessage } from "@/types/match";
 import type { ApiResponse } from "@/types/tournament";
 import { MatchHero } from "./_components/match-hero";
+import { ResultReportCard } from "./_components/result-report-card";
 import { OverviewTab } from "./_components/overview-tab";
 import { MapsTab } from "./_components/maps-tab";
 import { BanPickTab } from "./_components/banpick-tab";
@@ -162,6 +163,8 @@ export default function MatchSpectatorPage({ params }: Props) {
       )}
 
       <MatchHero match={match} team1Wins={team1Wins} team2Wins={team2Wins} />
+
+      {!isCompleted && <ResultReportCard match={match} />}
 
       {/* タブ - スクロール可能 */}
       <nav className="mt-5 flex overflow-x-auto border-b border-white/10 scrollbar-none" aria-label="試合詳細タブ">

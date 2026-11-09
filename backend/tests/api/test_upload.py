@@ -65,6 +65,18 @@ class TestUploadImage:
         assert stub_store["content_type"] == "image/png"
 
     @pytest.mark.asyncio
+    async def test_申告名の拡張子は使わない(
+        self, client: AsyncClient, player_token, stub_store
+    ):
+        res = await client.post(
+            "/api/v1/upload/image",
+            headers={"Authorization": f"Bearer {player_token}"},
+            files={"file": ("logo.html", PNG_1PX, "image/png")},
+        )
+        assert res.status_code == 200, res.text
+        assert res.json()["key"].endswith(".png")
+
+    @pytest.mark.asyncio
     async def test_許可されない形式は400(self, client: AsyncClient, player_token):
         """content_type がハンドラまで届いていないとこの判定は成立しない。"""
         res = await client.post(
@@ -115,7 +127,24 @@ class TestUploadFile:
         assert body["name"] == "規約.pdf"          # 非ASCIIのファイル名も壊れない
         assert body["size"] == len(content)
         assert stub_store["bytes"] == content
-        assert 'filename="規約.pdf"' in (stub_store["disposition"] or "")
+        # 日本語名は RFC 5987 の filename* で渡す（ヘッダは ASCII しか安全に運べない）
+        assert "filename*=UTF-8''%E8%A6%8F%E7%B4%84.pdf" in (stub_store["disposition"] or "")
+
+    @pytest.mark.asyncio
+    async def test_保存キーの拡張子は申告名ではなく形式から決まる(
+        self, client: AsyncClient, player_token, stub_store
+    ):
+        # 拡張子を .html にしても、配信時に HTML として解釈されないようにする
+        res = await client.post(
+            "/api/v1/upload/file",
+            headers={"Authorization": f"Bearer {player_token}"},
+            files={"file": ('evil".html\r\nX-Injected: 1', b"hello", "text/plain")},
+        )
+        assert res.status_code == 200, res.text
+        assert stub_store["key"].endswith(".txt")
+        disposition = stub_store["disposition"] or ""
+        assert "\r" not in disposition and "\n" not in disposition
+        assert disposition.count('"') == 2  # 名前に入れた引用符でヘッダが崩れない
 
     @pytest.mark.asyncio
     async def test_許可されない形式は400(self, client: AsyncClient, player_token):

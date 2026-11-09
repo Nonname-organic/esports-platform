@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useRequireAuth } from "@/hooks/use-require-auth";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -180,7 +181,7 @@ export default function PlayerPage() {
         </div>
 
         {/* チームを探す (LFT) — 自分のLFT掲載の作成・編集 */}
-        <a
+        <Link
           href="/scout/lft/me"
           className="mt-4 flex items-center justify-between rounded-2xl border border-purple-500/20 bg-purple-500/5 p-5 hover:bg-purple-500/10 transition-colors"
         >
@@ -194,10 +195,10 @@ export default function PlayerPage() {
             </div>
           </div>
           <ExternalLink className="h-4 w-4 text-slate-500" />
-        </a>
+        </Link>
 
         {/* メンバー募集 (LFP) — 自分のチームの募集の作成・編集 */}
-        <a
+        <Link
           href="/scout/lfp"
           className="mt-3 flex items-center justify-between rounded-2xl border border-brand-500/20 bg-brand-500/5 p-5 hover:bg-brand-500/10 transition-colors"
         >
@@ -211,7 +212,7 @@ export default function PlayerPage() {
             </div>
           </div>
           <ExternalLink className="h-4 w-4 text-slate-500" />
-        </a>
+        </Link>
 
         {/* 登録解除 */}
         <div className="mt-6 rounded-2xl border border-red-500/20 bg-red-500/5 p-5">

@@ -1,10 +1,10 @@
 # Web Framework
-fastapi==0.120.4
+fastapi==0.162.2
 # starlette は fastapi の間接依存だが、脆弱性の対象なので直接固定する。
 # fastapi 0.115 系は starlette<0.42 で頭打ちになり、未認証の Range ヘッダで
 # 成立する DoS (PYSEC-2026-1942) を塞げない。0.120 で上限が <0.50 に上がり
 # 0.49.1 を入れられる。残る勧告は starlette 1.x が要るため別途。
-starlette==0.49.1
+starlette==1.10.0
 uvicorn[standard]==0.30.6
 # アップロード（upload.py / スコアボード取り込み）が multipart を受ける。
 # 0.0.26 には multipart ヘッダ長の上限が無く、巨大なヘッダでCPUを食わせる
@@ -23,7 +23,7 @@ redis==5.2.0
 hiredis==3.0.0
 
 # Auth
-python-jose[cryptography]==3.4.0
+PyJWT==2.15.1
 passlib[bcrypt]==1.7.4
 bcrypt==4.2.0
 
@@ -34,7 +34,7 @@ email-validator==2.2.0
 
 # HTTP Client (for Discord / Riot API)
 httpx==0.27.2
-aiohttp==3.13.4
+aiohttp==3.14.5
 
 # Background Tasks
 celery==5.4.0
@@ -51,7 +51,7 @@ numpy==2.1.3
 # Utilities
 python-slugify==8.0.4
 qrcode[pil]==8.0
-Pillow==12.2.0
+Pillow==13.0.0
 python-dateutil==2.9.0.post0
 pytz==2024.2
 
@@ -61,13 +61,13 @@ pytesseract==0.3.13
 opencv-python-headless==4.10.0.84
 
 # Observability
-opentelemetry-api==1.28.2
-opentelemetry-sdk==1.28.2
-opentelemetry-exporter-otlp-proto-grpc==1.28.2
-opentelemetry-instrumentation-fastapi==0.49b2
-opentelemetry-instrumentation-sqlalchemy==0.49b2
-opentelemetry-instrumentation-redis==0.49b2
-opentelemetry-instrumentation-httpx==0.49b2
+opentelemetry-api==1.45.2
+opentelemetry-sdk==1.45.2
+opentelemetry-exporter-otlp-proto-grpc==1.45.2
+opentelemetry-instrumentation-fastapi==0.66b2
+opentelemetry-instrumentation-sqlalchemy==0.66b2
+opentelemetry-instrumentation-redis==0.66b2
+opentelemetry-instrumentation-httpx==0.66b2
 prometheus-client==0.21.0
 structlog==24.4.0
 

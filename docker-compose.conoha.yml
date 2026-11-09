@@ -36,8 +36,15 @@ services:
         limits:
           memory: 448M
 
+  # DB 接続数: postgres の max_connections=20（docker-compose.yml）に収める。
+  # アプリの既定（プール10+超過20）のままだと1プロセスで上限を超え、混雑時に
+  # "too many clients" で 500 になる。api 6+6・worker 2+1・scheduler 2+1 = 最大18、
+  # 残り2はマイグレーション・バックアップ・psql 用
   api:
     logging: *default-logging
+    environment:
+      - DB_POOL_SIZE=6
+      - DB_MAX_OVERFLOW=6
     deploy:
       resources:
         limits:
@@ -47,6 +54,9 @@ services:
 
   worker:
     logging: *default-logging
+    environment:
+      - DB_POOL_SIZE=2
+      - DB_MAX_OVERFLOW=1
     deploy:
       resources:
         limits:
@@ -54,6 +64,9 @@ services:
 
   scheduler:
     logging: *default-logging
+    environment:
+      - DB_POOL_SIZE=2
+      - DB_MAX_OVERFLOW=1
     deploy:
       resources:
         limits:

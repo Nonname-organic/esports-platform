@@ -18,6 +18,7 @@ from app.models.tournament import Tournament, TournamentRegistration
 from app.models.tournament_report import TournamentReport
 from app.rankings.aggregator import _placements
 from app.reports.aggregator import TournamentReportAggregator
+from app.repositories.tournament import publicly_listed
 
 
 class PlayerHistoryAggregator:
@@ -42,6 +43,7 @@ class PlayerHistoryAggregator:
                 TournamentRegistration.team_id.in_(team_ids),
                 TournamentRegistration.status == RegistrationStatus.APPROVED,
                 Tournament.status == TournamentStatus.COMPLETED,
+                publicly_listed(),  # 限定公開・非公開の大会は公開プロフィールに出さない
             )
             .order_by(Tournament.end_at.desc())
             .limit(limit)

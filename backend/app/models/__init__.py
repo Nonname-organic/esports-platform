@@ -45,6 +45,7 @@ from app.models.analytics import (
 from app.models.audit_log import AuditLog
 from app.models.domain_event import DomainEvent
 from app.models.tournament_report import TournamentReport
+from app.models.match_report import MatchResultReport
 from app.models.notification_preference import NotificationPreference
 from app.models.tag import Tag, Taggable
 from app.models.team_sponsor import TeamSponsor
@@ -70,6 +71,7 @@ __all__ = [
     "AuditLog",
     "DomainEvent",
     "TournamentReport",
+    "MatchResultReport",
     "NotificationPreference",
     "Tag",
     "Taggable",

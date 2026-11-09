@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import ColumnElement, and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -13,6 +13,19 @@ from app.models.tournament import (
     TournamentRegistration,
 )
 from app.repositories.base import BaseRepository
+
+
+def publicly_listed() -> ColumnElement[bool]:
+    """一覧・検索・ホームに載せてよい大会の条件。
+
+    下書きと、公開設定が「公開」以外（限定公開・非公開）の大会は載せない。
+    URL を知っている人による詳細ページへの直接アクセスはこれとは別に扱う。
+    """
+    return and_(
+        Tournament.is_public.is_(True),
+        Tournament.visibility == "public",
+        Tournament.status != TournamentStatus.DRAFT,
+    )
 
 
 class TournamentRepository(BaseRepository[Tournament]):
@@ -31,13 +44,12 @@ class TournamentRepository(BaseRepository[Tournament]):
         self,
         game: GameType | None = None,
         status: TournamentStatus | None = None,
-        is_public: bool = True,
         limit: int = 20,
         cursor: uuid.UUID | None = None,
         from_at: datetime | None = None,
         to_at: datetime | None = None,
     ) -> tuple[list[Tournament], bool]:
-        filters = [Tournament.is_public == is_public]
+        filters = [publicly_listed()]
         if game:
             filters.append(Tournament.game == game)
         if status:

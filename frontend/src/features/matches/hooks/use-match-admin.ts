@@ -88,7 +88,7 @@ export function useMatchAdmin(matchId: string, initialData?: MatchDetail) {
   useEffect(() => {
     connect();
     return () => {
-      retryRef.current && clearTimeout(retryRef.current);
+      if (retryRef.current) clearTimeout(retryRef.current);
       wsRef.current?.close();
       wsRef.current = null;
     };

@@ -86,10 +86,10 @@ function LoginForm() {
           )}
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-400">
+            <label htmlFor="login-email" className="mb-1.5 block text-sm font-medium text-slate-400">
               メールアドレス
             </label>
-            <input
+            <input id="login-email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -102,13 +102,13 @@ function LoginForm() {
 
           <div>
             <div className="mb-1.5 flex items-center justify-between">
-              <label className="block text-sm font-medium text-slate-400">パスワード</label>
+              <label htmlFor="login-password" className="block text-sm font-medium text-slate-400">パスワード</label>
               <Link href="/forgot-password" className="text-xs text-brand-400 hover:text-brand-300">
                 お忘れですか？
               </Link>
             </div>
             <div className="relative">
-              <input
+              <input id="login-password"
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}

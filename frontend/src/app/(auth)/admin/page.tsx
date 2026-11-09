@@ -12,6 +12,7 @@ import { OperationsPanel } from "./_components/operations-panel";
 import { TrendSection } from "./_components/trend-section";
 import { ActivityFeed } from "./_components/activity-feed";
 import { NotificationPanel } from "./_components/notification-panel";
+import { UserManagementSection } from "./_components/user-management";
 
 function AdminAuditSection() {
   const { data: items, isLoading } = useAdminAudit();
@@ -123,6 +124,9 @@ export default function AdminDashboardPage() {
             <ActivityFeed activities={data.recent_activities} />
             <NotificationPanel />
           </div>
+
+          {/* ユーザー管理（利用停止・ロール変更） */}
+          <UserManagementSection />
 
           {/* 監査ログ（全体・Admin限定 / ADR-0012） */}
           <AdminAuditSection />

@@ -15,4 +15,22 @@ export const adminApi = {
 
   markAllRead: (): Promise<void> =>
     apiClient.patch("/api/v1/admin/notifications/read-all"),
+
+  listUsers: (q: string): Promise<ApiResponse<AdminUserItem[]>> =>
+    apiClient.get(`/api/v1/admin/users${q ? `?q=${encodeURIComponent(q)}` : ""}`),
+
+  updateUser: (
+    id: string,
+    body: { is_active?: boolean; role?: AdminUserItem["role"] },
+  ): Promise<ApiResponse<AdminUserItem>> =>
+    apiClient.patch(`/api/v1/admin/users/${id}`, body),
 };
+
+export interface AdminUserItem {
+  id: string;
+  username: string;
+  email: string;
+  role: "admin" | "organizer" | "team_manager" | "player" | "viewer";
+  is_active: boolean;
+  created_at: string | null;
+}

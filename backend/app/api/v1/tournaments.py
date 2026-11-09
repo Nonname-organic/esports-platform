@@ -405,14 +405,17 @@ async def _user_registration(db, tournament_id: uuid.UUID, user):
     if not team_ids:
         return None
     from app.models.tournament import TournamentRegistration
+    # 所属チームが同じ大会に複数登録していても 500 にしない（先に申請した方を返す）
     return (
         await db.execute(
-            select(TournamentRegistration).where(
+            select(TournamentRegistration)
+            .where(
                 TournamentRegistration.tournament_id == tournament_id,
                 TournamentRegistration.team_id.in_(team_ids),
             )
+            .order_by(TournamentRegistration.registered_at)
         )
-    ).scalar_one_or_none()
+    ).scalars().first()
 
 
 @router.get("/{tournament_id}/my-registration")
@@ -439,6 +442,15 @@ async def my_registration(
         "team_id": str(reg.team_id),
         "team_name": team.name if team else None,
     }}
+
+
+@router.post("/{tournament_id}/withdraw", response_model=Response[dict[str, str]])
+async def withdraw_registration(
+    tournament_id: uuid.UUID, db: DBSession, cache: Cache, current_user: CurrentUser,
+) -> Response[dict[str, str]]:
+    """自チームの参加申請を取り下げる（チームのオーナー・キャプテン、組み合わせ生成前のみ）。"""
+    status = await TournamentService(db, cache).withdraw(tournament_id, current_user)
+    return Response(data={"status": status.value}, meta=None)
 
 
 @router.get("/{tournament_id}/check-in/me")

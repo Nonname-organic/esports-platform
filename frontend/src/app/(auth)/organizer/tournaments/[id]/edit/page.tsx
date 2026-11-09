@@ -36,20 +36,18 @@ const TIER_OPTIONS = [
   { value: "professional", label: "Professional" },
 ];
 
+// ブラケットを自動生成できる形式だけを出す（作成画面と同じ）
 const FORMAT_OPTIONS = [
   { value: "single_elimination", label: "シングルエリミネーション" },
   { value: "double_elimination", label: "ダブルエリミネーション" },
-  { value: "swiss", label: "スイス式" },
   { value: "round_robin", label: "ラウンドロビン" },
-  { value: "group_stage", label: "グループステージ" },
-  { value: "league", label: "リーグ戦" },
 ];
 
 const BO_OPTIONS = ["BO1", "BO3", "BO5", "BO7"];
 const VISIBILITY_OPTIONS = [
   { value: "public", label: "公開" },
   { value: "limited", label: "限定公開（URLを知っている人のみ）" },
-  { value: "private", label: "非公開" },
+  { value: "private", label: "非公開（一覧・検索に表示しない）" },
 ];
 
 interface PrizeRow { rank_position: number; amount: number | string; currency: string; description?: string }
@@ -433,6 +431,10 @@ export default function TournamentEditPage({ params }: { params: Promise<{ id: s
           <Field label="トーナメント形式">
             <select {...register("format")} className={selectCls}>
               {FORMAT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              {/* 以前の画面で作った形式は、保存で黙って別形式に変わらないよう選択肢に残す */}
+              {t?.format && !FORMAT_OPTIONS.some((o) => o.value === t.format) && (
+                <option value={t.format}>{t.format}（自動生成は未対応）</option>
+              )}
             </select>
           </Field>
           <div className="grid grid-cols-2 gap-4">
