@@ -198,6 +198,30 @@ class TestTournamentSetup:
         assert calls[-1].headers["Authorization"] == "Bearer owner-token"
 
     @pytest.mark.asyncio
+    async def test_管理者でもDiscord側のサーバー管理権限が無ければ設定できない(self, client: AsyncClient, db, mem_cache, discord_api):
+        # アプリの管理者（ADMIN ロール）と、Discord サーバーの管理権限は別物。管理者も Discord 側で確かめる
+        calls, routes = discord_api
+        _, tour = await _organizer_with_tournament(db)  # 他人の大会
+        admin = await f.make_user(db, role=UserRole.ADMIN)
+        url, body, headers = f"/api/v1/discord/setup/{tour.id}", {"guild_id": "123"}, auth_headers(_token(admin))
+
+        res = await client.post(url, json=body, headers=headers)  # Discord 未連携
+        assert res.status_code == 403 and "連携" in res.json()["detail"], res.text
+
+        db.add(DiscordLink(user_id=admin.id, discord_user_id="2", access_token="admin-token",
+                           linked_at=datetime.now(UTC)))
+        await db.flush()
+        routes["/users/@me/guilds"] = httpx.Response(200, json=[{"id": "123", "owner": False, "permissions": "8192"}])
+        res = await client.post(url, json=body, headers=headers)  # 連携済みでもサーバー管理権限なし
+        assert res.status_code == 403, res.text
+        assert calls[-1].headers["Authorization"] == "Bearer admin-token"
+        assert (await db.execute(select(DiscordServer).where(DiscordServer.tournament_id == tour.id))).first() is None
+
+        routes["/users/@me/guilds"] = httpx.Response(200, json=[{"id": "123", "owner": False, "permissions": str(0x20)}])
+        res = await client.post(url, json=body, headers=headers)
+        assert res.status_code == 201, res.text
+
+    @pytest.mark.asyncio
     async def test_設定状態のIDは主催者と管理者にだけ見える(self, client: AsyncClient, db, mem_cache, admin_token):
         owner, tour = await _organizer_with_tournament(db, token=None)
         db.add(DiscordServer(tournament_id=tour.id, guild_id="123", status="ready",
