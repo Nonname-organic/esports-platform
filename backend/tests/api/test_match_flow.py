@@ -8,12 +8,13 @@
 - RC2: 再開時の古い報告の解消、選手成績の重複防止、異議の理由の公開範囲、辞退ボタンの表示
 """
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
+from app.core.exceptions import BusinessRuleError
 from app.core.security import issue_tokens
 from app.models.discord import DiscordLink
 from app.models.enums import (
@@ -27,6 +28,7 @@ from app.models.enums import (
 )
 from app.models.match import Map, Match, MatchGame, MatchResult, PlayerMatchStats
 from app.models.match_report import MatchResultReport
+from app.models.team import TeamMember
 from app.models.tournament import TournamentRegistration
 from app.schemas.match import (
     GamePlayerStatsUpdate,
@@ -521,3 +523,93 @@ class TestWithdrawDisplay:
         regs = {r.team_id: r.status for r in (await db.execute(select(TournamentRegistration).where(
             TournamentRegistration.tournament_id == tour.id))).scalars()}
         assert regs == {old_team.id: RegistrationStatus.WITHDRAWN, new_team.id: RegistrationStatus.WITHDRAWN}
+
+
+# ── RC3（S8）: 成績は、出場する2チームの所属選手のぶんだけ ────────────────────────
+def _row(player, team_id, kills=1) -> dict:
+    return {"player_id": str(player.id), "team_id": str(team_id), "kills": kills}
+
+
+async def _started(client, db):
+    org, tour, _owners, teams = await _setup(db)
+    m = (await _round1(db, tour))[0]
+    mp, roster = await _with_players(db, teams)
+    assert (await client.patch(f"/api/v1/matches/{m.id}/start", headers=_h(org))).status_code == 204
+    await db.refresh(m)
+    return org, tour, teams, m, mp, roster
+
+
+class TestStatsOnlyForParticipants:
+    @pytest.mark.asyncio
+    async def test_出場チームの選手の登録と修正はこれまでどおりできる(self, client: AsyncClient, db):
+        org, _tour, _teams, m, mp, roster = await _started(client, db)
+        url = f"/api/v1/matches/{m.id}/games/1/player-stats"
+        body = lambda kills: {"map_id": str(mp.id), "team1_score": 13, "team2_score": 7, "player_stats": [
+            _row(p, t, kills) for t in (m.team1_id, m.team2_id) for p in roster[t]]}
+        assert (await client.post(url, headers=_h(org), json=body(5))).status_code == 204
+        assert (await client.post(url, headers=_h(org), json=body(7))).status_code == 204  # 修正
+        rows = await _stats(db, m.id)
+        assert len(rows) == 4 and {r.kills for r in rows} == {7}
+
+    @pytest.mark.asyncio
+    async def test_出場していない選手の成績は主催者にも管理者にも書けない(self, client: AsyncClient, db):
+        org, _tour, teams, m, mp, roster = await _started(client, db)
+        admin = await f.make_user(db, role=UserRole.ADMIN)
+        other = next(t for t in teams if t.id not in (m.team1_id, m.team2_id))  # 同じ大会の別の試合のチーム
+        elsewhere_tour = await f.make_tournament(db, organizer=org, status=TournamentStatus.ONGOING)
+        elsewhere = await f.make_team(db, owner=await f.make_user(db), name="S8 Elsewhere")
+        await f.register_team(db, tournament=elsewhere_tour, team=elsewhere)
+        stranger = await f.make_player(db, user=await f.make_user(db), in_game_name="S8 stranger")
+        await f.add_member(db, team=elsewhere, player=stranger)
+        loner = await f.make_player(db, user=await f.make_user(db), in_game_name="S8 loner")
+        p1, p2 = roster[m.team1_id][0], roster[m.team2_id][0]
+        cases = {
+            "同じ大会の別の試合のチームの選手": _row(roster[other.id][0], other.id),
+            "別の試合の選手を出場チームの選手として": _row(roster[other.id][0], m.team1_id),
+            "別の大会のチームの選手": _row(stranger, m.team2_id),
+            "どのチームにも入っていない選手": _row(loner, m.team1_id),
+            "相手チームの選手を自分のチームとして": _row(p2, m.team1_id),
+            "同じ選手を2回": _row(p1, m.team1_id),
+        }
+        stats_url = f"/api/v1/matches/{m.id}/games/1/player-stats"
+        for user in (org, admin):
+            for name, bad in cases.items():
+                body = {"map_id": str(mp.id), "team1_score": 13, "team2_score": 7,
+                        "player_stats": [_row(p1, m.team1_id), bad]}
+                res = await client.post(stats_url, headers=_h(user), json=body)
+                assert res.status_code == 400, (name, res.text)
+                result = {"winner_id": str(m.team1_id), "game_stats": [{
+                    "game_number": 1, "map_id": str(mp.id), "team1_score": 13, "team2_score": 7,
+                    "winner_id": str(m.team1_id), "player_stats": [_row(p1, m.team1_id), bad]}]}
+                res = await client.post(f"/api/v1/matches/{m.id}/result", headers=_h(user), json=result)
+                assert res.status_code == 400, (name, res.text)
+        assert await _stats(db, m.id) == []  # 一部だけ保存されることもない
+        await db.refresh(m)
+        assert m.status == MatchStatus.ONGOING
+        assert (await db.execute(select(MatchResult).where(MatchResult.match_id == m.id))).first() is None
+        res = await client.get(f"/api/v1/players/{stranger.id}/career")
+        assert res.json()["data"]["total_matches"] == 0  # 他人の公開の通算成績は変わらない
+
+    @pytest.mark.asyncio
+    async def test_Botの結果確定でも同じ確認を通る(self, client: AsyncClient, db):
+        org, _tour, _teams, m, mp, _roster = await _started(client, db)
+        loner = await f.make_player(db, user=await f.make_user(db), in_game_name="S8 bot loner")
+        data = MatchResultCreate(winner_id=m.team1_id, game_stats=[GameStatsCreate(
+            game_number=1, map_id=str(mp.id), team1_score=13, team2_score=7, winner_id=m.team1_id,
+            player_stats=[PlayerStatsCreate(player_id=loner.id, team_id=m.team1_id, kills=99)])])
+        with pytest.raises(BusinessRuleError):
+            await MatchService(db, _Cache()).register_result(m.id, data, org, authorized=True)
+
+    @pytest.mark.asyncio
+    async def test_試合の後に抜けた選手は直せて_試合の前に抜けた選手は入れられない(self, client: AsyncClient, db):
+        org, _tour, _teams, m, mp, roster = await _started(client, db)
+        left_after, left_before = roster[m.team1_id]
+        for player, left_at in ((left_after, m.started_at + timedelta(hours=1)),
+                                (left_before, m.started_at - timedelta(days=1))):
+            await db.execute(update(TeamMember).where(TeamMember.player_id == player.id).values(left_at=left_at))
+        url = f"/api/v1/matches/{m.id}/games/1/player-stats"
+        body = lambda rows: {"map_id": str(mp.id), "team1_score": 13, "team2_score": 7, "player_stats": rows}
+        res = await client.post(url, headers=_h(org), json=body([_row(left_after, m.team1_id)]))
+        assert res.status_code == 204, res.text
+        res = await client.post(url, headers=_h(org), json=body([_row(left_before, m.team1_id)]))
+        assert res.status_code == 400, res.text

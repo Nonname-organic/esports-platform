@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime, timezone
 
 import boto3
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -17,6 +17,7 @@ from app.core.exceptions import (
 from app.core.redis import CacheKeys, RedisCache
 from app.models.enums import MatchStatus, UserRole
 from app.models.match import Map, Match, MatchGame
+from app.models.team import TeamMember
 from app.models.tournament import Tournament
 from app.models.user import User
 from app.repositories.match import MatchRepository
@@ -26,6 +27,7 @@ from app.schemas.match import (
     GamePlayerStatsUpdate,
     MatchDetail,
     MatchResultCreate,
+    PlayerStatsCreate,
     ScoreUpdate,
 )
 from app.core.storage import resign_stored_url
@@ -209,6 +211,7 @@ class MatchService:
 
         if match.status not in (MatchStatus.ONGOING, MatchStatus.COMPLETED):
             raise BusinessRuleError("進行中または完了した試合にのみ成績を登録できます")
+        await self._check_player_stats(match, data.player_stats)
 
         winner_id = None
         if data.team1_score != data.team2_score:
@@ -248,6 +251,39 @@ class MatchService:
         )
 
         await self._invalidate_match_cache(match_id)
+
+    async def _check_player_stats(
+        self, match: Match, stats: list[PlayerStatsCreate] | None
+    ) -> None:
+        """成績は、この試合に出る2チームの所属選手のぶんだけ受け付ける（S8）。
+
+        主催者や管理者でも、出場していない選手の ID を入れると、その選手の公開の
+        通算成績を書き換えられてしまう。所属は「試合の開始時点でまだ抜けていない」
+        所属行で見る（あとでチームを抜けた選手の成績も直せるように）。同じ選手を
+        1マップに2回入れると二重に数えるので断る。
+        """
+        if not stats:
+            return
+        teams = {match.team1_id, match.team2_id} - {None}
+        players = [ps.player_id for ps in stats]
+        if any(ps.team_id not in teams for ps in stats):
+            raise BusinessRuleError("成績を登録できるのは、この試合に出場するチームの選手だけです")
+        if len(set(players)) != len(players):
+            raise BusinessRuleError("同じ選手の成績が重複しています")
+
+        since = match.started_at or datetime.now(timezone.utc)
+        members = {
+            (r.team_id, r.player_id)
+            for r in (await self._db.execute(
+                select(TeamMember.team_id, TeamMember.player_id).where(
+                    TeamMember.team_id.in_(teams),
+                    TeamMember.player_id.in_(players),
+                    or_(TeamMember.left_at.is_(None), TeamMember.left_at >= since),
+                )
+            )).all()
+        }
+        if any((ps.team_id, ps.player_id) not in members for ps in stats):
+            raise BusinessRuleError("チームに所属していない選手の成績は登録できません")
 
     async def _require_ban_pick_authority(
         self, match, team_id: uuid.UUID, current_user: User
@@ -370,6 +406,7 @@ class MatchService:
                         raise BusinessRuleError(
                             "ゲームの勝者はこの試合の参加チームである必要があります"
                         )
+                    await self._check_player_stats(match, game_stat.player_stats)
                 for game_stat in data.game_stats:
                     game = await self._repo.upsert_game_score(
                         match_id=match_id,
