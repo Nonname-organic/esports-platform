@@ -613,3 +613,16 @@ class TestStatsOnlyForParticipants:
         assert res.status_code == 204, res.text
         res = await client.post(url, headers=_h(org), json=body([_row(left_before, m.team1_id)]))
         assert res.status_code == 400, res.text
+
+        # 終わった試合には、終わった後に所属させた選手の成績を足せない（監査 S8-1 の後付けの手口）
+        res = await client.post(f"/api/v1/matches/{m.id}/result", headers=_h(org), json={"winner_id": str(m.team1_id)})
+        assert res.status_code == 204, res.text
+        await db.refresh(m)
+        late = await f.make_player(db, user=await f.make_user(db), in_game_name="S8 late")
+        member = await f.add_member(db, team=next(t for t in _teams if t.id == m.team1_id), player=late)
+        member.joined_at = m.ended_at + timedelta(minutes=5)
+        await db.flush()
+        res = await client.post(url, headers=_h(org), json=body([_row(late, m.team1_id)]))
+        assert res.status_code == 400, res.text
+        res = await client.post(url, headers=_h(org), json=body([_row(left_after, m.team1_id)]))
+        assert res.status_code == 204, res.text  # 試合の間に所属していた選手の修正はできる

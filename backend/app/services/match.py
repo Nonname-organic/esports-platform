@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime, timezone
 
 import boto3
-from sqlalchemy import ColumnElement, delete, func, or_, select, update
+from sqlalchemy import ColumnElement, delete, func, or_, select, true, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -258,9 +258,13 @@ class MatchService:
         """成績は、この試合に出る2チームの所属選手のぶんだけ受け付ける（S8）。
 
         主催者や管理者でも、出場していない選手の ID を入れると、その選手の公開の
-        通算成績を書き換えられてしまう。所属は「試合の開始時点でまだ抜けていない」
-        所属行で見る（あとでチームを抜けた選手の成績も直せるように）。同じ選手を
-        1マップに2回入れると二重に数えるので断る。
+        通算成績を書き換えられてしまう。所属は試合の期間と重なる所属行で見る
+        （開始の前に抜けていない・終わった後に入ったのではない）。あとでチームを
+        抜けた選手の成績は直せる。同じ選手を1マップに2回入れると二重に数えるので断る。
+
+        shortcut: 所属はチームのオーナー・キャプテンが本人の承諾なしに作れるため、大会と
+        出場チームの両方を持つ利用者は、試合の前に他人を所属させて成績を書ける。所属の
+        承諾制か参加登録時の名簿の固定が入ったら、ここをその名簿で確かめる形に替える。
         """
         if not stats:
             return
@@ -274,6 +278,8 @@ class MatchService:
         still_member: ColumnElement[bool] = TeamMember.left_at.is_(None)
         if match.started_at is not None:  # 開始時刻が無い試合は、今の所属だけを見る
             still_member = or_(still_member, TeamMember.left_at >= match.started_at)
+        # 終わった試合には、終わった後に入った選手の成績を足せない（後から所属させて書く手口を防ぐ）
+        joined_in_time = TeamMember.joined_at <= match.ended_at if match.ended_at else true()
         members = {
             (r.team_id, r.player_id)
             for r in (await self._db.execute(
@@ -281,6 +287,7 @@ class MatchService:
                     TeamMember.team_id.in_(teams),
                     TeamMember.player_id.in_(players),
                     still_member,
+                    joined_in_time,
                 )
             )).all()
         }
