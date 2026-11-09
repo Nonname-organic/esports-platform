@@ -12,9 +12,19 @@ from sqlalchemy import func, select, text
 from sqlalchemy.exc import DBAPIError
 
 from app.core.exceptions import BusinessRuleError
-from app.models.enums import GameType, MatchStatus, MemberRole, TournamentStatus, UserRole
+from app.models.enums import (
+    GameType,
+    MatchStatus,
+    MemberRole,
+    TournamentStatus,
+    UserRole,
+)
 from app.models.match import Map, Match, MatchResult, PlayerMatchStats
-from app.schemas.match import GamePlayerStatsUpdate, MatchResultCreate, PlayerStatsCreate
+from app.schemas.match import (
+    GamePlayerStatsUpdate,
+    MatchResultCreate,
+    PlayerStatsCreate,
+)
 from app.services.match import MatchService, lock_match
 from tests import factories as f
 from tests.conftest import TestSessionLocal

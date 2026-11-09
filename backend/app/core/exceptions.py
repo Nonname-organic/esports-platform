@@ -73,7 +73,7 @@ class ConflictError(AppException):
 
 
 class RateLimitError(AppException):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="リクエスト数が上限を超えました。しばらく待ってから再試行してください。",

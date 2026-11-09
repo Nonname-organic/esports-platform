@@ -28,7 +28,12 @@ from app.models.enums import (
 from app.models.match import Map, Match, MatchGame, MatchResult, PlayerMatchStats
 from app.models.match_report import MatchResultReport
 from app.models.tournament import TournamentRegistration
-from app.schemas.match import GamePlayerStatsUpdate, GameStatsCreate, MatchResultCreate, PlayerStatsCreate
+from app.schemas.match import (
+    GamePlayerStatsUpdate,
+    GameStatsCreate,
+    MatchResultCreate,
+    PlayerStatsCreate,
+)
 from app.services.match import MatchService
 from app.services.tournament import TournamentService
 from tests import factories as f
