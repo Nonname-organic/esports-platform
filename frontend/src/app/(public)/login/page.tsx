@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Trophy, Eye, EyeOff } from "lucide-react";
 import { useAuthStore } from "@/store/auth-store";
 import { apiClient } from "@/lib/api-client";
+import { safeNextPath } from "@/lib/safe-redirect";
 
 interface LoginResponse {
   access_token: string;
@@ -54,9 +55,7 @@ function LoginForm() {
         avatar_url: meRes.avatar_url,
       });
 
-      const nextParam = searchParams.get("next") ?? "";
-      const next = nextParam && nextParam !== "/login" && nextParam !== "/register" ? nextParam : "/dashboard";
-      router.replace(next);
+      router.replace(safeNextPath(searchParams.get("next")));
     } catch (err) {
       setError(err instanceof Error ? err.message : "ログインに失敗しました");
     } finally {
