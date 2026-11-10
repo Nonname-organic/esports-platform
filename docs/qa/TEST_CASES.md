@@ -75,9 +75,23 @@
 |----|-------|--------------|-------|----------|-----|------|
 | TEAM-001 | 作成(logo/banner presigned長URL) | login | POST /teams | 201、banner_url保存 | P0 | ✅ |
 | TEAM-002 | 詳細/メンバー | seed team | GET /teams/{id}, /members | 200 | P1 | ✅ |
-| TEAM-003 | メンバー追加 owner | owner | POST /members | 200/201 | P1 | ✅ |
-| TEAM-004 | メンバー追加 非owner拒否 | 他user | POST /members | 403 | P1 | 🟡 |
+| TEAM-003 | メンバーの招待 owner（RC4: 本人が承認したときだけ所属になる） | owner・招待先に選手プロフィール | POST /teams/{id}/invitations → 本人が POST /team-invitations/{id}/accept | 201 → 200。所属は consent=invitation | P1 | ✅ |
+| TEAM-004 | 招待 非owner拒否・本人以外の承認拒否 | 他user | POST /teams/{id}/invitations、他人が accept | 403 | P1 | ✅ |
 | TEAM-005 | career/achievements/rivals | seed | 各GET | 200 | P2 | 🟡 |
+| TEAM-006 | メンバーの直接追加は廃止（RC4） | — | POST /teams/{id}/members | 410 | P1 | ✅ |
+| TEAM-007 | 移行前の所属の確認・否認・管理者の否認の取り消し（RC4） | consent=unconfirmed の所属 | POST /me/memberships/{id}/confirm・reject、POST /admin/memberships/{id}/unreject（理由） | 本人だけ 200。否認は脱退。取り消しは管理者だけ・訂正の記録が残る | P1 | ✅ |
+
+## ROSTER — 大会の名簿と出場登録（RC4）
+| ID | Title | Precondition | Steps | Expected | Pri | Auto |
+|----|-------|--------------|-------|----------|-----|------|
+| ROSTER-001 | 名簿に載せて本人が承認 | 承諾済みの所属・参加登録（pending 可） | POST .../roster → 本人が POST /roster-entries/{id}/accept | 201 invited → 200 accepted。名簿は参加チームの正式な所属者・主催者・管理者だけが見られる | P0 | ✅ |
+| ROSTER-002 | 同じ大会で 2 チームの名簿に載らない・上限 | — | 2 チーム目に載せる、上限を超える | 409 | P1 | ✅ |
+| ROSTER-003 | 開始で出場登録を固定 | 名簿の方式の大会 | PATCH /matches/{id}/start（人数不足は理由が必須） | 400（理由なし）→ 204。返事の無い名簿の招待は期限切れ | P0 | ✅ |
+| ROSTER-004 | スターター 0 人のチームの試合は開始せず不戦勝 | — | start → POST /matches/{id}/forfeit（理由）→ reopen | 409 → 204（started_at なし）→ 予定に戻る | P1 | ✅ |
+| ROSTER-005 | 交代とマップごとの実出場 | 開始済み | POST /matches/{id}/games/{n}/substitutions | 成績を書けるのはそのマップに出た選手だけ | P1 | ✅ |
+| ROSTER-006 | 出場の異議と裁定 | 出場登録に載った本人 | POST /me/participation-disputes → 管理者が PATCH | 認めると個人の記録に数えない | P1 | ✅ |
+| ROSTER-007 | 旧方式（legacy）の大会の制限と切り替え | RC4 より前からある大会 | start・status ongoing → POST /tournaments/{id}/roster-mode | 409 → 未開始なら 200（一方向） | P0 | ✅ |
+| ROSTER-008 | 完了した大会の訂正は管理者だけ（理由つき） | 完了した大会 | 成績の保存・再開 | 主催者 409、管理者は理由が無いと 400。訂正の記録が残る | P1 | ✅ |
 
 ## SCOUT — スカウト
 | ID | Title | Precondition | Steps | Expected | Pri | Auto |

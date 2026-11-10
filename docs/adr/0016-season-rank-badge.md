@@ -44,9 +44,13 @@ Faceit / VALORANT Premier / LoL Ranked のような競技プロフィールを�
 - Player RP = 所属チームの Team RP 合計 ＋ MVP ボーナス（`MVP_RP`）。
 - Win/Loss/Matches は既存 `CareerAggregationService` を再利用。
 - 近似（過去の所属変更は現在の membership で近似）。将来 PlayerMatchStats ベースへ精緻化可能。
+- **2026-11（RC4）で置き換え**: 個人の RP・大会履歴は `app/rankings/attribution.py` の帰属で決める。
+  名簿の方式の大会は、そのチームとして 1 マップ以上出場した選手だけ。RC4 より前からある大会（legacy）は、
+  大会の期間と重なる所属（本人否認は数えない。本人未確認は移行期間中だけ数える）。異議が認められた試合の
+  選手は数えない。同じ大会で 2 チームに当たる選手は、良い方の 1 回だけ数える（区分 → 勝ち数 → 参加登録の早い方）
 
 ## Consequences
 
 - Pros: マイグレーション不要・SSOT一貫・Team/Player 共通・Season materialize 余地。
-- Cons: season 窓ごとに board 再集計（Redis で緩和）。Player RP は近似。
+- Cons: season 窓ごとに board 再集計（Redis で緩和）。Player RP は近似（RC4 で帰属の規則に置き換え）。
 - Future: Materialized Season / Promotion・Demotion Match / Regional / AI Rank Prediction。

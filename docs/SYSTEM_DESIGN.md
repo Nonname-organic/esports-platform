@@ -113,10 +113,15 @@ VALORANT / Apex Legends / Counter-Strike 2 / League of Legends / Overwatch 2 / R
 | `users` | アカウント（email/role/auth） |
 | `players` | プレイヤープロフィール（Riot ID/ランク/ロール） |
 | `teams` | チーム（ロゴ/バナー/オーナー） |
-| `team_members` | チームメンバー（ロール/背番号/soft delete） |
+| `team_members` | チームメンバー（ロール/背番号/soft delete）。RC4: 本人の承諾の状態（consent）。現役の重複は一意制約で防ぐ |
+| `team_invitations` | チームへの招待（本人が承認したときだけ所属を作る。RC4） |
+| `membership_migration_state` | 移行前の所属を本人未確認として数える期限（開始から 60 日。RC4） |
 | `tournaments` | 大会（拡張済: tier/visibility/seeding他） |
 | `tournament_registrations` | 参加申請（pending/approved/rejected） |
 | `brackets` / `matches` | ブラケット・試合 |
+| `tournament_roster_entries` | 大会の名簿（チームが載せ、本人が承認。同じ大会では 1 チームだけ。RC4） |
+| `match_lineup_entries` / `match_substitutions` | 試合の出場登録（開始で固定）と交代。成績を書けるのはそのマップに出た選手だけ（RC4） |
+| `participation_disputes` / `admin_corrections` | 出場の異議と、完了した大会の管理者の訂正の記録（RC4） |
 
 ### 大会拡張テーブル（正規化）
 | テーブル | 役割 |
@@ -150,8 +155,10 @@ VALORANT / Apex Legends / Counter-Strike 2 / League of Legends / Overwatch 2 / R
 |---|---|
 | `/api/v1/auth` | register, login, refresh, me |
 | `/api/v1/tournaments` | CRUD, mine, status変更, registrations承認/却下, bracket生成 |
-| `/api/v1/matches` | get, listByTournament, start, score更新, result, banpick |
-| `/api/v1/teams` | CRUD, members（追加/削除） |
+| `/api/v1/matches` | get, listByTournament, start（出場登録の固定）, forfeit（開始を経ない不戦勝）, lineups, substitutions, score更新, result, banpick |
+| `/api/v1/teams` | CRUD, members（一覧/削除。追加は 410）, invitations（招待/一覧/取り消し） |
+| `/api/v1/me` `/api/v1/team-invitations` `/api/v1/roster-entries` | 本人の操作: 招待への返事、所属の確認・否認、名簿への参加の返事、出場の異議（RC4） |
+| `/api/v1/tournaments/{id}/registrations/{reg}/roster` | 大会の名簿（RC4） |
 | `/api/v1/players` | CRUD, me, roles |
 | `/api/v1/analytics` | maps, agents, winrate, trend, rankings, players, heatmap |
 | `/api/v1/admin` | dashboard, notifications |
@@ -186,7 +193,9 @@ VALORANT / Apex Legends / Counter-Strike 2 / League of Legends / Overwatch 2 / R
 | `/admin` | Admin Dashboard（MAU/DAU/成長率） | admin |
 | `/admin/matches/[id]` | 試合管理（スコア入力/Ban Pick/WS） | organizer |
 | `/teams/create` | チーム作成（画像アップロード） | 全認証 |
-| `/teams/[id]/edit` `/members` | チーム編集・メンバー管理 | owner |
+| `/teams/[id]/edit` `/members` | チーム編集・メンバー管理（招待） | owner |
+| `/teams/invitations` `/settings/memberships` `/tournaments/roster-invitations` | 招待への返事・所属の確認・大会の名簿への参加（RC4） | 全認証（本人） |
+| `/admin/disputes` | 出場の異議の裁定（RC4） | admin |
 | `/players/create` | プレイヤー登録 | 全認証 |
 
 ---
