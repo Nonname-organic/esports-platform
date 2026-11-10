@@ -41,6 +41,8 @@ from app.models.user import User
 from app.services.match import MatchService
 from app.services.tournament import TournamentService
 
+from app.services.membership import formal_clause
+
 router = APIRouter(prefix="/bot", tags=["bot"])
 
 
@@ -63,7 +65,8 @@ async def _actor_context(db, user: User) -> dict:
             await db.execute(
                 select(TeamMember, Team)
                 .join(Team, Team.id == TeamMember.team_id)
-                .where(TeamMember.player_id == player.id, TeamMember.left_at.is_(None))
+                .where(TeamMember.player_id == player.id, TeamMember.left_at.is_(None),
+                       await formal_clause(db))
             )
         ).all()
         for tm, team in rows:
@@ -412,7 +415,10 @@ async def forfeit_match(
         raise BusinessRuleError("勝者のIDが不正です")
     service = MatchService(db, cache)  # 主催者・管理者かどうかはサービス側で確認する
     if match.status == MatchStatus.SCHEDULED:
-        await service.start_match(match.id, user)
+        # RC4: 予定の試合は開始せずに不戦勝にする（出場登録を固定しない。Q04）
+        await service.record_forfeit_without_start(
+            match.id, winner_id, "Discord Bot からの不戦勝の確定", user)
+        return {"data": {"status": "forfeit", "winner_id": str(winner_id)}}
     await service.register_result(
         match.id, MatchResultCreate(winner_id=winner_id, was_forfeit=True), user,
     )

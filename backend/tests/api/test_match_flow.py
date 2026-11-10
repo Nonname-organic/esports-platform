@@ -57,12 +57,16 @@ def _h(user) -> dict:
 
 async def _setup(db, *, n=4, fmt=TournamentFormat.SINGLE_ELIMINATION, generate=True):
     org = await f.make_user(db, role=UserRole.ORGANIZER)
-    tour = await f.make_tournament(db, organizer=org, status=TournamentStatus.ONGOING, format=fmt)
+    # RC4: 名簿の方式の大会。出場人数 2 で、各チームに承認済みの名簿の選手を 2 人用意する
+    tour = await f.make_tournament(db, organizer=org, status=TournamentStatus.ONGOING, format=fmt,
+                                   lineup_size=2, roster_max=6)
     owners, teams = [], []
     for i in range(n):
         owner = await f.make_user(db)
         team = await f.make_team(db, owner=owner, name=f"Flow {fmt.value[:4]} {i}", tag=f"F{i}{fmt.value[:2]}")
         await f.register_team(db, tournament=tour, team=team)
+        for k in range(2):
+            await f.roster_player(db, tournament=tour, team=team, name=f"{team.tag}-{k}")
         owners.append(owner)
         teams.append(team)
     if generate:
@@ -357,11 +361,13 @@ async def _with_players(db, teams):
     await db.flush()
     roster = {}
     for team in teams:
-        roster[team.id] = []
-        for i in range(2):
-            player = await f.make_player(db, user=await f.make_user(db), in_game_name=f"{team.tag}-{i}")
-            await f.add_member(db, team=team, player=player, role=MemberRole.PLAYER)
-            roster[team.id].append(player)
+        # RC4: 成績を書けるのは出場登録（名簿の既定のスターター）の選手。_setup で作った 2 人を使う
+        from app.models.player import Player
+        from app.models.roster import TournamentRosterEntry
+        roster[team.id] = list((await db.execute(
+            select(Player).join(TournamentRosterEntry, TournamentRosterEntry.player_id == Player.id)
+            .where(TournamentRosterEntry.team_id == team.id, TournamentRosterEntry.status == "accepted")
+            .order_by(TournamentRosterEntry.invited_at))).scalars())[:2]
     return mp, roster
 
 
@@ -601,17 +607,20 @@ class TestStatsOnlyForParticipants:
             await MatchService(db, _Cache()).register_result(m.id, data, org, authorized=True)
 
     @pytest.mark.asyncio
-    async def test_試合の後に抜けた選手は直せて_試合の前に抜けた選手は入れられない(self, client: AsyncClient, db):
-        org, _tour, _teams, m, mp, roster = await _started(client, db)
-        left_after, left_before = roster[m.team1_id]
-        for player, left_at in ((left_after, m.started_at + timedelta(hours=1)),
-                                (left_before, m.started_at - timedelta(days=1))):
-            await db.execute(update(TeamMember).where(TeamMember.player_id == player.id).values(left_at=left_at))
+    async def test_試合の後に抜けた選手は直せて_出場登録に無い選手は入れられない(self, client: AsyncClient, db):
+        # RC4: 成績を書けるのは、開始で固定した出場登録とマップごとの実出場の選手（C1）。
+        # 所属の期間ではなく出場の記録で決まる。試合の後にチームを抜けても、出場した選手の成績は直せる
+        org, tour, _teams, m, mp, roster = await _started(client, db)
+        left_after = roster[m.team1_id][0]
+        await db.execute(update(TeamMember).where(TeamMember.player_id == left_after.id)
+                         .values(left_at=m.started_at + timedelta(hours=1)))
+        team1 = next(t for t in _teams if t.id == m.team1_id)
+        not_in_lineup = await f.roster_player(db, tournament=tour, team=team1, name="RC4 not in lineup")
         url = f"/api/v1/matches/{m.id}/games/1/player-stats"
         body = lambda rows: {"map_id": str(mp.id), "team1_score": 13, "team2_score": 7, "player_stats": rows}
         res = await client.post(url, headers=_h(org), json=body([_row(left_after, m.team1_id)]))
         assert res.status_code == 204, res.text
-        res = await client.post(url, headers=_h(org), json=body([_row(left_before, m.team1_id)]))
+        res = await client.post(url, headers=_h(org), json=body([_row(not_in_lineup, m.team1_id)]))
         assert res.status_code == 400, res.text
 
         # 終わった試合には、終わった後に所属させた選手の成績を足せない（監査 S8-1 の後付けの手口）

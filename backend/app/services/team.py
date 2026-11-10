@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import (
     AlreadyExistsError,
     ForbiddenError,
+    GoneError,
     NotFoundError,
 )
 from app.core.redis import RedisCache
@@ -15,7 +16,10 @@ from app.models.player import Player
 from app.models.team import Team, TeamMember
 from app.models.user import User
 from app.repositories.team import TeamMemberRepository, TeamRepository
-from app.schemas.team import AddMemberRequest, TeamCreate, TeamUpdate
+from app.schemas.team import TeamCreate, TeamUpdate
+from app.services.membership import formal_consents, grace_deadline
+
+GONE_ADD_MEMBER = "メンバーの追加は招待に変わりました。チームの管理画面から招待を送ってください"
 from app.core.storage import resign_stored_url
 from app.events import Ev, EventEnvelope, EventService
 
@@ -44,7 +48,10 @@ class TeamService:
         if not player:
             return None
         member = await self._member_repo.find_active(team_id, player.id)
-        return member.role if member else None
+        # RC4: 期限の後の本人未確認・否認の所属は、チーム内の権限を持たない（D7）
+        if member is None or member.consent not in formal_consents(await grace_deadline(self._db)):
+            return None
+        return member.role
 
     async def _require_owner_or_captain(self, team: Team, user: User) -> None:
         if self._is_owner(team, user):
@@ -103,6 +110,7 @@ class TeamService:
                 player_id=player.id,
                 role=MemberRole.CAPTAIN,
                 joined_at=datetime.now(timezone.utc),
+                consent="self",  # RC4: 作成者自身の所属は本人の操作でできた所属
             )
 
         await self._emit(Ev.TEAM_CREATED, team.id, after={
@@ -143,6 +151,7 @@ class TeamService:
     async def get_members(self, team_id: uuid.UUID) -> list[dict]:
         await self.get_team(team_id)
         members = await self._member_repo.get_active_members(team_id)
+        formal = formal_consents(await grace_deadline(self._db))
 
         result = []
         for m in members:
@@ -161,64 +170,14 @@ class TeamService:
                 "jersey_number": m.jersey_number,
                 "joined_at": m.joined_at,
                 "is_active": True,
+                "consent": m.consent,
+                "formal": m.consent in formal,
             })
         return result
 
-    async def add_member(
-        self, team_id: uuid.UUID, data: AddMemberRequest, current_user: User
-    ) -> dict:
-        team = await self.get_team(team_id)
-        await self._require_owner_or_captain(team, current_user)
-
-        # ユーザー名でユーザーを検索
-        target_user = await self._db.scalar(
-            select(User).where(User.username == data.username, User.is_active == True)
-        )
-        if not target_user:
-            raise NotFoundError(f"ユーザー '{data.username}' が見つかりません")
-
-        # Playerプロフィールを取得
-        player = await self._db.scalar(
-            select(Player).where(Player.user_id == target_user.id)
-        )
-        if not player:
-            raise NotFoundError("このユーザーはプレイヤープロフィールを持っていません")
-
-        # 既存メンバーチェック
-        existing = await self._member_repo.find_active(team_id, player.id)
-        if existing:
-            raise AlreadyExistsError("このユーザーは既にチームメンバーです")
-
-        member = await self._member_repo.create(
-            team_id=team_id,
-            player_id=player.id,
-            role=data.role,
-            jersey_number=data.jersey_number,
-            joined_at=datetime.now(timezone.utc),
-        )
-
-        await self._emit(Ev.TEAM_MEMBER_ADDED, team_id, after={
-            "player_id": str(player.id),
-            "username": target_user.username,
-            "role": member.role.value,
-        })
-        # 公開活動: プレイヤー視点の「チーム加入」（Activity Feed / ADR-0011）
-        await EventService(self._db).emit(EventEnvelope.build(
-            type=Ev.PLAYER_TEAM_JOINED, entity_type="player", entity_id=player.id,
-            producer="team", metadata={"team_id": str(team_id), "team_name": team.name},
-        ))
-        return {
-            "id": member.id,
-            "player_id": player.id,
-            "user_id": target_user.id,
-            "in_game_name": player.in_game_name,
-            "username": target_user.username,
-            "avatar_url": resign_stored_url(target_user.avatar_url),
-            "role": member.role.value,
-            "jersey_number": member.jersey_number,
-            "joined_at": member.joined_at,
-            "is_active": True,
-        }
+    async def add_member(self, *_args, **_kwargs) -> dict:
+        """RC4: 所属を直接作る経路は残さない（招待に置き換えた。設計の 8.3）。"""
+        raise GoneError(GONE_ADD_MEMBER)
 
     async def remove_member(
         self, team_id: uuid.UUID, player_id: uuid.UUID, current_user: User

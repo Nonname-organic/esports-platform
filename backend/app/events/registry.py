@@ -66,6 +66,23 @@ class Ev:
     TOURNAMENT_REGISTRATION_WITHDRAWN = "tournament.registration.withdrawn"
     TOURNAMENT_CHECKIN_PERFORMED= "tournament.checkin.performed"
     TOURNAMENT_COMPLETED        = "tournament.completed"
+    # RC4: 所属の承諾・大会の名簿・試合の出場登録（監査）
+    TEAM_MEMBER_INVITED              = "team.member.invited"
+    TEAM_MEMBER_INVITATION_ACCEPTED  = "team.member.invitation_accepted"
+    TEAM_MEMBER_INVITATION_DECLINED  = "team.member.invitation_declined"
+    TEAM_MEMBER_INVITATION_CANCELLED = "team.member.invitation_cancelled"
+    TEAM_MEMBER_CONFIRMED            = "team.member.confirmed"
+    TEAM_MEMBER_REJECTED             = "team.member.rejected"
+    TOURNAMENT_ROSTER_CHANGED        = "tournament.roster.changed"
+    TOURNAMENT_ROSTER_MODE_CHANGED   = "tournament.roster_mode.changed"
+    MATCH_LINEUP_CHANGED             = "match.lineup.changed"
+    MATCH_FORFEIT_RECORDED           = "match.forfeit.recorded"
+    MATCH_SUBSTITUTION_REQUESTED     = "match.substitution.requested"
+    MATCH_SUBSTITUTION_DECIDED       = "match.substitution.decided"
+    MATCH_PARTICIPATION_DISPUTED     = "match.participation.disputed"
+    MATCH_DISPUTE_RESOLVED           = "match.participation.dispute_resolved"
+    ADMIN_CORRECTION_APPLIED         = "admin.correction.applied"
+
     # User（管理者による操作の監査）
     USER_STATUS_CHANGED         = "user.status.changed"
     USER_ROLE_CHANGED           = "user.role.changed"
@@ -78,6 +95,21 @@ _AUDIT = EventSpec(visibility=Visibility.INTERNAL, dispatch=False)
 
 
 REGISTRY: dict[str, EventSpec] = {
+    Ev.TEAM_MEMBER_INVITED: _AUDIT,
+    Ev.TEAM_MEMBER_INVITATION_ACCEPTED: _AUDIT,
+    Ev.TEAM_MEMBER_INVITATION_DECLINED: _AUDIT,
+    Ev.TEAM_MEMBER_INVITATION_CANCELLED: _AUDIT,
+    Ev.TEAM_MEMBER_CONFIRMED: _AUDIT,
+    Ev.TEAM_MEMBER_REJECTED: _AUDIT,
+    Ev.TOURNAMENT_ROSTER_CHANGED: _AUDIT,
+    Ev.TOURNAMENT_ROSTER_MODE_CHANGED: _AUDIT,
+    Ev.MATCH_LINEUP_CHANGED: _AUDIT,
+    Ev.MATCH_FORFEIT_RECORDED: _AUDIT,
+    Ev.MATCH_SUBSTITUTION_REQUESTED: _AUDIT,
+    Ev.MATCH_SUBSTITUTION_DECIDED: _AUDIT,
+    Ev.MATCH_PARTICIPATION_DISPUTED: _AUDIT,
+    Ev.MATCH_DISPUTE_RESOLVED: _AUDIT,
+    Ev.ADMIN_CORRECTION_APPLIED: _AUDIT,
     Ev.USER_STATUS_CHANGED: _AUDIT,
     Ev.USER_ROLE_CHANGED: _AUDIT,
     Ev.TOURNAMENT_REGISTRATION_WITHDRAWN: _AUDIT,

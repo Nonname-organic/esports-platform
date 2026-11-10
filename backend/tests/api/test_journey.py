@@ -42,6 +42,10 @@ async def _signup(client: AsyncClient, name: str, role: str = "player") -> dict:
 
 
 async def _create_team(client: AsyncClient, headers: dict, name: str, tag: str) -> str:
+    # RC4: 選手のプロフィールを先に作ると、チームの作成者自身の所属（self）ができる
+    res = await client.post("/api/v1/players", headers=headers,
+                            json={"game": "VALORANT", "riot_id": f"{tag}cap#JP1"})
+    assert res.status_code == 201, res.text
     res = await client.post("/api/v1/teams", headers=headers,
                             json={"name": name, "tag": tag, "game": "VALORANT"})
     assert res.status_code == 201, res.text
@@ -67,6 +71,7 @@ async def test_主催者とチームの一連の流れ(journey_client: AsyncClie
     # ── 大会作成（下書きは一覧に出ない） ──────────────────────────────
     res = await client.post("/api/v1/tournaments", headers=org, json={
         "name": "Journey Cup", "game": "VALORANT", "format": "single_elimination", "max_teams": 4,
+        "lineup_size": 1, "roster_max": 2,
     })
     assert res.status_code == 201, res.text
     tid = res.json()["data"]["id"]
@@ -111,6 +116,18 @@ async def test_主催者とチームの一連の流れ(journey_client: AsyncClie
                                  params={"status": "approved"}, headers=org)
         assert res.status_code == 200, res.text
         assert res.json()["data"]["status"] == "approved"
+
+    # ── RC4: 名簿（キャプテンが自分を載せ、本人が参加を承認する） ─────────────
+    for r in regs:
+        headers = cap_a if r["team_id"] == team_a else cap_b
+        me = (await client.get(f"/api/v1/teams/{r['team_id']}/members")).json()["data"][0]
+        assert me["consent"] == "self"
+        res = await client.post(f"/api/v1/tournaments/{tid}/registrations/{r['id']}/roster", headers=headers,
+                                json={"player_id": me["player_id"]})
+        assert res.status_code == 201, res.text
+        assert res.json()["data"]["status"] == "invited"
+        res = await client.post(f"/api/v1/roster-entries/{res.json()['data']['id']}/accept", headers=headers)
+        assert res.status_code == 200 and res.json()["data"]["status"] == "accepted", res.text
 
     # ── 受付終了 → ブラケット生成 ──────────────────────────────────────
     assert (await _set_status(client, org, tid, "registration_closed")).status_code == 200

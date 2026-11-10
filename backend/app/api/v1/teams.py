@@ -9,7 +9,6 @@ from app.models.enums import GameType
 from app.schemas.common import ListResponse, Meta, Response
 from app.services.sponsor_service import SponsorService
 from app.schemas.team import (
-    AddMemberRequest,
     TeamCreate,
     TeamDetailSchema,
     TeamMemberSchema,
@@ -19,7 +18,8 @@ from app.schemas.team import (
 from app.schemas.career import TeamCareerSchema, AchievementItem, RivalItem
 from app.schemas.achievement import AchievementCardDTO
 from app.schemas.ranking import RankCard
-from app.services.team import TeamService
+from app.core.exceptions import GoneError
+from app.services.team import GONE_ADD_MEMBER, TeamService
 from app.services.career_service import CareerAggregationService
 from app.achievements.aggregator import AchievementAggregator
 from app.core.storage import resign_stored_url
@@ -278,17 +278,10 @@ async def list_members(team_id: uuid.UUID, db: DBSession, cache: Cache):
 
 
 # ── POST /teams/{id}/members ──────────────────────────────────────────────────
-@router.post("/{team_id}/members", response_model=Response[TeamMemberSchema], status_code=201)
-async def add_member(
-    team_id: uuid.UUID,
-    data: AddMemberRequest,
-    db: DBSession,
-    cache: Cache,
-    current_user: CurrentUser,
-):
-    service = TeamService(db, cache)
-    member = await service.add_member(team_id, data, current_user)
-    return Response(data=TeamMemberSchema(**member), meta=None)
+@router.post("/{team_id}/members", status_code=410)
+async def add_member(team_id: uuid.UUID):
+    """RC4: 廃止。本人の承諾なしに所属を作る経路を残さない（招待の API を使う）。"""
+    raise GoneError(GONE_ADD_MEMBER)
 
 
 # ── DELETE /teams/{id}/members/{player_id} ────────────────────────────────────

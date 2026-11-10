@@ -203,6 +203,11 @@ class Settings(BaseSettings):
     RATE_LIMIT_REQUESTS: int = 100
     RATE_LIMIT_WINDOW_SECONDS: int = 60
 
+    # RC4: チームの招待（D20）。期限・拒否の後の再招待の待ち・チームごとの返事待ちの上限
+    TEAM_INVITATION_EXPIRY_DAYS: int = 7
+    TEAM_INVITATION_REINVITE_DAYS: int = 7
+    TEAM_INVITATION_MAX_PENDING: int = 30
+
     # Sentry
     SENTRY_DSN: str | None = None
 

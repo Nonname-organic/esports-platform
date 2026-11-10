@@ -100,6 +100,10 @@ def _build_detail(tournament, count: int) -> TournamentDetail:
         player_stats_enabled=tournament.player_stats_enabled,
         ranking_enabled=tournament.ranking_enabled,
         is_public=tournament.is_public,
+        lineup_size=tournament.lineup_size,
+        roster_max=tournament.roster_max,
+        roster_mode=tournament.roster_mode,
+        roster_locked_at=tournament.roster_locked_at,
     )
 
 
@@ -338,13 +342,14 @@ async def update_registration(
     tournament_id: uuid.UUID,
     registration_id: uuid.UUID,
     status: RegistrationStatus = Query(..., description="approve/reject/pending"),
+    reason: str | None = Query(default=None, max_length=1000, description="完了した大会の訂正の理由（管理者）"),
     db: DBSession = ...,
     cache: Cache = ...,
     current_user: OrganizerUser = ...,
 ):
     """参加申請を承認・却下"""
     service = TournamentService(db, cache)
-    reg = await service.update_registration(tournament_id, registration_id, status, current_user)
+    reg = await service.update_registration(tournament_id, registration_id, status, current_user, reason=reason)
     return Response(
         data=RegistrationInfo(
             id=str(reg.id),
@@ -440,18 +445,21 @@ async def my_registration(
     team = await db.get(Team, reg.team_id)
     service = TournamentService(db, cache)
     # 辞退ボタンを出すか。TournamentService.withdraw と同じ条件（組み合わせ生成後は押されてから断る）
-    can_withdraw = reg.status in LIVE_REGISTRATION and tournament.status in WITHDRAWABLE_STAGES
-    if can_withdraw:
-        try:
-            await service._require_team_authority(reg.team_id, current_user)
-        except (ForbiddenError, NotFoundError):
-            can_withdraw = False
+    try:
+        await service._require_team_authority(reg.team_id, current_user)
+        manager = True
+    except (ForbiddenError, NotFoundError):
+        manager = False
+    can_withdraw = manager and reg.status in LIVE_REGISTRATION and tournament.status in WITHDRAWABLE_STAGES
     return {"data": {
         "registered": True,
+        "registration_id": str(reg.id),
         "status": reg.status.value,
         "team_id": str(reg.team_id),
         "team_name": team.name if team else None,
         "can_withdraw": can_withdraw,
+        # RC4: 名簿の欄を出すか（チームのオーナー・正式な所属のキャプテン）
+        "can_manage_roster": manager,
     }}
 
 

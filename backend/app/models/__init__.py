@@ -54,6 +54,15 @@ from app.models.discord import DiscordServer, DiscordChannel, DiscordLink
 from app.models.bot_ops import CommandMetric, BotErrorLog, MatchDispute, MatchEvidence
 from app.models.riot import RiotProfile, RiotMatch
 from app.models.ranking_snapshot import RankingSnapshot
+from app.models.roster import (
+    AdminCorrection,
+    MatchLineupEntry,
+    MatchSubstitution,
+    MembershipMigrationState,
+    ParticipationDispute,
+    TeamInvitation,
+    TournamentRosterEntry,
+)
 
 __all__ = [
     "ScoutProfile",

@@ -113,6 +113,10 @@ class Match(UUIDMixin, TimestampMixin, Base):
     ended_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # RC4: 出場登録を固定した時刻（試合の開始で入る）
+    lineup_locked_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     stream_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     vod_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
@@ -287,6 +291,10 @@ class PlayerMatchStats(UUIDMixin, Base):
         UUID(as_uuid=True),
         ForeignKey("teams.id", ondelete="CASCADE"),
         nullable=False,
+    )
+    # RC4: 実出場の根拠の出場登録の行（名簿のある大会では必ず入る。サービスで保証）
+    lineup_entry_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("match_lineup_entries.id", ondelete="CASCADE"), nullable=True
     )
     agent: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
     kills: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

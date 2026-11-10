@@ -28,6 +28,13 @@ PROFILE_TTL = 900     # 15分
 ANALYSIS_TTL = 1800   # 30分
 
 
+
+async def _profile_consents(db) -> tuple[str, ...]:
+    """Q24: 期限の後の本人未確認・否認の所属は、選手プロフィールの所属チームに出さない。"""
+    from app.services.membership import formal_consents, grace_deadline
+    return formal_consents(await grace_deadline(db))
+
+
 class PlayerProfileAggregator:
     def __init__(self, db: AsyncSession, cache: RedisCache, *, provider: Optional[PlayerAnalysisProvider] = None):
         self._db = db
@@ -91,7 +98,8 @@ class PlayerProfileAggregator:
         row = (await self._db.execute(
             select(Team.id, Team.name, Team.tag, Team.logo_url)
             .join(TeamMember, TeamMember.team_id == Team.id)
-            .where(TeamMember.player_id == player_id, TeamMember.left_at.is_(None))
+            .where(TeamMember.player_id == player_id, TeamMember.left_at.is_(None),
+                   TeamMember.consent.in_(await _profile_consents(self._db)))
             .limit(1)
         )).first()
         if not row:

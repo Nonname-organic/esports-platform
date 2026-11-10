@@ -67,15 +67,125 @@ async def get_match(match_id: uuid.UUID, db: DBSession, cache: Cache):
     return Response(data=detail)
 
 
+class ReasonBody(BaseModel):
+    reason: str | None = Field(default=None, max_length=1000)
+
+
 @router.patch("/{match_id}/start", status_code=204)
 async def start_match(
     match_id: uuid.UUID,
     db: DBSession,
     cache: Cache,
     current_user: MatchOrganizer,
+    data: ReasonBody | None = None,
 ):
+    """開始で出場登録を固定する（RC4）。スターターが足りないチームがあれば理由が必須（D14）。"""
     service = MatchService(db, cache)
-    await service.start_match(match_id, current_user)
+    await service.start_match(match_id, current_user, reason=data.reason if data else None)
+
+
+class ForfeitBody(BaseModel):
+    winner_id: uuid.UUID
+    reason: str = Field(..., min_length=1, max_length=1000)
+
+
+@router.post("/{match_id}/forfeit", status_code=204)
+async def record_forfeit_without_start(match_id: uuid.UUID, data: ForfeitBody, db: DBSession, cache: Cache,
+                                       current_user: MatchOrganizer) -> None:
+    """開始を経ない不戦勝（RC4 Q04）。出場登録を固定せず、マップ・成績は記録しない。"""
+    await MatchService(db, cache).record_forfeit_without_start(match_id, data.winner_id, data.reason, current_user)
+
+
+class LineupBody(BaseModel):
+    starters: list[uuid.UUID] = Field(default_factory=list, max_length=20)
+    bench: list[uuid.UUID] = Field(default_factory=list, max_length=20)
+    reason: str | None = Field(default=None, max_length=1000)
+
+
+@router.get("/{match_id}/lineups", response_model=Response[dict[str, Any]])
+async def get_lineups(match_id: uuid.UUID, db: DBSession, cache: Cache):
+    """両チームの出場登録と、マップごとの実出場（D18: 試合を見られる人に公開）。"""
+    from app.services.match import lock_match  # noqa: F401  (読み取りだけ。ロックは取らない)
+    from app.models.match import Match
+    from app.services.roster import LineupService
+    match = await db.get(Match, match_id)
+    if match is None:
+        from app.core.exceptions import NotFoundError
+        raise NotFoundError("試合", str(match_id))
+    return Response(data=await LineupService(db, cache).get_lineups(match))
+
+
+@router.put("/{match_id}/lineups/{team_id}", response_model=Response[dict[str, Any]])
+async def put_lineup(match_id: uuid.UUID, team_id: uuid.UUID, data: LineupBody, db: DBSession, cache: Cache,
+                     current_user: CurrentUser):
+    """出場登録を置き換える。開始の前はチーム、固定の後は主催者（理由つき）、完了の後は管理者の訂正。"""
+    from app.services.match import lock_match
+    from app.services.roster import LineupService
+    match = await lock_match(db, match_id)
+    if match is None:
+        from app.core.exceptions import NotFoundError
+        raise NotFoundError("試合", str(match_id))
+    service = LineupService(db, cache)
+    await service.put_lineup(match, team_id, data.starters, data.bench, data.reason, current_user)
+    return Response(data=await service.get_lineups(match))
+
+
+class SubstitutionBody(BaseModel):
+    team_id: uuid.UUID
+    kind: str = Field(..., pattern="^(between_maps|mid_map|fill)$")
+    out_player_id: uuid.UUID | None = None
+    in_player_id: uuid.UUID
+    at_round: int | None = Field(default=None, ge=0, le=99)
+    reason: str | None = Field(default=None, max_length=1000)
+
+
+def _sub(s) -> dict[str, Any]:
+    return {"id": str(s.id), "game_number": s.game_number, "team_id": str(s.team_id), "kind": s.kind,
+            "out_lineup_entry_id": str(s.out_lineup_entry_id) if s.out_lineup_entry_id else None,
+            "in_lineup_entry_id": str(s.in_lineup_entry_id), "at_round": s.at_round, "reason": s.reason,
+            "status": s.status, "requested_at": s.requested_at, "approved_at": s.approved_at}
+
+
+@router.get("/{match_id}/substitutions", response_model=Response[list[dict[str, Any]]])
+async def list_substitutions(match_id: uuid.UUID, db: DBSession, cache: Cache):
+    from sqlalchemy import select
+    from app.models.roster import MatchSubstitution
+    rows = (await db.execute(select(MatchSubstitution).where(MatchSubstitution.match_id == match_id)
+                             .order_by(MatchSubstitution.game_number, MatchSubstitution.requested_at))).scalars()
+    return Response(data=[_sub(s) for s in rows])
+
+
+@router.post("/{match_id}/games/{game_number}/substitutions", response_model=Response[dict[str, Any]], status_code=201)
+async def submit_substitution(match_id: uuid.UUID, game_number: int, data: SubstitutionBody, db: DBSession,
+                              cache: Cache, current_user: CurrentUser):
+    """交代の申請（キャプテン・オーナー）か、主催者・管理者の理由つきの直接の記録（D27）。"""
+    from app.services.match import lock_match
+    from app.services.roster import SubstitutionService
+    if not 1 <= game_number <= 9:
+        raise ValidationError("マップの番号が不正です")
+    match = await lock_match(db, match_id)
+    if match is None:
+        from app.core.exceptions import NotFoundError
+        raise NotFoundError("試合", str(match_id))
+    sub = await SubstitutionService(db, cache).submit(
+        match, game_number=game_number, team_id=data.team_id, kind=data.kind, out_player_id=data.out_player_id,
+        in_player_id=data.in_player_id, at_round=data.at_round, reason=data.reason, user=current_user)
+    return Response(data=_sub(sub))
+
+
+@router.post("/{match_id}/substitutions/{sub_id}/{decision}", response_model=Response[dict[str, Any]])
+async def decide_substitution(match_id: uuid.UUID, sub_id: uuid.UUID, decision: str, db: DBSession, cache: Cache,
+                              current_user: MatchOrganizer):
+    from app.services.match import lock_match
+    from app.services.roster import SubstitutionService
+    if decision not in ("approve", "reject"):
+        raise ValidationError("approve か reject を指定してください")
+    match = await lock_match(db, match_id)
+    if match is None:
+        from app.core.exceptions import NotFoundError
+        raise NotFoundError("試合", str(match_id))
+    sub = await SubstitutionService(db, cache).decide(match, sub_id, decision == "approve", current_user)
+    return Response(data=_sub(sub))
 
 
 @router.post("/{match_id}/games/{game_number}/score", status_code=204)
@@ -224,6 +334,10 @@ async def dispute_result_report(
 
 
 @router.post("/{match_id}/reopen", status_code=204)
-async def reopen_match(match_id: uuid.UUID, db: DBSession, cache: Cache, current_user: MatchOrganizer) -> None:
-    """確定済みの結果を取り消して進行中へ戻す（次の試合が未開始の場合のみ）。"""
-    await MatchService(db, cache).reopen_match(match_id, current_user)
+async def reopen_match(match_id: uuid.UUID, db: DBSession, cache: Cache, current_user: MatchOrganizer,
+                       data: ReasonBody | None = None) -> None:
+    """確定済みの結果を取り消して進行中へ戻す（次の試合が未開始の場合のみ）。
+
+    RC4: 大会の完了の後は管理者だけが理由つきで行える（Q15）。バイと legacy の大会は再開しない。
+    """
+    await MatchService(db, cache).reopen_match(match_id, current_user, reason=data.reason if data else None)

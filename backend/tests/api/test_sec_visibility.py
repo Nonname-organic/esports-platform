@@ -5,7 +5,7 @@
 - 非公開の LFP/LFT が ID 指定やタグ検索で誰にでも読めた。
 - 下書き・非公開の大会が、優勝ハイライト・選手の大会履歴・タグ検索に出ていた。
 """
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
@@ -27,6 +27,14 @@ def _now():
 
 def _token(user) -> str:
     return issue_tokens(user)[0]
+
+
+async def _member_since_before(db, team, player):
+    """RC4: 既存の大会（legacy）は、所属の期間が大会の期間と重なる選手に帰属する。大会より前から所属させる。"""
+    m = await f.add_member(db, team=team, player=player)
+    m.joined_at = _now() - timedelta(days=60)
+    await db.flush()
+    return m
 
 
 class TestPlayerStatsPublic:
@@ -161,7 +169,7 @@ class TestTagSearch:
 
 
 async def _completed_with_report(db, owner, team, **kw):
-    tour = await f.make_tournament(db, organizer=owner, status=TournamentStatus.COMPLETED, **kw)
+    tour = await f.make_legacy_tournament(db, organizer=owner, status=TournamentStatus.COMPLETED, **kw)
     await f.register_team(db, tournament=tour, team=team)
     db.add(TournamentReport(tournament_id=tour.id, data={"champion": {"team_id": str(team.id),
                                                                       "team_name": team.name}}))
@@ -175,7 +183,7 @@ class TestPrivateTournamentsStayOut:
         owner = await f.make_user(db)
         player = await f.make_player(db, user=owner)
         team = await f.make_team(db, owner=owner)
-        await f.add_member(db, team=team, player=player)
+        await _member_since_before(db, team, player)
         public = await _completed_with_report(db, owner, team)
         await _completed_with_report(db, owner, team, visibility="private")
         await _completed_with_report(db, owner, team, visibility="unlisted")
@@ -192,7 +200,7 @@ class TestPrivateTournamentsStayOut:
 # ── RC3（S7）: 限定公開・非公開の大会を、実績カード・ランキング・通算成績・分析に数えない ──
 async def _final(db, owner, teams, player, *, kills, **kw):
     """teams[0] が決勝で teams[1] に勝って優勝した完了大会（4チーム・選手成績つき）。"""
-    tour = await f.make_tournament(db, organizer=owner, status=TournamentStatus.COMPLETED, **kw)
+    tour = await f.make_legacy_tournament(db, organizer=owner, status=TournamentStatus.COMPLETED, **kw)
     for t in teams:
         await f.register_team(db, tournament=tour, team=t)
     match = Match(tournament_id=tour.id, round_number=1, match_number=1, status=MatchStatus.COMPLETED,
@@ -225,7 +233,7 @@ class TestPrivateTournamentsStayOutOfAggregates:
 
         pub, priv, lim = await teams("pub"), await teams("priv"), await teams("lim")
         star = pub[0]  # 3大会すべてで優勝するチーム
-        await f.add_member(db, team=star, player=player)
+        await _member_since_before(db, star, player)
         public = await _final(db, owner, pub, player, kills=10)
         private = await _final(db, owner, [star, *priv[1:]], player, kills=40, visibility="private")
         limited = await _final(db, owner, [star, *lim[1:]], player, kills=40, visibility="limited")

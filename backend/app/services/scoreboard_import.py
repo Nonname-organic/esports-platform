@@ -83,16 +83,30 @@ class ScoreboardImportService:
         if not team_ids:
             return []
 
-        rows = (
-            await self._db.execute(
-                select(TeamMember, Player)
-                .join(Player, Player.id == TeamMember.player_id)
-                .where(
-                    TeamMember.team_id.in_(team_ids),
-                    TeamMember.left_at.is_(None),
+        from app.models.roster import MatchLineupEntry
+        from app.models.tournament import Tournament
+
+        tournament = await self._db.get(Tournament, match.tournament_id)
+        if tournament is not None and tournament.roster_mode == "roster":
+            # RC4: 名簿の大会の候補は、その試合の出場登録（設計の 2.4・10 章）
+            rows = (
+                await self._db.execute(
+                    select(MatchLineupEntry, Player)
+                    .join(Player, Player.id == MatchLineupEntry.player_id)
+                    .where(MatchLineupEntry.match_id == match.id, MatchLineupEntry.removed_at.is_(None))
                 )
-            )
-        ).all()
+            ).all()
+        else:
+            rows = (
+                await self._db.execute(
+                    select(TeamMember, Player)
+                    .join(Player, Player.id == TeamMember.player_id)
+                    .where(
+                        TeamMember.team_id.in_(team_ids),
+                        TeamMember.left_at.is_(None),
+                    )
+                )
+            ).all()
 
         roster: list[RosterEntry] = []
         for member, player in rows:

@@ -25,6 +25,9 @@ from app.services.match import MatchService, lock_match
 OPEN = ("pending", "disputed")
 
 
+from app.services.membership import formal_clause
+
+
 class MatchReportService:
     def __init__(self, db: AsyncSession, cache: RedisCache):
         self._db = db
@@ -59,7 +62,8 @@ class MatchReportService:
             select(TeamMember.team_id)
             .join(Player, Player.id == TeamMember.player_id)
             .where(TeamMember.team_id.in_(teams), Player.user_id == user.id,
-                   TeamMember.role == MemberRole.CAPTAIN, TeamMember.left_at.is_(None))
+                   TeamMember.role == MemberRole.CAPTAIN, TeamMember.left_at.is_(None),
+                   await formal_clause(self._db))
         )).scalars().first()
 
     async def _is_member(self, match: Match, user: User) -> bool:

@@ -48,6 +48,8 @@ class GamePlayerStatsUpdate(BaseModel):
     team2_score: int = Field(..., ge=0)
     duration_seconds: int | None = Field(default=None, ge=0)
     player_stats: list[PlayerStatsCreate]
+    # RC4: 完了・中止した大会の訂正（管理者だけ）の理由
+    correction_reason: str | None = Field(default=None, max_length=1000)
 
 
 class GameStatsCreate(BaseModel):

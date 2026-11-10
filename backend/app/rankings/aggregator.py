@@ -18,7 +18,7 @@ from app.core.redis import RedisCache
 from app.core.storage import resign_stored_url
 from app.models.enums import GameType, RegistrationStatus, TournamentStatus
 from app.models.player import Player
-from app.models.team import Team, TeamMember
+from app.models.team import Team
 from app.models.tournament import Tournament, TournamentRegistration
 from app.models.tournament_report import TournamentReport
 from app.rankings.tiers import MVP_RP, next_tier_for, placement_rp, tier_for, tier_progress
@@ -350,18 +350,18 @@ class RankingAggregator:
         await self._cache.set(cache_key, board, ttl=RANKING_CACHE_TTL)
         return board[:limit]
 
-    async def _compute_players(self, *, game: Optional[str], season: str) -> list[dict]:
-        team_rp = await self._team_rp_map(season=season)  # {team_id: rp}
-        if not team_rp:
-            return []
-        team_ids = [uuid.UUID(t) for t in team_rp.keys()]
-
-        rows = (await self._db.execute(
-            select(TeamMember.player_id, TeamMember.team_id).where(TeamMember.team_id.in_(team_ids))
-        )).all()
+    async def _player_rp(self, *, season: str, player_ids: Optional[set] = None) -> dict[str, int]:
+        """RC4（S8-2）: 個人の RP は帰属の関数で決める。大会・選手ごとに 1 回（D9）。"""
+        from app.rankings.attribution import attribution_entries
         agg: dict[str, int] = {}
-        for player_id, team_id in rows:
-            agg[str(player_id)] = agg.get(str(player_id), 0) + team_rp.get(str(team_id), 0)
+        for e in await attribution_entries(self._db, self._report_data, season=season, player_ids=player_ids):
+            gained = placement_rp(e["label"], e["team_count"])
+            if gained:
+                agg[e["player_id"]] = agg.get(e["player_id"], 0) + gained
+        return agg
+
+    async def _compute_players(self, *, game: Optional[str], season: str) -> list[dict]:
+        agg = await self._player_rp(season=season)
         if not agg:
             return []
 
@@ -413,14 +413,10 @@ class RankingAggregator:
         if not player:
             raise NotFoundError("プレイヤー", str(player_id))
 
-        team_ids = [str(t) for t in (await self._db.execute(
-            select(TeamMember.team_id).where(TeamMember.player_id == player_id)
-        )).scalars().all()]
         mvp = await self._player_mvp(player_id)
 
         async def _rp(season: str) -> int:
-            m = await self._team_rp_map(season=season)
-            return sum(m.get(t, 0) for t in team_ids)
+            return (await self._player_rp(season=season, player_ids={player_id})).get(str(player_id), 0)
 
         rp = await _rp("all") + mvp * MVP_RP
         tier = tier_for(rp)

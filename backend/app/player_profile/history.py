@@ -7,18 +7,15 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.enums import RegistrationStatus, TournamentStatus
-from app.models.team import Team, TeamMember
-from app.models.tournament import Tournament, TournamentRegistration
+from app.models.team import Team
 from app.models.tournament_report import TournamentReport
-from app.rankings.aggregator import _placements
 from app.reports.aggregator import TournamentReportAggregator
-from app.repositories.tournament import publicly_listed
 
 
 class PlayerHistoryAggregator:
@@ -26,43 +23,22 @@ class PlayerHistoryAggregator:
         self._db = db
 
     async def history(self, player_id: uuid.UUID, *, limit: int = 30) -> list[dict]:
-        team_ids = [t for t in (await self._db.execute(
-            select(TeamMember.team_id).where(TeamMember.player_id == player_id)
-        )).scalars().all()]
-        if not team_ids:
-            return []
-
-        rows = (await self._db.execute(
-            select(
-                Tournament.id, Tournament.name, Tournament.game, Tournament.end_at,
-                TournamentRegistration.team_id, Team.name,
-            )
-            .join(TournamentRegistration, TournamentRegistration.tournament_id == Tournament.id)
-            .join(Team, Team.id == TournamentRegistration.team_id)
-            .where(
-                TournamentRegistration.team_id.in_(team_ids),
-                TournamentRegistration.status == RegistrationStatus.APPROVED,
-                Tournament.status == TournamentStatus.COMPLETED,
-                publicly_listed(),  # 限定公開・非公開の大会は公開プロフィールに出さない
-            )
-            .order_by(Tournament.end_at.desc())
-            .limit(limit)
-        )).all()
-
-        out: list[dict] = []
-        for tid, tname, game, end_at, team_id, team_name in rows:
-            data = await self._report_data(tid)
-            placement = _placements(data).get(str(team_id)) if data else None
-            out.append({
-                "tournament_id": str(tid),
-                "tournament_name": tname,
-                "game": game.value if hasattr(game, "value") else str(game),
-                "ended_at": end_at.isoformat() if end_at else None,
-                "placement": placement,
-                "team_name": team_name,
-                "is_mvp": False,  # 将来 match_mvps 連携で精緻化
-            })
-        return out
+        """RC4（S8-2）: 帰属の関数で決めた大会だけを出す（名簿の大会は実出場、既存の大会は所属の期間）。"""
+        from app.rankings.attribution import attribution_entries
+        entries = await attribution_entries(self._db, self._report_data, season="all", player_ids={player_id})
+        entries.sort(key=lambda e: e["ended_at"] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+        entries = entries[:limit]
+        names = dict((await self._db.execute(select(Team.id, Team.name).where(
+            Team.id.in_({uuid.UUID(e["team_id"]) for e in entries} or {uuid.uuid4()})))).all())
+        return [{
+            "tournament_id": e["tournament_id"],
+            "tournament_name": e["tournament_name"],
+            "game": e["game"],
+            "ended_at": e["ended_at"].isoformat() if e["ended_at"] else None,
+            "placement": e["label"],
+            "team_name": names.get(uuid.UUID(e["team_id"])),
+            "is_mvp": False,  # 将来 match_mvps 連携で精緻化
+        } for e in entries]
 
     async def _report_data(self, tournament_id: uuid.UUID) -> Optional[dict]:
         report = await self._db.scalar(

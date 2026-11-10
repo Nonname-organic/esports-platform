@@ -72,6 +72,12 @@ class ConflictError(AppException):
         )
 
 
+class GoneError(AppException):
+    """廃止した API（RC4: メンバーの直接の追加は招待に置き換えた）。"""
+    def __init__(self, detail: str):
+        super().__init__(status_code=status.HTTP_410_GONE, detail=detail, error_type="gone")
+
+
 class RateLimitError(AppException):
     def __init__(self) -> None:
         super().__init__(

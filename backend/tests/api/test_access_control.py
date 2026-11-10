@@ -30,10 +30,13 @@ def _token(user) -> str:
 async def _ongoing_match(db):
     """主催者A の大会（開催中・2チーム）と、その1回戦の試合を作る。"""
     owner = await f.make_user(db, role=UserRole.ORGANIZER)
-    tour = await f.make_tournament(db, organizer=owner, status=TournamentStatus.ONGOING)
+    # RC4: 名簿の方式。出場人数 1 で、各チームに承認済みの名簿の選手を 1 人
+    tour = await f.make_tournament(db, organizer=owner, status=TournamentStatus.ONGOING,
+                                   lineup_size=1, roster_max=3)
     for i in range(2):
         team = await f.make_team(db, owner=owner, name=f"AC Team {i}", tag=f"AC{i}")
         await f.register_team(db, tournament=tour, team=team)
+        await f.roster_player(db, tournament=tour, team=team, name=f"AC{i}-p")
     await TournamentService(db, _Cache()).generate_bracket(tour.id, owner)
     match = (await db.execute(
         select(Match).where(Match.tournament_id == tour.id, Match.team1_id.is_not(None),

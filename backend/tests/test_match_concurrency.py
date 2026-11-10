@@ -15,7 +15,6 @@ from app.core.exceptions import BusinessRuleError
 from app.models.enums import (
     GameType,
     MatchStatus,
-    MemberRole,
     TournamentStatus,
     UserRole,
 )
@@ -44,19 +43,28 @@ async def _committed_match(status=MatchStatus.ONGOING):
     """別セッションから見えるよう、試合・選手・マップをコミットしておく。"""
     async with TestSessionLocal() as s:
         org = await f.make_user(s, role=UserRole.ORGANIZER)
-        tour = await f.make_tournament(s, organizer=org, status=TournamentStatus.ONGOING)
-        teams, rows = [], []
+        # RC4: 名簿の方式。出場人数 2 で、各チームの 2 人は承認済みの名簿の選手
+        tour = await f.make_tournament(s, organizer=org, status=TournamentStatus.ONGOING,
+                                       lineup_size=2, roster_max=4)
+        teams, rows, squads = [], [], []
         for i in range(2):
             team = await f.make_team(s, owner=await f.make_user(s), name=f"Conc {uuid.uuid4().hex[:4]}", tag=f"C{i}")
+            await f.register_team(s, tournament=tour, team=team)
             teams.append(team)
+            squad = []
             for j in range(2):
-                player = await f.make_player(s, user=await f.make_user(s), in_game_name=f"c{i}{j}")
-                await f.add_member(s, team=team, player=player, role=MemberRole.PLAYER)
+                player = await f.roster_player(s, tournament=tour, team=team, name=f"c{i}{j}")
+                squad.append(player)
                 rows.append(PlayerStatsCreate(player_id=player.id, team_id=team.id, kills=10))
+            squads.append(squad)
         match = Match(tournament_id=tour.id, round_number=1, match_number=1, status=status,
                       team1_id=teams[0].id, team2_id=teams[1].id)
         mp = Map(game=GameType.VALORANT, internal_name=f"conc-{uuid.uuid4().hex[:6]}", display_name="Conc")
         s.add_all([match, mp])
+        await s.flush()
+        if status != MatchStatus.SCHEDULED:  # 開始済みの試合は出場登録が固定されている
+            for team, squad in zip(teams, squads):
+                await f.lock_lineup(s, match=match, tournament=tour, team=team, players=squad)
         await s.commit()
         return org, match, mp, rows
 

@@ -86,6 +86,8 @@ class CareerAggregationService:
                 Match.id.label("match_id"),
                 Match.winner_id.label("match_winner"),
                 Match.tournament_id,
+                Match.started_at.label("match_started"),
+                Match.ended_at.label("match_ended"),
             )
             .join(MatchGame, PlayerMatchStats.match_game_id == MatchGame.id)
             .join(Match, MatchGame.match_id == Match.id)
@@ -96,6 +98,8 @@ class CareerAggregationService:
                 publicly_listed(),
             )
         )).all()
+
+        rows = await self._exclude_unattributed(player_id, rows)
 
         # マップ名解決
         map_names = await self._load_map_names()
@@ -385,6 +389,33 @@ class CareerAggregationService:
         except Exception:
             pass
         return None
+
+    async def _exclude_unattributed(self, player_id: uuid.UUID, rows) -> list:
+        """RC4（D4・Q13）: 本人否認・期限の後の本人未確認の所属の期間と、異議が認められた試合の成績を外す。
+
+        行は消さない。試合の時刻と重なる所属が、すべて数えない状態のときだけ外す（所属が分からない行は残す）。
+        """
+        from app.models.roster import ParticipationDispute
+        from app.models.team import TeamMember
+        from app.services.membership import CONSENTED, grace_deadline
+        deadline = await grace_deadline(self._db)
+        counted = CONSENTED + (("unconfirmed",) if deadline is None or datetime.now(timezone.utc) < deadline else ())
+        members = (await self._db.execute(select(
+            TeamMember.team_id, TeamMember.joined_at, TeamMember.left_at, TeamMember.consent,
+        ).where(TeamMember.player_id == player_id))).all()
+        upheld = set((await self._db.execute(select(ParticipationDispute.match_id).where(
+            ParticipationDispute.player_id == player_id, ParticipationDispute.status == "upheld"))).scalars())
+        kept = []
+        for r in rows:
+            if r.match_id in upheld:
+                continue
+            at = r.match_started or r.match_ended
+            overlapping = [m for m in members if m.team_id == r.team_id and at is not None
+                           and m.joined_at <= at and (m.left_at is None or m.left_at >= at)]
+            if overlapping and not any(m.consent in counted for m in overlapping):
+                continue
+            kept.append(r)
+        return kept
 
     async def _get_player_titles(self, player_id: uuid.UUID) -> tuple[int, int]:
         championships = mvp_count = 0
