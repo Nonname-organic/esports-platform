@@ -7,6 +7,7 @@ import { useMatchAdmin } from "@/features/matches/hooks/use-match-admin";
 import type { MatchDetail } from "@/types/match";
 import { MatchHeader } from "./match-header";
 import { StatusControls } from "./status-controls";
+import { LineupPanel } from "./lineup-panel";
 import { GameManager } from "./game-manager";
 import { BanPickPanel } from "./banpick-panel";
 import { ScoreboardImport } from "./scoreboard-import";
@@ -65,6 +66,9 @@ export function MatchAdminClient({ matchId, initialMatch, game }: MatchAdminClie
         startMatch={startMatch}
         registerResult={registerResult}
       />
+
+      {/* RC4: 出場登録（開始で固定）と交代 */}
+      <LineupPanel match={match} />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         {/* ゲーム管理 */}

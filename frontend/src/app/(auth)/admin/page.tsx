@@ -79,14 +79,23 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        <button
-          onClick={() => refetch()}
-          disabled={isFetching}
-          className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-400 hover:text-white transition-colors disabled:opacity-50"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? "animate-spin" : ""}`} />
-          更新
-        </button>
+        <div className="flex items-center gap-2">
+          {/* RC4: 出場の異議の裁定 */}
+          <a
+            href="/admin/disputes"
+            className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-400 hover:text-white transition-colors"
+          >
+            出場の異議
+          </a>
+          <button
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-400 hover:text-white transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? "animate-spin" : ""}`} />
+            更新
+          </button>
+        </div>
       </div>
 
       {/* コンテンツ */}

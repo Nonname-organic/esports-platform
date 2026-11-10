@@ -22,8 +22,9 @@ export const matchApi = {
     return apiClient.get(`/api/v1/matches?${qs.toString()}`);
   },
 
-  start: (id: string): Promise<void> =>
-    apiClient.patch(`/api/v1/matches/${id}/start`),
+  /** 開始で出場登録を固定する。スターターが出場人数に満たないチームがあれば理由が要る（RC4） */
+  start: (id: string, reason?: string): Promise<void> =>
+    apiClient.patch(`/api/v1/matches/${id}/start`, reason ? { reason } : undefined),
 
   /** この試合を配信対象にする。空文字で解除。 */
   setStreamUrl: (id: string, streamUrl: string): Promise<unknown> =>
@@ -54,7 +55,9 @@ export const matchApi = {
     apiClient.post(`/api/v1/matches/${id}/report/confirm`),
   disputeReport: (id: string, reason: string): Promise<{ data: { status: string } }> =>
     apiClient.post(`/api/v1/matches/${id}/report/dispute`, { reason }),
-  reopen: (id: string): Promise<void> => apiClient.post(`/api/v1/matches/${id}/reopen`),
+  /** 完了・中止した大会の試合は、管理者だけが理由つきで再開できる（RC4） */
+  reopen: (id: string, reason?: string): Promise<void> =>
+    apiClient.post(`/api/v1/matches/${id}/reopen`, reason ? { reason } : undefined),
 
   registerBanPick: (
     id: string,

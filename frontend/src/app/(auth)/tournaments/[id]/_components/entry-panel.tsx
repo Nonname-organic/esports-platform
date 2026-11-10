@@ -10,6 +10,7 @@ import { useMyTeams } from "@/features/teams/hooks/use-teams";
 import { useMyRegistration, useRegisterTeam, useWithdrawRegistration } from "@/features/tournaments/hooks/use-tournaments";
 import type { RegistrationState } from "@/features/tournaments/api/tournament-api";
 import type { TournamentDetail } from "@/types/tournament";
+import { RosterPanel } from "./roster-panel";
 
 const CARD = "rounded-xl border border-white/10 bg-slate-900 p-5";
 
@@ -131,6 +132,11 @@ export function EntryPanel({ tournament }: EntryPanelProps) {
           <p role="alert" className="mt-2 text-xs text-red-400">
             {withdraw.error instanceof Error ? withdraw.error.message : "辞退に失敗しました"}
           </p>
+        )}
+        {/* RC4: 名簿の方式の大会では、出場する選手を名簿に載せる（オーナー・キャプテン） */}
+        {tournament.roster_mode === "roster" && registration.can_manage_roster && registration.registration_id
+          && registration.team_id && ["pending", "approved", "waitlisted"].includes(registration.status) && (
+          <RosterPanel tournament={tournament} registrationId={registration.registration_id} teamId={registration.team_id} />
         )}
       </div>
     );

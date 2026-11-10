@@ -77,6 +77,13 @@ export interface TournamentDetail extends TournamentSummary {
   player_stats_enabled?: boolean | null;
   ranking_enabled?: boolean | null;
   is_public?: boolean | null;
+  /** RC4: roster（名簿の方式）か legacy（RC4 より前からある、名簿の無い大会） */
+  roster_mode?: "roster" | "legacy";
+  /** 名簿を固定した時刻（大会の開始） */
+  roster_locked_at?: string | null;
+  /** 出場人数・名簿の上限（未設定なら VALORANT は 5・7） */
+  lineup_size?: number | null;
+  roster_max?: number | null;
 }
 
 export interface BracketMatchTeam {

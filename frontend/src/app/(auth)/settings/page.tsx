@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRequireAuth } from "@/hooks/use-require-auth";
-import { AlertTriangle, Bell, Check, ChevronRight, Loader2, Lock, Mail, Settings as SettingsIcon, Shield } from "lucide-react";
+import { AlertTriangle, Bell, Check, ChevronRight, ClipboardList, Loader2, Lock, Mail, Settings as SettingsIcon, Shield, ShieldCheck } from "lucide-react";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthStore } from "@/store/auth-store";
 
@@ -123,6 +123,23 @@ export default function SettingsPage() {
         </div>
         <ChevronRight className="h-4 w-4 text-slate-600" />
       </Link>
+
+      {/* RC4: 所属と大会の名簿は、本人の承諾で決まる */}
+      {[
+        { href: "/settings/memberships", icon: ShieldCheck, title: "所属の確認", note: "本人未確認の所属の確認・否認" },
+        { href: "/teams/invitations", icon: Mail, title: "チームからの招待", note: "届いた招待への返事" },
+        { href: "/tournaments/roster-invitations", icon: ClipboardList, title: "大会の名簿への参加", note: "名簿に載せられた大会への返事" },
+      ].map(({ href, icon: Icon, title, note }) => (
+        <Link key={href} href={href}
+          className="mb-5 flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-900 p-5 hover:border-white/20 transition-colors">
+          <div className="rounded-lg bg-brand-500/10 p-2"><Icon className="h-5 w-5 text-brand-400" /></div>
+          <div className="flex-1">
+            <p className="text-sm font-bold text-white">{title}</p>
+            <p className="text-xs text-slate-500">{note}</p>
+          </div>
+          <ChevronRight className="h-4 w-4 text-slate-600" />
+        </Link>
+      ))}
 
       {/* 主催者機能 */}
       <section className="mb-5 rounded-2xl border border-white/10 bg-slate-900 p-5">

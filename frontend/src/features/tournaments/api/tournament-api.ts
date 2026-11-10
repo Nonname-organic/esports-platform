@@ -27,6 +27,9 @@ export type RegistrationState = "pending" | "approved" | "waitlisted" | "rejecte
 
 export interface MyRegistration {
   registered: boolean;
+  registration_id?: string;
+  /** RC4: 名簿を管理できるか（チームのオーナー・正式な所属のキャプテン） */
+  can_manage_roster?: boolean;
   status?: RegistrationState;
   team_id?: string;
   team_name?: string | null;

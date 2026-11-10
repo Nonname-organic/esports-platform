@@ -96,7 +96,7 @@ export function useMatchAdmin(matchId: string, initialData?: MatchDetail) {
 
   // ── ミューテーション ──────────────────────────────────────────────────────
   const startMatch = useMutation({
-    mutationFn: () => matchApi.start(matchId),
+    mutationFn: (reason?: string) => matchApi.start(matchId, reason),
     onSuccess: () => qc.invalidateQueries({ queryKey: matchKeys.detail(matchId) }),
   });
 
