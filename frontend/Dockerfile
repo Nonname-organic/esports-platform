@@ -5,7 +5,7 @@
 # ============================
 # Stage 1: deps
 # ============================
-FROM public.ecr.aws/docker/library/node:20-alpine AS deps
+FROM public.ecr.aws/docker/library/node:26-alpine AS deps
 WORKDIR /app
 
 # package-lock.json をコピーして再現性を確保
@@ -15,7 +15,7 @@ RUN npm install --include=optional
 # ============================
 # Stage 2: builder
 # ============================
-FROM public.ecr.aws/docker/library/node:20-alpine AS builder
+FROM public.ecr.aws/docker/library/node:26-alpine AS builder
 WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
@@ -44,7 +44,7 @@ RUN npm run build
 # ============================
 # Stage 3: runner (production)
 # ============================
-FROM public.ecr.aws/docker/library/node:20-alpine AS runner
+FROM public.ecr.aws/docker/library/node:26-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
