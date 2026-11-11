@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import BusinessRuleError, ForbiddenError, NotFoundError
 from app.core.redis import RedisCache
 from app.models.bot_ops import MatchDispute
-from app.models.enums import MatchStatus, MemberRole, UserRole
+from app.models.enums import MatchStatus, MemberRole, TournamentStatus, UserRole
 from app.models.match import Match
 from app.models.match_report import MatchResultReport
 from app.models.player import Player
@@ -109,6 +109,11 @@ class MatchReportService:
         # 権限はここまでで確認済み（報告者と相手チーム、または主催者）
         service = MatchService(self._db, self._cache)
         if match.status == MatchStatus.SCHEDULED:
+            # 開始は出場登録と名簿を固定する。チームの確定で始めるのは、大会が開催中（名簿は固定済み）の
+            # ときだけ。それより前は主催者が開始する（チームが大会全体の名簿を固定できないように）
+            tournament = await self._db.get(Tournament, match.tournament_id)
+            if not self._is_manager(tournament, user) and tournament.status != TournamentStatus.ONGOING:
+                raise BusinessRuleError("大会が開催中になってから結果を確定できます（それより前は主催者が試合を開始します）")
             await service.start_match(match.id, user, authorized=True)
         await service.register_result(
             match.id, MatchResultCreate(winner_id=winner_id), user, authorized=True,

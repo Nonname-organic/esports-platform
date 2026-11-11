@@ -30,6 +30,7 @@ from app.core.storage import resign_stored_url
 from app.events import Ev, EventEnvelope, EventService
 from app.services.membership import formal_clause
 from app.services.roster import (
+    CLOSED,
     NOT_STARTED,
     closed_tournament_guard,
     is_legacy,
@@ -38,9 +39,14 @@ from app.services.roster import (
 )
 
 
-def guard_status_change(tournament, new_status) -> None:
-    """legacy の大会を開催中にしない。未開始の legacy の大会を完了にしない（Q01・Q18）。"""
-    if not is_legacy(tournament) or new_status == tournament.status:
+def guard_status_change(tournament, new_status, user) -> None:
+    """完了・中止した大会の状態は管理者だけが変える（Q15。主催者が戻して訂正の規則を避けられないように）。
+    legacy の大会を開催中にしない。未開始の legacy の大会を完了にしない（Q01・Q18）。"""
+    if new_status == tournament.status:
+        return
+    if tournament.status in CLOSED and user.role != UserRole.ADMIN:
+        raise ConflictError("完了・中止した大会の状態は、管理者だけが変更できます")
+    if not is_legacy(tournament):
         return
     if new_status == TournamentStatus.ONGOING:
         raise ConflictError("この大会は名簿の無い旧方式（legacy）のため開催中にできません。"
@@ -233,7 +239,7 @@ class TournamentService:
         update_data = data.model_dump(exclude_none=True)
         update_data = self._preserve_discord_webhook(tournament, update_data)
         if "status" in update_data:
-            guard_status_change(tournament, TournamentStatus(update_data["status"]))
+            guard_status_change(tournament, TournamentStatus(update_data["status"]), current_user)
         # 変更対象フィールドのスカラー値のみ before に記録（差分・PII非対象 / ADR-0008）
         keys = [k for k in update_data if _is_scalar(getattr(tournament, k, None))]
         before = {k: _scalar(getattr(tournament, k, None)) for k in keys}
@@ -710,7 +716,7 @@ class TournamentService:
 
         # 主催者は任意のステータスへ手動変更できる（RC4: legacy の大会の開催中・未開始からの完了を除く）。
         # 手動変更後は status_locked=True にし、日程による自動更新の対象外とする。
-        guard_status_change(tournament, new_status)
+        guard_status_change(tournament, new_status, current_user)
         old_status = tournament.status
         tournament = await self._repo.update(
             tournament, status=new_status, status_locked=True

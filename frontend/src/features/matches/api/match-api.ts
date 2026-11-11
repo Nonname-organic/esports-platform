@@ -43,6 +43,8 @@ export const matchApi = {
       winner_id: string;
       was_forfeit?: boolean;
       game_stats?: unknown[];
+      /** 完了・中止した大会の訂正（管理者だけ）の理由（RC4） */
+      correction_reason?: string;
     },
   ): Promise<void> => apiClient.post(`/api/v1/matches/${id}/result`, data),
 

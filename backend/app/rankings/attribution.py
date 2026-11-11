@@ -69,7 +69,7 @@ async def _roster_pairs(db: AsyncSession, tournament_id) -> set[tuple]:
     for mid, played in games.items():
         if not entries.get(mid):
             continue
-        timeline = compute_timeline(entries[mid], subs.get(mid, []), max(played))
+        timeline = compute_timeline(entries[mid], subs.get(mid, []), played)
         by_id = {e.id: e for e in entries[mid]}
         for (team_id, g), sets in timeline.items():
             if g not in played:

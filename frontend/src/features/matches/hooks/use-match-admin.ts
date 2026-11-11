@@ -116,7 +116,7 @@ export function useMatchAdmin(matchId: string, initialData?: MatchDetail) {
   });
 
   const registerResult = useMutation({
-    mutationFn: (data: { winner_id: string; was_forfeit?: boolean }) =>
+    mutationFn: (data: { winner_id: string; was_forfeit?: boolean; correction_reason?: string }) =>
       matchApi.registerResult(matchId, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: matchKeys.detail(matchId) }),
   });

@@ -11,7 +11,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 
 from app.core.security import issue_tokens
-from app.models.enums import MatchStatus, RegistrationStatus, TournamentStatus, UserRole
+from app.models.enums import MatchStatus, MemberRole, RegistrationStatus, TournamentStatus, UserRole
 from app.models.match import Match, MatchGame, MatchResult, PlayerMatchStats
 from app.models.roster import AdminCorrection, MatchLineupEntry, ParticipationDispute, TournamentRosterEntry
 from app.models.team import TeamMember
@@ -535,3 +535,111 @@ class TestAttribution:
             consent="rejected", rejected_at=_now()))
         res = await client.get(f"{API}/players/{player.id}/history")
         assert [(h["placement"], h["team_name"]) for h in res.json()["data"]] == [("runner_up", "RC4 Second")]
+
+
+# ── 独立レビューの指摘（2026-11-11）の回帰テスト ─────────────────────────────
+
+def test_出場の計算は実在するマップの番号だけを回す():
+    """番号の大きさで回数が増えない（大きな番号のマップで API が止まらない）。"""
+    from types import SimpleNamespace as N
+    from app.services.roster import compute_timeline
+    a, b = N(id="a", team_id="t", slot="starter"), N(id="b", team_id="t", slot="bench")
+    sub = N(team_id="t", game_number=2, kind="between_maps", out_lineup_entry_id="a", in_lineup_entry_id="b")
+    out = compute_timeline([a, b], [sub], {1, 2_000_000_000})
+    assert [out[("t", g)]["participants"] for g in (1, 2, 2_000_000_000)] == [{"a"}, {"b"}, {"b"}]
+    assert len(out) == 3
+
+
+class TestReviewFindings:
+    @pytest.mark.asyncio
+    async def test_マップの番号は1から9まで(self, client: AsyncClient, db):
+        w = await _started(client, db)
+        for n in (0, 10, 2147483647):
+            res = await client.post(f"{API}/matches/{w['match'].id}/games/{n}/score", headers=_h(w["org"]),
+                                    json={"team1_score": 1, "team2_score": 0})
+            assert res.status_code == 422, (n, res.text)
+            res = await client.post(f"{API}/matches/{w['match'].id}/games/{n}/player-stats", headers=_h(w["org"]),
+                                    json=_stats([]))
+            assert res.status_code == 422, (n, res.text)
+
+    @pytest.mark.asyncio
+    async def test_完了した大会の状態と結果は管理者だけが理由つきで変えられる(self, client: AsyncClient, db, admin_user):
+        w = await _started(client, db)
+        m = w["match"]
+        w["tour"].status = TournamentStatus.COMPLETED
+        await db.flush()
+        status_url = f"{API}/tournaments/{w['tour'].id}/status"
+        assert (await client.patch(status_url, headers=_h(w["org"]), json={"status": "ongoing"})).status_code == 409
+        result = {"winner_id": str(w["teams"][0].id)}
+        assert (await client.post(f"{API}/matches/{m.id}/result", headers=_h(w["org"]), json=result)).status_code == 409
+        score = f"{API}/matches/{m.id}/games/1/score"
+        body = {"team1_score": 13, "team2_score": 5}
+        assert (await client.post(score, headers=_h(w["org"]), json=body)).status_code == 409
+        assert (await client.post(score, headers=_h(admin_user), json=body)).status_code == 400
+        res = await client.post(score, headers=_h(admin_user), json={**body, "correction_reason": "入力の誤り"})
+        assert res.status_code == 204, res.text
+        res = await client.post(f"{API}/matches/{m.id}/result", headers=_h(admin_user),
+                                json={**result, "correction_reason": "入力の誤り"})
+        assert res.status_code == 204, res.text
+        kinds = list((await db.execute(select(AdminCorrection.kind).where(AdminCorrection.match_id == m.id))).scalars())
+        assert kinds == ["result_change", "result_change"]
+        assert (await client.patch(status_url, headers=_h(admin_user), json={"status": "ongoing"})).status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_大会の開始の前はチームの確定で試合を開始しない(self, client: AsyncClient, db):
+        w = await _match_world(db, status=TournamentStatus.CHECK_IN)
+        m, (a, _b) = w["match"], w["teams"]
+        url = f"{API}/matches/{m.id}/report"
+        assert (await client.post(url, headers=_h(w["owners"][0]), json={"winner_id": str(a.id)})).status_code == 200
+        res = await client.post(url, headers=_h(w["owners"][1]), json={"winner_id": str(a.id)})
+        assert res.status_code == 400, res.text  # 一致すると確定になるが、開始は主催者が行う
+        await db.refresh(m)
+        await db.refresh(w["tour"])
+        assert m.status == MatchStatus.SCHEDULED and w["tour"].roster_locked_at is None
+
+    @pytest.mark.asyncio
+    async def test_開始を経ない不戦勝の試合に出場登録も成績も足せない(self, client: AsyncClient, db):
+        w = await _match_world(db)
+        m, team1 = w["match"], w["teams"][0]
+        (_u1, p1), = w["squads"][0]
+        res = await client.post(f"{API}/matches/{m.id}/forfeit", headers=_h(w["org"]),
+                                json={"winner_id": str(team1.id), "reason": "相手が来なかった"})
+        assert res.status_code == 204, res.text
+        res = await client.put(f"{API}/matches/{m.id}/lineups/{team1.id}", headers=_h(w["org"]),
+                               json={"starters": [str(p1.id)], "reason": "後から足す"})
+        assert res.status_code == 409, res.text
+        res = await client.post(f"{API}/matches/{m.id}/games/1/player-stats", headers=_h(w["org"]),
+                                json=_stats([_row(p1, team1.id)]))
+        assert res.status_code == 400, res.text
+
+    @pytest.mark.asyncio
+    async def test_キャプテンでなくなった人は自分の送った招待も取り消せない(self, client: AsyncClient, db):
+        owner = await f.make_user(db)
+        team = await f.make_team(db, owner=owner)
+        cap_user, cap_player = await _person(db, "Captain")
+        await f.add_member(db, team=team, player=cap_player, role=MemberRole.CAPTAIN)
+        invitee, _p = await _person(db, "Invitee two")
+        res = await client.post(f"{API}/teams/{team.id}/invitations", headers=_h(cap_user),
+                                json={"username": invitee.username})
+        assert res.status_code == 201, res.text
+        inv_id = res.json()["data"]["id"]
+        await db.execute(TeamMember.__table__.update().where(TeamMember.player_id == cap_player.id)
+                         .values(role=MemberRole.PLAYER))
+        url = f"{API}/teams/{team.id}/invitations/{inv_id}"
+        assert (await client.delete(url, headers=_h(cap_user))).status_code == 403
+        assert (await client.delete(url, headers=_h(owner))).status_code == 204
+
+    @pytest.mark.asyncio
+    async def test_交代の一覧は主催者だけが見られ_外された出場登録では異議を出せない(self, client: AsyncClient, db):
+        w = await _started(client, db)
+        m, t1 = w["match"], w["teams"][0].id
+        url = f"{API}/matches/{m.id}/substitutions"
+        assert (await client.get(url)).status_code in (401, 403)
+        assert (await client.get(url, headers=_h(w["owners"][0]))).status_code == 403
+        assert (await client.get(url, headers=_h(w["org"]))).status_code == 200
+        res = await client.put(f"{API}/matches/{m.id}/lineups/{t1}", headers=_h(w["org"]),
+                               json={"starters": [str(w["p1"].id)], "bench": [], "reason": "登録の誤り"})
+        assert res.status_code == 200, res.text
+        res = await client.post(f"{API}/me/participation-disputes", headers=_h(w["u2"]),
+                                json={"match_id": str(m.id), "reason": "出ていない"})
+        assert res.status_code == 403, res.text

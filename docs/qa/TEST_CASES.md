@@ -91,7 +91,9 @@
 | ROSTER-005 | 交代とマップごとの実出場 | 開始済み | POST /matches/{id}/games/{n}/substitutions | 成績を書けるのはそのマップに出た選手だけ | P1 | ✅ |
 | ROSTER-006 | 出場の異議と裁定 | 出場登録に載った本人 | POST /me/participation-disputes → 管理者が PATCH | 認めると個人の記録に数えない | P1 | ✅ |
 | ROSTER-007 | 旧方式（legacy）の大会の制限と切り替え | RC4 より前からある大会 | start・status ongoing → POST /tournaments/{id}/roster-mode | 409 → 未開始なら 200（一方向） | P0 | ✅ |
-| ROSTER-008 | 完了した大会の訂正は管理者だけ（理由つき） | 完了した大会 | 成績の保存・再開 | 主催者 409、管理者は理由が無いと 400。訂正の記録が残る | P1 | ✅ |
+| ROSTER-008 | 完了した大会の訂正は管理者だけ（理由つき） | 完了した大会 | 成績の保存・スコア・結果・再開・状態の変更 | 主催者 409、管理者は理由が無いと 400。訂正の記録が残る | P1 | ✅ |
+| ROSTER-009 | マップの番号の上限 | 開始済み | POST /matches/{id}/games/{0・10・巨大な値}/score・player-stats | 422 | P1 | ✅ |
+| ROSTER-010 | 大会の開始の前はチームの確定で試合を開始しない | チェックイン中の大会 | 両チームが同じ勝者を報告 | 400。試合は予定のまま、名簿は固定されない | P1 | ✅ |
 
 ## SCOUT — スカウト
 | ID | Title | Precondition | Steps | Expected | Pri | Auto |

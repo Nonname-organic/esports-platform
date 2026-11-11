@@ -24,6 +24,7 @@ export function StatusControls({ match, startMatch, registerResult }: StatusCont
   const [showForfeit, setShowForfeit] = useState(false);
   const [forfeitWinner, setForfeitWinner] = useState("");
   const [forfeitReason, setForfeitReason] = useState("");
+  const [correctionReason, setCorrectionReason] = useState("");
   const qc = useQueryClient();
   const reopen = useMutation({
     mutationFn: (reason?: string) => matchApi.reopen(match.id, reason),
@@ -39,7 +40,9 @@ export function StatusControls({ match, startMatch, registerResult }: StatusCont
 
   const handleComplete = async () => {
     if (!winnerId) return;
-    await registerResult.mutateAsync({ winner_id: winnerId, was_forfeit: isForfeit });
+    await registerResult.mutateAsync({
+      winner_id: winnerId, was_forfeit: isForfeit, correction_reason: correctionReason.trim() || undefined,
+    });
     setShowComplete(false);
   };
 
@@ -219,6 +222,14 @@ export function StatusControls({ match, startMatch, registerResult }: StatusCont
             <span className="text-sm text-slate-400">没収試合（Forfeit）</span>
           </label>
 
+          <input
+            value={correctionReason}
+            onChange={(e) => setCorrectionReason(e.target.value)}
+            placeholder="訂正の理由（完了した大会を管理者が直すときだけ）"
+            aria-label="訂正の理由"
+            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white outline-none focus:border-brand-500"
+          />
+
           <div className="flex items-center gap-2">
             <button
               onClick={handleComplete}
@@ -237,9 +248,9 @@ export function StatusControls({ match, startMatch, registerResult }: StatusCont
           </div>
 
           {registerResult.isError && (
-            <p className="text-xs text-red-400">
+            <p role="alert" className="text-xs text-red-400">
               <XCircle className="inline h-3.5 w-3.5 mr-1" />
-              エラーが発生しました。再試行してください。
+              {registerResult.error instanceof Error ? registerResult.error.message : "エラーが発生しました。再試行してください。"}
             </p>
           )}
         </div>

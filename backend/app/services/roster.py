@@ -175,16 +175,21 @@ async def participation(db: AsyncSession, match: Match, upto_game: int | None = 
     ).order_by(MatchSubstitution.game_number, MatchSubstitution.approved_at, MatchSubstitution.requested_at)
     )).scalars())
     subs = [s for s in subs if s.id != exclude_sub]
-    games = [g for g in (await db.execute(select(MatchGame.game_number).where(MatchGame.match_id == match.id))).scalars()]
-    return compute_timeline(entries, subs, max([1, upto_game or 1, *games, *(s.game_number for s in subs)]))
+    games = set((await db.execute(select(MatchGame.game_number).where(MatchGame.match_id == match.id))).scalars())
+    return compute_timeline(entries, subs, games | {upto_game or 1})
 
 
-def compute_timeline(entries: list, subs: list, last: int) -> dict:
-    """設計の 2.4 の計算（DB を読まない）。subs は承認済みの交代を、マップ・承認の順に並べたもの。"""
+def compute_timeline(entries: list, subs: list, games) -> dict:
+    """設計の 2.4 の計算（DB を読まない）。subs は承認済みの交代を、マップ・承認の順に並べたもの。
+
+    games は計算するマップの番号。交代のあるマップを足して、番号の順に 1 回ずつだけ回す。
+    交代の無いマップでは出場者が変わらないので、間の番号を飛ばしても結果は同じ（番号の大きさで回数が増えない）。
+    """
+    numbers = sorted({int(g) for g in games} | {s.game_number for s in subs})
     out: dict = {}
     for team_id in {e.team_id for e in entries}:
         playing = {e.id for e in entries if e.team_id == team_id and e.slot == "starter"}
-        for g in range(1, last + 1):
+        for g in numbers:
             for s in subs:
                 if s.team_id == team_id and s.game_number == g and s.kind in ("between_maps", "fill"):
                     playing.discard(s.out_lineup_entry_id)
@@ -437,11 +442,15 @@ class LineupService:
         if team_id not in (match.team1_id, match.team2_id):
             raise BusinessRuleError("この試合のチームではありません")
         admin_fix = closed_tournament_guard(t, user, reason)
+        if admin_fix and match.lineup_locked_at is None:
+            raise ConflictError("開始を経ずに決着した試合には、出場登録を作れません")
         if not admin_fix:
             if match.lineup_locked_at is None and match.status == MatchStatus.SCHEDULED:
                 if not is_organizer(t, user):
                     await MembershipService(self._db, self._cache).require_team_manager(
                         await self._db.get(Team, team_id), user)
+            elif match.lineup_locked_at is None:
+                raise ConflictError("開始を経ずに決着した試合には、出場登録を作れません")
             else:
                 if not is_organizer(t, user):
                     raise ConflictError("出場登録は固定されています。変更は大会の主催者に依頼してください")
@@ -642,7 +651,8 @@ class DisputeService:
         if player is None:
             raise ForbiddenError("異議を出せるのは、出場登録・成績に載った本人だけです")
         on_record = await self._db.scalar(select(MatchLineupEntry.id).where(
-            MatchLineupEntry.match_id == match_id, MatchLineupEntry.player_id == player.id).limit(1))
+            MatchLineupEntry.match_id == match_id, MatchLineupEntry.player_id == player.id,
+            MatchLineupEntry.removed_at.is_(None)).limit(1))
         if on_record is None:
             on_record = await self._db.scalar(select(PlayerMatchStats.id).join(
                 MatchGame, MatchGame.id == PlayerMatchStats.match_game_id).where(

@@ -166,8 +166,8 @@ class MembershipService:
         inv = await self._locked(invitation_id)
         if inv.team_id != team_id:
             raise NotFoundError("招待", str(invitation_id))
-        if inv.invited_by_user_id != current_user.id:
-            await self.require_team_manager(await self._team(team_id), current_user)
+        # 送った人でも、オーナー・キャプテンでなくなっていれば取り消せない
+        await self.require_team_manager(await self._team(team_id), current_user)
         if inv.status != "pending":
             raise ConflictError("返事待ちの招待だけを取り消せます")
         inv.status, inv.decided_at, inv.decided_by_user_id = "cancelled", utcnow(), current_user.id

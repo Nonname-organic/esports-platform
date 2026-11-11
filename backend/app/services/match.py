@@ -184,6 +184,8 @@ class MatchService:
 
         if match.status != MatchStatus.ONGOING:
             raise BusinessRuleError("進行中の試合のスコアのみ更新できます")
+        tournament = await self._db.get(Tournament, match.tournament_id)
+        admin_fix = closed_tournament_guard(tournament, current_user, data.correction_reason)
 
         winner_id = None
         if data.team1_score != data.team2_score:
@@ -202,6 +204,11 @@ class MatchService:
             side_first_team1=data.side_first_team1,
             duration_seconds=data.duration_seconds,
         )
+        if admin_fix:
+            await record_correction(self._db, kind="result_change", reason=data.correction_reason,
+                                    actor=current_user, tournament_id=tournament.id, match_id=match.id,
+                                    before={}, after={"game_number": game_number, "team1_score": data.team1_score,
+                                                      "team2_score": data.team2_score})
 
         # WebSocket でリアルタイム配信
         await self._cache.publish(
@@ -238,6 +245,8 @@ class MatchService:
             raise BusinessRuleError("進行中または完了した試合にのみ成績を登録できます")
         tournament = await self._db.get(Tournament, match.tournament_id)
         admin_fix = closed_tournament_guard(tournament, current_user, data.correction_reason)
+        if not is_legacy(tournament) and match.lineup_locked_at is None:
+            raise BusinessRuleError("開始していない試合（開始を経ない不戦勝を含む）には、マップ・成績を記録できません")
         entry_of = await self._check_player_stats(match, data.player_stats, game_number)
 
         winner_id = None
@@ -449,6 +458,9 @@ class MatchService:
 
             if match.status != MatchStatus.ONGOING:
                 raise BusinessRuleError("進行中の試合の結果のみ登録できます")
+            tournament = await self._db.get(Tournament, match.tournament_id)
+            # 完了・中止した大会では、チームの報告・Bot・主催者の確定も断る（管理者の理由つきの訂正だけ）
+            admin_fix = closed_tournament_guard(tournament, current_user, data.correction_reason)
 
             winner_id = data.winner_id
             if winner_id not in (match.team1_id, match.team2_id):
@@ -523,6 +535,11 @@ class MatchService:
             match.status = MatchStatus.COMPLETED
             match.winner_id = winner_id
             match.ended_at = datetime.now(timezone.utc)
+            if admin_fix:
+                await record_correction(self._db, kind="result_change", reason=data.correction_reason,
+                                        actor=current_user, tournament_id=tournament.id, match_id=match.id,
+                                        before={"status": "ongoing"},
+                                        after={"winner_id": str(winner_id), "was_forfeit": data.was_forfeit})
             # 確認待ち・異議中のチーム報告は、主催者の確定で決着したものとして閉じる
             from app.models.match_report import MatchResultReport
             await self._db.execute(

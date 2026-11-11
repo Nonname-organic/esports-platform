@@ -67,6 +67,10 @@ async def get_match(match_id: uuid.UUID, db: DBSession, cache: Cache):
     return Response(data=detail)
 
 
+# マップの番号の上限（BO7 まで）。番号の大きさで出場の計算が重くならないよう、保存の入口で断る
+MAX_GAME_NUMBER = 9
+
+
 class ReasonBody(BaseModel):
     reason: str | None = Field(default=None, max_length=1000)
 
@@ -147,7 +151,8 @@ def _sub(s) -> dict[str, Any]:
 
 
 @router.get("/{match_id}/substitutions", response_model=Response[list[dict[str, Any]]])
-async def list_substitutions(match_id: uuid.UUID, db: DBSession, cache: Cache):
+async def list_substitutions(match_id: uuid.UUID, db: DBSession, cache: Cache, current_user: MatchOrganizer):
+    """交代の記録（主催者・管理者だけ。理由は自由記述なので公開しない）。"""
     from sqlalchemy import select
     from app.models.roster import MatchSubstitution
     rows = (await db.execute(select(MatchSubstitution).where(MatchSubstitution.match_id == match_id)
@@ -161,7 +166,7 @@ async def submit_substitution(match_id: uuid.UUID, game_number: int, data: Subst
     """交代の申請（キャプテン・オーナー）か、主催者・管理者の理由つきの直接の記録（D27）。"""
     from app.services.match import lock_match
     from app.services.roster import SubstitutionService
-    if not 1 <= game_number <= 9:
+    if not 1 <= game_number <= MAX_GAME_NUMBER:
         raise ValidationError("マップの番号が不正です")
     match = await lock_match(db, match_id)
     if match is None:
@@ -197,6 +202,8 @@ async def update_game_score(
     cache: Cache,
     current_user: MatchOrganizer,
 ):
+    if not 1 <= game_number <= MAX_GAME_NUMBER:
+        raise ValidationError("マップの番号が不正です")
     service = MatchService(db, cache)
     await service.update_game_score(match_id, game_number, data, current_user)
 
@@ -223,6 +230,8 @@ async def save_game_player_stats(
     current_user: MatchOrganizer,
 ):
     """1マップ分のスコアと選手成績を保存する（スコアボード取り込みの確定先）"""
+    if not 1 <= game_number <= MAX_GAME_NUMBER:
+        raise ValidationError("マップの番号が不正です")
     service = MatchService(db, cache)
     await service.save_game_player_stats(match_id, game_number, data, current_user)
 

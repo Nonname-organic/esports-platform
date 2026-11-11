@@ -188,7 +188,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=NOW),
         sa.CheckConstraint(
             "kind IN ('lineup_change','substitution_change','stats_change','match_reopen',"
-            "'roster_change','membership_unreject','registration_change',"
+            "'roster_change','membership_unreject','registration_change','result_change',"
             # 切り戻しの手順書（Q30）の 1 回だけの作業で、完了した roster の大会を legacy に戻すときの記録
             "'roster_mode_change')", name="ck_admin_corrections_kind"),
     )
