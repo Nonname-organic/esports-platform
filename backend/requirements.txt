@@ -44,7 +44,7 @@ arq==0.26.1
 aioboto3==13.2.0
 
 # Data Analysis
-pandas==2.2.3
+pandas==3.0.6
 polars==1.13.1
 numpy==2.1.3
 
