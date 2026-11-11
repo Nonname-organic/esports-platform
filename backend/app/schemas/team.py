@@ -63,6 +63,9 @@ class TeamMemberSchema(BaseModel):
     jersey_number: Optional[int]
     joined_at: datetime
     is_active: bool
+    # RC4: 承諾の状態と、正式な所属として扱うか（期限の後の本人未確認は False）
+    consent: Optional[str] = None
+    formal: bool = True
 
 
 class AddMemberRequest(BaseModel):
@@ -73,3 +76,55 @@ class AddMemberRequest(BaseModel):
 
 class UpdateMemberRoleRequest(BaseModel):
     role: MemberRole
+
+
+# ── RC4: 招待と所属の確認 ─────────────────────────────────────────────────────
+
+class TeamInvitationCreate(BaseModel):
+    username: str = Field(..., min_length=1, max_length=50, description="招待するユーザーのユーザー名")
+    role: MemberRole = MemberRole.PLAYER
+
+
+class TeamInvitationSchema(BaseModel):
+    id: uuid.UUID
+    team_id: uuid.UUID
+    invitee_user_id: uuid.UUID
+    invited_by_user_id: Optional[uuid.UUID]
+    role: MemberRole
+    status: str
+    created_at: datetime
+    expires_at: datetime
+    decided_at: Optional[datetime]
+    membership_id: Optional[uuid.UUID]
+    # チームの管理者の一覧でだけ入れる（招待したときに自分で入れたユーザー名）
+    invitee_username: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class MyTeamInvitationSchema(TeamInvitationSchema):
+    team_name: str
+    team_tag: str
+
+
+class MembershipSchema(BaseModel):
+    id: uuid.UUID
+    team_id: uuid.UUID
+    team_name: str
+    team_tag: str
+    role: str
+    joined_at: datetime
+    left_at: Optional[datetime]
+    consent: str
+    confirmed_at: Optional[datetime]
+    rejected_at: Optional[datetime]
+    formal: bool
+
+
+class MyMembershipsResponse(BaseModel):
+    deadline: Optional[datetime]
+    items: list[MembershipSchema]
+
+
+class ReasonRequest(BaseModel):
+    reason: str = Field(..., min_length=1, max_length=1000)

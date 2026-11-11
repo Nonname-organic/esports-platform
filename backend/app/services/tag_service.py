@@ -45,16 +45,20 @@ class TagService:
 
     async def _resolve_or_create(self, slugs_or_labels: list[str]) -> list[Tag]:
         """入力（slug or ラベル）を正規化し、既存タグ解決 or 新規作成。"""
-        norm = [slugify(s) for s in slugs_or_labels if s and s.strip()]
-        norm = list(dict.fromkeys(norm))  # 重複排除・順序維持
-        if not norm:
+        # slug ごとに最初の入力を残す（重複排除・順序維持）。以前は重複を除いた slug と
+        # 除く前の入力を zip しており、重複があると新しいタグに別の入力のラベルが付いた
+        pairs: dict[str, str] = {}
+        for s in slugs_or_labels:
+            if s and s.strip():
+                pairs.setdefault(slugify(s), s.strip())
+        if not pairs:
             return []
-        existing = {t.slug: t for t in await self._repo.get_by_slugs(norm)}
+        existing = {t.slug: t for t in await self._repo.get_by_slugs(list(pairs))}
         result: list[Tag] = []
-        for slug, original in zip(norm, [s for s in slugs_or_labels if s and s.strip()]):
+        for slug, original in pairs.items():
             tag = existing.get(slug)
             if tag is None:
-                tag = await self._repo.create_tag(slug=slug, label=original.strip()[:50])
+                tag = await self._repo.create_tag(slug=slug, label=original[:50])
                 existing[slug] = tag
             result.append(tag)
         return result

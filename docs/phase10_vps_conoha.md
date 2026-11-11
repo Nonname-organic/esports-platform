@@ -157,8 +157,8 @@ mkdir -p certbot-www nginx/ssl
 `backend/.env` を作成します:
 
 ```env
-SECRET_KEY=<32文字以上>
-DB_PASSWORD=<任意>
+SECRET_KEY=<32文字以上のランダム値（openssl rand -hex 32）>
+DB_PASSWORD=<ランダム値（openssl rand -hex 24）。ルートの .env と同じ値>
 USE_REDIS_QUEUE=true
 ALLOWED_ORIGINS=https://app.axelia-esports.jp
 FRONTEND_BASE_URL=https://app.axelia-esports.jp
@@ -180,7 +180,16 @@ AWS_SECRET_ACCESS_KEY=<supabase-secret-key>
 AWS_REGION=ap-northeast-1
 ```
 
-Discord Bot を使う場合はルートにも `.env`（compose が参照）:
+ルートの `/opt/app/.env`（compose が参照）にも同じ `DB_PASSWORD` を入れる。postgres の初期化に使われ、
+本番の compose（`docker-compose.prod.yml`）は未設定だとその場で止まる（既定値 `esports_pass` は使わない）。
+`SECRET_KEY` が見本の値、`DB_PASSWORD` が空・既定値のときは、デプロイ前の設定検査で止まる
+（[RC1_PRODUCTION_CHECKLIST.md](release/RC1_PRODUCTION_CHECKLIST.md)）。
+
+```env
+DB_PASSWORD=<backend/.env と同じ値>
+```
+
+Discord Bot を使う場合は、ルートの `.env` に次も加える:
 
 ```env
 PUBLIC_WEB_URL=https://app.axelia-esports.jp
@@ -337,6 +346,113 @@ git push main
 接続先が変わるだけで、仕組みは従来どおりです。
 ConoHa は x86 なので、`build.yml` の `platforms` を `linux/amd64` のみに絞ると
 ビルド時間がほぼ半減します（ARM 向けビルドは不要になりました）。
+
+---
+
+## RC1 本番公開の手順（2026-11）
+
+> **RC2 で置き換えた。** 公開は [RC2_DEPLOYMENT_RUNBOOK.md](release/RC2_DEPLOYMENT_RUNBOOK.md)、
+> 切り戻しは [RC2_ROLLBACK_RUNBOOK.md](release/RC2_ROLLBACK_RUNBOOK.md) に従う。この節は RC1 時点の記録として残す。
+> Deploy workflow は 2026-10-12 から無効で、main へのマージだけでは本番に出ない。下の「11. ロールバック」は使わない。
+
+RC1（[リリースノート](release/RC1_RELEASE_NOTES.md)）を公開するときの手順。デプロイは従来どおり
+main へのマージで自動に走り（Build & Push → Deploy）、**Deploy の最後にマイグレーション 028〜030 が自動で適用される**。
+つまりマージした時点で本番 DB が変わる。各コマンドには、ローカルの使い捨て環境で確かめたかを書いた。
+**本番ではどれも未実行。**
+
+### 1. デプロイ前確認
+
+- PR の CI（qa.yml）が通っている
+- [チェックリスト](release/RC1_PRODUCTION_CHECKLIST.md)の「公開前の確認コマンド」がすべて OK
+  （DB パスワードが既定値なら、同じ文書の手順で変えてからにする）
+- 作業の時間帯を決める。デプロイ中は api / worker / scheduler / frontend が作り直され、数十秒落ちる
+
+### 2. バックアップ（マージの直前）
+
+```bash
+cd /opt/app
+./scripts/backup-db.sh                                  # cron と同じスクリプトで1世代取る
+F=backups/$(ls -1t backups | head -1)
+gzip -t "$F" && gzip -dc "$F" | tail -8 | grep -q "PostgreSQL database dump complete" \
+  && echo "バックアップ OK: $F"
+sha256sum "$F"
+```
+
+取得・整合性の確認・別 DB への復元は、postgres 15 の使い捨て DB で確認済み
+（下の「バックアップが復元できることの確認」の手順）。
+
+### 3. 現在のバージョンを控える
+
+```bash
+docker compose images api worker scheduler frontend     # 稼働中のタグ（sha-xxxxxxx）
+docker compose exec -T api alembic current               # 027 (head) のはず
+gh run list --workflow deploy-demo.yml --limit 5 --repo Nonname-organic/esports-platform
+                                                          # 直近成功した Deploy の run-id（切り戻し用）
+```
+
+### 4. 新しい版の配置
+
+PR を main へマージする。Build & Push のあと Deploy が自動で走る。手で `docker compose up` しない
+（「サーバー上で docker compose を叩くときの注意」）。
+
+### 5. DB マイグレーション
+
+Deploy が readiness の通過後に `alembic upgrade head` を流す（028 → 029 → 030）。新しいコードが起動してから
+適用が終わるまでの数秒は、結果報告と「チームを探す」募集の投稿が失敗しうる。終わったら確かめる:
+
+```bash
+docker compose exec -T api alembic current               # 030 (head)
+```
+
+028 で書き換わる大会を事前に控える場合は、下の「マイグレーション 028 を戻すとき」の読み取りクエリを使う。
+
+### 6. コンテナの起動
+
+Deploy は pull のあと、`docker compose up` の**前に**新しいイメージで本番設定を検査する
+（`docker compose run --rm --no-deps -T api python -c "import app.core.config"`）。
+DB パスワードが空・既定値、`SECRET_KEY` が見本値ならここで止まり、稼働中のコンテナはそのまま残る。
+ログの「本番設定の不備: …」（値は出ない）を見て `.env` を直し、Deploy を再実行する。
+検査そのものは RC1 のイメージで確認済み（既定値で終了コード 1・値の出力なし、固有の値で 0）。
+
+### 7. ヘルスチェック
+
+```bash
+curl -fsS https://app.axelia-esports.jp/health/ready
+docker compose ps                                         # すべて running、api は healthy
+```
+
+### 8. ログの確認
+
+```bash
+docker compose logs --since 10m api worker scheduler \
+  | grep -i -E "error|traceback|too many clients|本番設定の不備" | grep -v -i bcrypt | tail -20
+```
+
+`error reading bcrypt version` の警告は passlib の既知の表示で、動作に影響しない。
+
+### 9. 主要画面の確認
+
+トップ、ログイン、大会一覧（期間「すべて」）、大会詳細の各タブ（Overview / Matches / Bracket）、試合ページ、
+スカウト（LFP / LFT）、通知、ランキング、管理画面（管理者）。主催者で大会作成画面を開く
+（作成まで試す場合は非公開で作り、確認後に削除する）。
+
+### 10. 異常時の停止
+
+readiness が通らない、5xx が続く、ログインできない、データの表示がおかしい、のいずれかなら公開を止める。
+Deploy は設定検査と readiness で自動的に止まる。止まった状態から手で `docker compose up` はしない。
+利用者への影響が続くなら 11 の切り戻しを先に行い、そのあと調べる。
+
+### 11. ロールバック
+
+RC2 で訂正した。以前ここにあった「直近成功の Deploy を再実行する」は使えない（Deploy workflow が無効の間は
+再実行できず、再実行できるのも最初の実行から 30 日まで）。DB を戻す手順（`alembic downgrade`）も使わない。
+イメージの版と digest を指定して戻す [RC2_ROLLBACK_RUNBOOK.md](release/RC2_ROLLBACK_RUNBOOK.md) に従う。
+DB は 030 のままでよい（旧コードは 030 のスキーマで動く）。
+
+### 12. 復旧後の確認
+
+7〜9 をもう一度行い、`alembic current` が想定の版であることを確かめる。翌朝、03:15 UTC のバックアップが
+取れていることを確認する。
 
 ---
 
@@ -565,6 +681,52 @@ docker compose exec -T postgres psql -U esports_user -d postgres \
   -c "DROP DATABASE restore_test;"
 ```
 
+もう一段確かめる場合（公開前・マイグレーション適用前に推奨）。2026-11 にローカルの使い捨て DB で
+この手順どおりに取得→別DBへ復元→件数照合→アプリ起動まで確認済み。
+
+```bash
+F=backups/$(ls -1t backups | head -1)
+gzip -t "$F" && echo "gzip OK"                                         # 壊れていない
+gzip -dc "$F" | tail -8 | grep -q "PostgreSQL database dump complete" \
+  && echo "最後まで出力されている"                                         # 途中で切れていない
+sha256sum "$F"                                                          # 保存先へ送ったものと照合する
+
+# 復元先（restore_test）と本番で主要テーブルの件数とマイグレーション版を比べる
+Q="select 'users',count(*) from users union all select 'teams',count(*) from teams
+   union all select 'tournaments',count(*) from tournaments
+   union all select 'registrations',count(*) from tournament_registrations
+   union all select 'matches',count(*) from matches
+   union all select 'alembic',version_num::int from alembic_version"
+docker compose exec -T postgres psql -U esports_user -d esports_db   -tAc "$Q" > /tmp/src.txt
+docker compose exec -T postgres psql -U esports_user -d restore_test -tAc "$Q" > /tmp/dst.txt
+diff /tmp/src.txt /tmp/dst.txt && echo "件数・版とも一致"
+```
+
+### マイグレーション 028〜030 は戻さない（RC2 で訂正）
+
+以前この節にあった `alembic downgrade 027`（028 だけを戻す）と、030 を戻す手順は使わない。
+
+- `alembic downgrade 027` は、030・029・028 をまとめて戻す。029 の表（`match_result_reports`）が消えるので、
+  新しいイメージでは結果の登録がすべて 500 になる。旧イメージは 030 を知らないので、その中では実行もできない
+- 030 を戻すには `player_seeks` の投稿を消す必要がある。応募（`recruitment_applications`）が ON DELETE CASCADE で
+  一緒に消え、元に戻せない
+
+切り戻しは、DB をそのままにしてイメージだけを前の版へ戻す。旧コード（027 まで）は 030 のスキーマで動く。
+手順は [RC2_ROLLBACK_RUNBOOK.md](release/RC2_ROLLBACK_RUNBOOK.md) を参照する。
+
+- 旧イメージで動かした期間の後に新しいイメージへ戻したら、028 の補正を流し直す（同じ文書の SQL。
+  028 の UPDATE をそのまま流すと、その間に主催者が公開へ戻した大会が非公開に戻ってしまうので使わない）
+- 028 の補正で公開範囲が主催者の意図と違ってしまった大会は、SQL ではなく、主催者か管理者が編集画面で設定し直す
+  （列と `rules` の両方が書かれる。列だけを SQL で戻すと、次に補正を流したときにまた変わる）
+
+補正の対象を控えておく場合（読み取りのみ）:
+
+```bash
+docker compose exec -T postgres psql -U esports_user -d esports_db -c "
+  SELECT id, name, visibility, rules->>'visibility' FROM tournaments
+   WHERE visibility = 'public' AND rules->>'visibility' IN ('limited', 'private');"
+```
+
 ---
 
 ## 運用中に実際に起きること
@@ -581,8 +743,10 @@ docker compose exec -T postgres psql -U esports_user -d postgres \
 
 ## メール送信の設定（パスワードリセットに必須）
 
-SMTP未設定でもアプリは動きますが、パスワードリセットのメールが届かず
-本文がAPIログに出るだけになります。公開前に必ず設定してください。
+SMTP未設定でもアプリは動きますが、パスワードリセットのメールが届きません。
+本文（再設定リンクを含む）は秘密情報にあたるため、通常のログには出さず
+`LOG_LEVEL=DEBUG` のときだけ出します。宛先のアドレスはログに残さず、ドメインだけを記録します。
+公開前に必ず設定してください。
 
 ### 方式A: Resend（独自ドメイン・推奨）
 

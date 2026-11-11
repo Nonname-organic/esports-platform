@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
-import { teamApi, type TeamCreateInput, type TeamUpdateInput, type AddMemberInput } from "../api/team-api";
+import { teamApi, membershipApi, type TeamCreateInput, type TeamUpdateInput, type InviteMemberInput } from "../api/team-api";
 
 export const teamKeys = {
   all: ["teams"] as const,
@@ -13,6 +13,9 @@ export const teamKeys = {
   matches: (id: string, cursor?: string) =>
     [...teamKeys.all, "matches", id, cursor] as const,
   analytics: (id: string) => [...teamKeys.all, "analytics", id] as const,
+  invitations: (id: string) => [...teamKeys.all, "invitations", id] as const,
+  myInvitations: () => [...teamKeys.all, "my-invitations"] as const,
+  myMemberships: () => [...teamKeys.all, "my-memberships"] as const,
 };
 
 /** 自分のチーム一覧。公開ページで使う場合は enabled で未ログイン時の呼び出しを止める。 */
@@ -110,11 +113,67 @@ export function useDeleteTeam() {
   });
 }
 
-export function useAddMember(teamId: string) {
+export function useInviteMember(teamId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: AddMemberInput) => teamApi.addMember(teamId, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: teamKeys.members(teamId) }),
+    mutationFn: (data: InviteMemberInput) => teamApi.invite(teamId, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: teamKeys.invitations(teamId) }),
+  });
+}
+
+/** チームの招待の一覧（オーナー・キャプテンだけが見られる） */
+export function useTeamInvitations(teamId: string, enabled = true) {
+  return useQuery({
+    queryKey: teamKeys.invitations(teamId),
+    queryFn: () => teamApi.listInvitations(teamId),
+    select: (res) => res.data,
+    enabled: !!teamId && enabled,
+  });
+}
+
+export function useCancelInvitation(teamId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (invitationId: string) => teamApi.cancelInvitation(teamId, invitationId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: teamKeys.invitations(teamId) }),
+  });
+}
+
+export function useMyTeamInvitations(enabled = true) {
+  return useQuery({
+    queryKey: teamKeys.myInvitations(),
+    queryFn: () => membershipApi.myInvitations(),
+    select: (res) => res.data,
+    enabled,
+  });
+}
+
+export function useRespondInvitation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, accept }: { id: string; accept: boolean }) => {
+      if (accept) await membershipApi.accept(id);
+      else await membershipApi.decline(id);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: teamKeys.all }),
+  });
+}
+
+export function useMyMemberships(enabled = true) {
+  return useQuery({
+    queryKey: teamKeys.myMemberships(),
+    queryFn: () => membershipApi.myMemberships(),
+    select: (res) => res.data,
+    enabled,
+  });
+}
+
+export function useDecideMembership() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, confirm }: { id: string; confirm: boolean }) =>
+      confirm ? membershipApi.confirm(id) : membershipApi.reject(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: teamKeys.all }),
   });
 }
 

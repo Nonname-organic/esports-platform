@@ -1,14 +1,15 @@
 """LFP (Looking for Players) - チーム募集 API"""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from app.core.dependencies import CurrentUser, DBSession
+from app.core.dependencies import CurrentUser, DBSession, OptionalUser
 from app.core.ranks import ranks_in_range
+from app.models.enums import UserRole
 from app.models.team import Team, TeamMember
 from app.models.team_recruitment import TeamRecruitment
 from app.schemas.common import Response, ListResponse, Meta
@@ -20,8 +21,9 @@ router = APIRouter(prefix="/lfp", tags=["LFP チーム募集"])
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
+# 文字列長は DB の列長に合わせる（超えると 500 になっていた）
 class LFPCreate(BaseModel):
-    team_id: str
+    team_id: uuid.UUID
     title: str = Field(..., min_length=1, max_length=200)
     status: str = Field(default="open", pattern=r"^(open|paused|closed)$")
     roles: list[str] = Field(..., min_length=1)
@@ -29,13 +31,13 @@ class LFPCreate(BaseModel):
     min_rank: str = Field(..., min_length=1, max_length=50)
     region: str = Field(..., min_length=1, max_length=50)
     activity_time: list[str] = Field(default=[])
-    activity_level: Optional[str] = None
+    activity_level: Optional[str] = Field(None, max_length=30)
     tournaments: list[str] = Field(default=[])
-    age_requirement: Optional[str] = None
+    age_requirement: Optional[str] = Field(None, max_length=30)
     description: Optional[str] = Field(None, max_length=500)
     team_intro: Optional[str] = Field(None, max_length=1000)
     discord: Optional[str] = Field(None, max_length=100)
-    deadline: Optional[str] = None
+    deadline: Optional[date] = None
     is_public: bool = True
 
 
@@ -44,16 +46,16 @@ class LFPUpdate(BaseModel):
     status: Optional[str] = Field(None, pattern=r"^(open|paused|closed)$")
     roles: Optional[list[str]] = None
     headcount: Optional[int] = Field(None, ge=1, le=5)
-    min_rank: Optional[str] = None
-    region: Optional[str] = None
+    min_rank: Optional[str] = Field(None, min_length=1, max_length=50)
+    region: Optional[str] = Field(None, min_length=1, max_length=50)
     activity_time: Optional[list[str]] = None
-    activity_level: Optional[str] = None
+    activity_level: Optional[str] = Field(None, max_length=30)
     tournaments: Optional[list[str]] = None
-    age_requirement: Optional[str] = None
+    age_requirement: Optional[str] = Field(None, max_length=30)
     description: Optional[str] = Field(None, max_length=500)
     team_intro: Optional[str] = Field(None, max_length=1000)
     discord: Optional[str] = Field(None, max_length=100)
-    deadline: Optional[str] = None
+    deadline: Optional[date] = None
     is_public: Optional[bool] = None
 
 
@@ -202,7 +204,7 @@ async def list_lfp(
 
 @router.post("", response_model=Response[LFPSchema], status_code=201)
 async def create_lfp(data: LFPCreate, db: DBSession, current_user: CurrentUser):
-    team_id = uuid.UUID(data.team_id)
+    team_id = data.team_id
     team = (await db.execute(select(Team).where(Team.id == team_id, Team.is_active == True))).scalar_one_or_none()
     if not team:
         raise HTTPException(status_code=404, detail="チームが見つかりません")
@@ -210,8 +212,6 @@ async def create_lfp(data: LFPCreate, db: DBSession, current_user: CurrentUser):
         raise HTTPException(status_code=403, detail="チームオーナーのみ募集を作成できます")
 
     now = datetime.now(timezone.utc)
-    from datetime import date as date_type
-    deadline = date_type.fromisoformat(data.deadline) if data.deadline else None
     r = TeamRecruitment(
         id=uuid.uuid4(),
         team_id=team_id,
@@ -229,7 +229,7 @@ async def create_lfp(data: LFPCreate, db: DBSession, current_user: CurrentUser):
         description=data.description,
         team_intro=data.team_intro,
         discord=data.discord,
-        deadline=deadline,
+        deadline=data.deadline,
         is_public=data.is_public,
         created_at=now,
         updated_at=now,
@@ -256,9 +256,10 @@ async def list_mine(db: DBSession, current_user: CurrentUser):
 
 
 @router.get("/{lfp_id}", response_model=Response[LFPSchema])
-async def get_lfp(lfp_id: uuid.UUID, db: DBSession):
+async def get_lfp(lfp_id: uuid.UUID, db: DBSession, viewer: OptionalUser) -> Response[LFPSchema]:
     r = (await db.execute(select(TeamRecruitment).where(TeamRecruitment.id == lfp_id))).scalar_one_or_none()
-    if not r:
+    # 非公開の募集は作成者と管理者以外には存在ごと見せない
+    if not r or not (r.is_public or (viewer and (viewer.id == r.owner_id or viewer.role == UserRole.ADMIN))):
         raise HTTPException(status_code=404, detail="募集が見つかりません")
     team = (await db.execute(select(Team).where(Team.id == r.team_id))).scalar_one_or_none()
     if not team:
@@ -275,9 +276,6 @@ async def update_lfp(lfp_id: uuid.UUID, data: LFPUpdate, db: DBSession, current_
         raise HTTPException(status_code=403, detail="作成者のみ編集できます")
 
     for field, value in data.model_dump(exclude_none=True).items():
-        if field == "deadline" and value:
-            from datetime import date as date_type
-            value = date_type.fromisoformat(value)
         setattr(r, field, value)
     r.updated_at = datetime.now(timezone.utc)
     await db.commit()

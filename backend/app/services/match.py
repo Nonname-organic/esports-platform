@@ -3,19 +3,22 @@ import uuid
 from datetime import datetime, timezone
 
 import boto3
-from sqlalchemy import func, select
+from sqlalchemy import ColumnElement, delete, func, or_, select, true, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.exceptions import (
     BusinessRuleError,
     ConflictError,
+    ForbiddenError,
     NotFoundError,
     ValidationError,
 )
 from app.core.redis import CacheKeys, RedisCache
-from app.models.enums import MatchStatus
-from app.models.match import Map, MatchGame
+from app.models.enums import MatchStatus, UserRole
+from app.models.match import Map, Match, MatchGame
+from app.models.team import TeamMember
+from app.models.tournament import Tournament
 from app.models.user import User
 from app.repositories.match import MatchRepository
 from app.repositories.tournament import TournamentRepository
@@ -24,9 +27,50 @@ from app.schemas.match import (
     GamePlayerStatsUpdate,
     MatchDetail,
     MatchResultCreate,
+    PlayerStatsCreate,
     ScoreUpdate,
 )
 from app.core.storage import resign_stored_url
+from app.services.membership import formal_clause, formal_consents, grace_deadline, invalidate_player_caches
+from app.services.roster import (
+    CLOSED,
+    NO_PLAYER_STATS_GAMES,
+    LineupService,
+    approval_errors,
+    closed_tournament_guard,
+    is_bye,
+    is_legacy,
+    participants_by_player,
+    record_correction,
+)
+
+LEGACY_LOCKED = "この大会は名簿の無い旧方式（legacy）のため、試合の開始・再開はできません。主催者が名簿の方式に切り替えてください"
+
+
+async def ensure_can_manage_match(db: AsyncSession, match: Match, user: User) -> None:
+    """試合を操作できるのは、その大会の主催者か管理者だけ。
+
+    organizer ロールは誰でも自分で付けられるため、ロールだけで通すと
+    他人の大会の試合を開始・採点・確定できてしまう。
+    """
+    if user.role == UserRole.ADMIN:
+        return
+    tournament = await db.get(Tournament, match.tournament_id)
+    if tournament is None or tournament.organizer_id != user.id:
+        raise ForbiddenError("この大会の試合を操作する権限がありません")
+
+
+async def lock_match(db: AsyncSession, match_id: uuid.UUID) -> Match | None:
+    """試合の行をコミットまでロックし、最新の状態で読み直す。
+
+    開始・スコア・成績・結果の確定・再開・チームの報告を、同じ試合について1件ずつ
+    処理する。並行した操作で状態の更新が消えたり、成績が二重に入ったりしないように
+    する（ロックを待った後は、相手が確定した状態を読んでから判定する）。
+    """
+    return (await db.execute(
+        select(Match).where(Match.id == match_id).with_for_update()
+        .execution_options(populate_existing=True)
+    )).scalar_one_or_none()
 
 
 class MatchService:
@@ -75,41 +119,45 @@ class MatchService:
     async def require_organizer_authority(
         self, match_id: uuid.UUID, current_user: User
     ) -> None:
-        """この試合を運営として操作できるか確かめる。ADMIN か、その大会の主催者だけ。
+        """この試合を運営として操作できるか確かめる（ADMIN か、その大会の主催者）。
 
-        試合を変更するメソッド自身には認可を置いていない。Bot は自前でキャプテン
-        判定を済ませてから同じメソッドを呼ぶため、ここで一律に主催者を要求すると
-        2者確認フローが通らなくなる。REST 経路は API 層の Dependency から
-        このメソッドを通して絞る。
-
-        shortcut: サービス層は無防備なまま。呼び出し元は matches.py と bot.py と
-        scripts/ だけで、bot.py は自前で認可している。別の呼び出し元を足すときは
-        そこで認可するか、ここを通すこと。
+        REST の試合操作 route は matches.py の Dependency からこれを通し、拒否した
+        リクエストをサービス層・OCR・結果登録のロックに届かせない。判定は
+        ensure_can_manage_match に一本化してある。各 mutation メソッドも同じ判定を
+        自分で行うので、Bot など REST 以外の呼び出し元も守られる。呼び出し側で権限を
+        確かめ済みの経路（Bot・Web の結果報告の確定）だけが authorized=True で省略する。
         """
-        from app.core.exceptions import ForbiddenError
-        from app.models.enums import UserRole
-        from app.models.match import Match
-        from app.models.tournament import Tournament
-
         match = await self._db.get(Match, match_id)
         if not match:
             raise NotFoundError("試合", str(match_id))
+        await ensure_can_manage_match(self._db, match, current_user)
 
-        tournament = await self._db.get(Tournament, match.tournament_id)
-        if (current_user.role != UserRole.ADMIN
-                and (tournament is None or tournament.organizer_id != current_user.id)):
-            raise ForbiddenError("この大会の試合を操作する権限がありません")
+    async def start_match(
+        self, match_id: uuid.UUID, current_user: User, *, authorized: bool = False,
+        reason: str | None = None,
+    ) -> None:
+        """authorized=True は、呼び出し側で権限を確認済みの経路（Bot の結果確定）専用。
 
-    async def start_match(self, match_id: uuid.UUID, current_user: User) -> None:
-        match = await self._repo.get_by_id(match_id)
+        RC4: 開始で出場登録を固定する。legacy の大会と、完了・中止の大会では開始しない。
+        スターターが出場人数に満たないチームがあれば理由が必須（D14）。"""
+        match = await lock_match(self._db, match_id)
         if not match:
             raise NotFoundError("試合", str(match_id))
+        if not authorized:
+            await ensure_can_manage_match(self._db, match, current_user)
 
         if match.status != MatchStatus.SCHEDULED:
             raise BusinessRuleError("スケジュール済みの試合のみ開始できます")
 
         if not match.team1_id or not match.team2_id:
             raise BusinessRuleError("対戦チームが確定していません")
+
+        tournament = await self._db.get(Tournament, match.tournament_id)
+        if is_legacy(tournament):
+            raise ConflictError(LEGACY_LOCKED)
+        if tournament.status in CLOSED:
+            raise ConflictError("完了・中止した大会の試合は開始できません")
+        await LineupService(self._db, self._cache).lock_for_start(match, tournament, reason, current_user)
 
         match.status = MatchStatus.ONGOING
         match.started_at = datetime.now(timezone.utc)
@@ -129,12 +177,15 @@ class MatchService:
         data: ScoreUpdate,
         current_user: User,
     ) -> None:
-        match = await self._repo.get_by_id(match_id)
+        match = await lock_match(self._db, match_id)
         if not match:
             raise NotFoundError("試合", str(match_id))
+        await ensure_can_manage_match(self._db, match, current_user)
 
         if match.status != MatchStatus.ONGOING:
             raise BusinessRuleError("進行中の試合のスコアのみ更新できます")
+        tournament = await self._db.get(Tournament, match.tournament_id)
+        admin_fix = closed_tournament_guard(tournament, current_user, data.correction_reason)
 
         winner_id = None
         if data.team1_score != data.team2_score:
@@ -153,6 +204,11 @@ class MatchService:
             side_first_team1=data.side_first_team1,
             duration_seconds=data.duration_seconds,
         )
+        if admin_fix:
+            await record_correction(self._db, kind="result_change", reason=data.correction_reason,
+                                    actor=current_user, tournament_id=tournament.id, match_id=match.id,
+                                    before={}, after={"game_number": game_number, "team1_score": data.team1_score,
+                                                      "team2_score": data.team2_score})
 
         # WebSocket でリアルタイム配信
         await self._cache.publish(
@@ -180,12 +236,18 @@ class MatchService:
         試合を完了させずマップ単位で確定できるようにしてある。撮り直しや修正に
         備えて、同一ゲームの選手成績は追記ではなく毎回置き換える。
         """
-        match = await self._repo.get_by_id(match_id)
+        match = await lock_match(self._db, match_id)
         if not match:
             raise NotFoundError("試合", str(match_id))
+        await ensure_can_manage_match(self._db, match, current_user)
 
         if match.status not in (MatchStatus.ONGOING, MatchStatus.COMPLETED):
             raise BusinessRuleError("進行中または完了した試合にのみ成績を登録できます")
+        tournament = await self._db.get(Tournament, match.tournament_id)
+        admin_fix = closed_tournament_guard(tournament, current_user, data.correction_reason)
+        if not is_legacy(tournament) and match.lineup_locked_at is None:
+            raise BusinessRuleError("開始していない試合（開始を経ない不戦勝を含む）には、マップ・成績を記録できません")
+        entry_of = await self._check_player_stats(match, data.player_stats, game_number)
 
         winner_id = None
         if data.team1_score != data.team2_score:
@@ -219,12 +281,76 @@ class MatchService:
                     "score": ps.score,
                     "first_bloods": ps.first_bloods,
                     "custom_stats": ps.custom_stats,
+                    "lineup_entry_id": entry_of.get((ps.team_id, ps.player_id)),
                 }
                 for ps in data.player_stats
             ],
         )
+        if admin_fix:
+            await record_correction(self._db, kind="stats_change", reason=data.correction_reason,
+                                    actor=current_user, tournament_id=tournament.id, match_id=match.id,
+                                    before={}, after={"game_number": game_number,
+                                                      "players": [str(ps.player_id) for ps in data.player_stats]})
+        await invalidate_player_caches(self._cache, [ps.player_id for ps in data.player_stats])
 
         await self._invalidate_match_cache(match_id)
+
+    async def _check_player_stats(
+        self, match: Match, stats: list[PlayerStatsCreate] | None, game_number: int | None = None,
+    ) -> dict:
+        """成績を受け付ける選手を確かめ、{(team_id, player_id): lineup_entry_id} を返す。
+
+        名簿の大会（RC4）: そのマップの実出場の選手だけ（C1）。出場登録の行の名簿が accepted、
+        参加登録が承認済み、所属が正式な所属であること（Q06）。2 チームの対戦でない形式（APEX）の
+        大会は選手の成績を受け付けない（Q14）。
+        既存の大会（legacy）: 試合の期間と重なる、正式な所属の選手だけ（RC3 の S8 と D7）。
+        どちらも、同じ選手を 1 マップに 2 回入れると二重に数えるので断る。
+        """
+        if not stats:
+            return {}
+        teams = {match.team1_id, match.team2_id} - {None}
+        players = [ps.player_id for ps in stats]
+        if any(ps.team_id not in teams for ps in stats):
+            raise BusinessRuleError("成績を登録できるのは、この試合に出場するチームの選手だけです")
+        if len(set(players)) != len(players):
+            raise BusinessRuleError("同じ選手の成績が重複しています")
+
+        tournament = await self._db.get(Tournament, match.tournament_id)
+        if tournament is not None and not is_legacy(tournament):
+            if tournament.game in NO_PLAYER_STATS_GAMES:
+                raise BusinessRuleError("この大会の形式では選手の成績を受け付けません")
+            allowed = await participants_by_player(self._db, match, game_number or 1)
+            if any((ps.team_id, ps.player_id) not in allowed for ps in stats):
+                raise BusinessRuleError(
+                    "成績を登録できるのは、そのマップに実際に出場した選手（出場登録と承認された交代）だけです")
+            from app.models.roster import MatchLineupEntry
+            entries = list((await self._db.execute(select(MatchLineupEntry).where(
+                MatchLineupEntry.id.in_({allowed[(ps.team_id, ps.player_id)] for ps in stats})))).scalars())
+            errors = await approval_errors(self._db, entries)
+            if errors:
+                raise ConflictError(next(iter(errors.values())))
+            return {(ps.team_id, ps.player_id): allowed[(ps.team_id, ps.player_id)] for ps in stats}
+
+        still_member: ColumnElement[bool] = TeamMember.left_at.is_(None)
+        if match.started_at is not None:  # 開始時刻が無い試合は、今の所属だけを見る
+            still_member = or_(still_member, TeamMember.left_at >= match.started_at)
+        # 終わった試合には、終わった後に入った選手の成績を足せない（後から所属させて書く手口を防ぐ）
+        joined_in_time = TeamMember.joined_at <= match.ended_at if match.ended_at else true()
+        members = {
+            (r.team_id, r.player_id)
+            for r in (await self._db.execute(
+                select(TeamMember.team_id, TeamMember.player_id).where(
+                    TeamMember.team_id.in_(teams),
+                    TeamMember.player_id.in_(players),
+                    still_member,
+                    joined_in_time,
+                    TeamMember.consent.in_(formal_consents(await grace_deadline(self._db))),
+                )
+            )).all()
+        }
+        if any((ps.team_id, ps.player_id) not in members for ps in stats):
+            raise BusinessRuleError("試合の間にそのチームに所属していなかった選手の成績は登録できません")
+        return {}
 
     async def _require_ban_pick_authority(
         self, match, team_id: uuid.UUID, current_user: User
@@ -264,6 +390,7 @@ class MatchService:
                     Player.user_id == current_user.id,
                     TeamMember.left_at.is_(None),
                     TeamMember.role == MemberRole.CAPTAIN,
+                    await formal_clause(self._db),
                 )
                 .limit(1)
             )
@@ -309,22 +436,31 @@ class MatchService:
         match_id: uuid.UUID,
         data: MatchResultCreate,
         current_user: User,
+        *,
+        authorized: bool = False,
     ) -> None:
+        """authorized=True は、呼び出し側で権限を確認済みの経路（Bot の結果確定）専用。"""
         # 分散ロック（重複登録防止）
         lock_key = CacheKeys.LOCK_MATCH_RESULT.replace("{match_id}", str(match_id))
         if not await self._cache.acquire_lock(lock_key, ttl=10):
             raise ConflictError("結果を処理中です。しばらく待ってから再試行してください")
 
         try:
+            await lock_match(self._db, match_id)
             match = await self._repo.get_full_detail(match_id)
             if not match:
                 raise NotFoundError("試合", str(match_id))
+            if not authorized:
+                await ensure_can_manage_match(self._db, match, current_user)
 
             if match.status == MatchStatus.COMPLETED:
                 raise BusinessRuleError("この試合の結果は既に登録されています")
 
             if match.status != MatchStatus.ONGOING:
                 raise BusinessRuleError("進行中の試合の結果のみ登録できます")
+            tournament = await self._db.get(Tournament, match.tournament_id)
+            # 完了・中止した大会では、チームの報告・Bot・主催者の確定も断る（管理者の理由つきの訂正だけ）
+            admin_fix = closed_tournament_guard(tournament, current_user, data.correction_reason)
 
             winner_id = data.winner_id
             if winner_id not in (match.team1_id, match.team2_id):
@@ -334,15 +470,17 @@ class MatchService:
                 match.team1_id if winner_id == match.team2_id else match.team2_id
             )
 
-            # ゲーム数からスコアを計算
-            games = match.games
-            winner_game_wins = sum(
-                1 for g in games if g.winner_id == winner_id
-            )
-            loser_game_wins = len(games) - winner_game_wins
-
             # ゲーム別統計の保存
             if data.game_stats:
+                for game_stat in data.game_stats:
+                    if game_stat.winner_id not in (match.team1_id, match.team2_id):
+                        raise BusinessRuleError(
+                            "ゲームの勝者はこの試合の参加チームである必要があります"
+                        )
+                entry_maps = {}
+                for game_stat in data.game_stats:
+                    entry_maps[game_stat.game_number] = await self._check_player_stats(
+                        match, game_stat.player_stats, game_stat.game_number)
                 for game_stat in data.game_stats:
                     game = await self._repo.upsert_game_score(
                         match_id=match_id,
@@ -356,7 +494,8 @@ class MatchService:
                         ended_at=datetime.now(timezone.utc),
                     )
                     if game_stat.player_stats:
-                        await self._repo.bulk_create_player_stats([
+                        # 再開後の登録し直しや、マップごとに保存済みの成績と重ならないよう置き換える
+                        await self._repo.replace_player_stats(game.id, [
                             {
                                 "match_game_id": game.id,
                                 "player_id": ps.player_id,
@@ -368,9 +507,19 @@ class MatchService:
                                 "score": ps.score,
                                 "first_bloods": ps.first_bloods,
                                 "custom_stats": ps.custom_stats,
+                                "lineup_entry_id": entry_maps[game_stat.game_number].get(
+                                    (ps.team_id, ps.player_id)),
                             }
                             for ps in game_stat.player_stats
                         ])
+
+            # マップ取得数はこのリクエストで保存したゲームも含めて数える。
+            # 先に読み込んだ match.games は保存前の状態なので使わない。
+            games = (
+                await self._db.execute(select(MatchGame).where(MatchGame.match_id == match_id))
+            ).scalars().all()
+            winner_game_wins = sum(1 for g in games if g.winner_id == winner_id)
+            loser_game_wins = sum(1 for g in games if g.winner_id == loser_id)
 
             # 試合結果の保存
             await self._repo.create_result(
@@ -386,6 +535,19 @@ class MatchService:
             match.status = MatchStatus.COMPLETED
             match.winner_id = winner_id
             match.ended_at = datetime.now(timezone.utc)
+            if admin_fix:
+                await record_correction(self._db, kind="result_change", reason=data.correction_reason,
+                                        actor=current_user, tournament_id=tournament.id, match_id=match.id,
+                                        before={"status": "ongoing"},
+                                        after={"winner_id": str(winner_id), "was_forfeit": data.was_forfeit})
+            # 確認待ち・異議中のチーム報告は、主催者の確定で決着したものとして閉じる
+            from app.models.match_report import MatchResultReport
+            await self._db.execute(
+                update(MatchResultReport)
+                .where(MatchResultReport.match_id == match_id,
+                       MatchResultReport.status.in_(("pending", "disputed")))
+                .values(status="superseded", resolved_by_user_id=current_user.id)
+            )
             await self._db.flush()
 
             # 次の試合にチームを自動セット
@@ -427,6 +589,132 @@ class MatchService:
 
         finally:
             await self._cache.release_lock(lock_key)
+
+    async def record_forfeit_without_start(
+        self, match_id: uuid.UUID, winner_id: uuid.UUID, reason: str | None, current_user: User,
+        *, authorized: bool = False,
+    ) -> None:
+        """開始を経ない不戦勝（Q04）。予定の試合に、出場登録を固定せずに不戦勝の結果を登録する。
+
+        スターターのいないチーム・名簿が空のチーム・参加登録の承認が外れたチームとの試合を決着させる。
+        マップの記録と成績は受け付けない。再開すると予定に戻る（reopen_match）。
+        """
+        if not (reason or "").strip():
+            raise BusinessRuleError("開始を経ない不戦勝には理由が必要です")
+        match = await lock_match(self._db, match_id)
+        if not match:
+            raise NotFoundError("試合", str(match_id))
+        if not authorized:
+            await ensure_can_manage_match(self._db, match, current_user)
+        if match.status != MatchStatus.SCHEDULED:
+            raise BusinessRuleError("予定の試合だけを、開始せずに不戦勝にできます")
+        if not match.team1_id or not match.team2_id:
+            raise BusinessRuleError("対戦チームが確定していません")
+        if winner_id not in (match.team1_id, match.team2_id):
+            raise BusinessRuleError("勝者はこの試合の参加チームである必要があります")
+        tournament = await self._db.get(Tournament, match.tournament_id)
+        if is_legacy(tournament):
+            raise ConflictError(LEGACY_LOCKED)
+        if tournament.status in CLOSED:
+            raise ConflictError("完了・中止した大会の試合は変更できません")
+        loser_id = match.team1_id if winner_id == match.team2_id else match.team2_id
+
+        await self._repo.create_result(
+            match_id=match_id, winner_id=winner_id, loser_id=loser_id, winner_score=0, loser_score=0,
+            was_forfeit=True, confirmed_by=current_user.id,
+        )
+        match.status = MatchStatus.COMPLETED
+        match.winner_id = winner_id
+        match.ended_at = datetime.now(timezone.utc)
+        from app.models.match_report import MatchResultReport
+        await self._db.execute(
+            update(MatchResultReport)
+            .where(MatchResultReport.match_id == match_id,
+                   MatchResultReport.status.in_(("pending", "disputed")))
+            .values(status="superseded", resolved_by_user_id=current_user.id)
+        )
+        await self._db.flush()
+        await self._advance_bracket(match, winner_id, loser_id)
+        from app.events import Ev, EventEnvelope, EventService
+        await EventService(self._db).emit(EventEnvelope.build(
+            type=Ev.MATCH_FORFEIT_RECORDED, entity_type="match", entity_id=match.id, producer="match",
+            after={"winner_id": str(winner_id), "reason": reason.strip(), "started": False}))
+        await self._publish_result_event(match_id, winner_id, loser_id, match.tournament_id)
+        await self._cache.publish(
+            CacheKeys.WS_BRACKET_CHANNEL.replace("{tournament_id}", str(match.tournament_id)),
+            {"type": "bracket_update", "tournament_id": str(match.tournament_id),
+             "updated_match_id": str(match_id)},
+        )
+        await self._invalidate_match_cache(match_id)
+        await self._cache.delete(CacheKeys.BRACKET.replace("{tournament_id}", str(match.tournament_id)))
+
+    async def reopen_match(self, match_id: uuid.UUID, current_user: User, *, reason: str | None = None) -> None:
+        """確定済みの試合を進行中へ戻す（結果の入力ミスの訂正用・主催者と管理者のみ）。
+
+        勝者・敗者を送り込んだ次の試合がまだ始まっていない場合に限り、送り込んだ
+        チームを取り除いてから戻す。始まっていれば、その試合から先に直す必要がある。
+        """
+        from app.models.match import MatchResult
+        from app.models.match_report import MatchResultReport
+
+        match = await lock_match(self._db, match_id)
+        if not match:
+            raise NotFoundError("試合", str(match_id))
+        await ensure_can_manage_match(self._db, match, current_user)
+        if match.status not in (MatchStatus.COMPLETED, MatchStatus.FORFEIT):
+            raise BusinessRuleError("結果が確定した試合だけを再開できます")
+        tournament = await self._db.get(Tournament, match.tournament_id)
+        if is_legacy(tournament):
+            raise ConflictError(LEGACY_LOCKED)
+        admin_fix = closed_tournament_guard(tournament, current_user, reason)
+        if await is_bye(self._db, match):
+            raise ConflictError("バイの試合は再開できません")
+        previous = await self._db.scalar(select(MatchResult).where(MatchResult.match_id == match_id))
+        # 開始を経ない不戦勝（Q04）は、出場登録を固定していないので予定に戻す
+        never_started = match.started_at is None and previous is not None and previous.was_forfeit
+
+        winner_id = match.winner_id
+        loser_id = match.team1_id if winner_id == match.team2_id else match.team2_id
+        moves = [(match.next_match_id, winner_id), (match.loser_next_match_id, loser_id)]
+        targets = []
+        for next_id, team_id in moves:
+            if not next_id or not team_id:
+                continue
+            nxt = await lock_match(self._db, next_id)
+            if nxt is None:
+                continue
+            if nxt.status != MatchStatus.SCHEDULED:
+                raise BusinessRuleError("次の試合が既に始まっているため再開できません")
+            targets.append((nxt, team_id))
+        for nxt, team_id in targets:
+            if nxt.team1_id == team_id:
+                nxt.team1_id = None
+            elif nxt.team2_id == team_id:
+                nxt.team2_id = None
+
+        await self._db.execute(delete(MatchResult).where(MatchResult.match_id == match_id))
+        # チームの報告・確認・異議は、再開した試合と、チームを外した次の試合から消して最初からにする。
+        # 残すと、相手が入れ替わった後の古い報告を、片方のチームの確認だけで確定できてしまう
+        await self._db.execute(delete(MatchResultReport).where(
+            MatchResultReport.match_id.in_([match_id, *(nxt.id for nxt, _ in targets)])
+        ))
+        match.status = MatchStatus.SCHEDULED if never_started else MatchStatus.ONGOING
+        match.winner_id = None
+        match.ended_at = None
+        await self._db.flush()
+        if admin_fix:
+            await record_correction(self._db, kind="match_reopen", reason=reason, actor=current_user,
+                                    tournament_id=tournament.id, match_id=match.id,
+                                    before={"status": "completed", "winner_id": str(winner_id) if winner_id else None},
+                                    after={"status": match.status.value})
+
+        await self._invalidate_match_cache(match_id)
+        await self._cache.delete(CacheKeys.BRACKET.replace("{tournament_id}", str(match.tournament_id)))
+        await self._cache.publish(
+            CacheKeys.WS_BRACKET_CHANNEL.replace("{tournament_id}", str(match.tournament_id)),
+            {"type": "bracket_update", "tournament_id": str(match.tournament_id),
+             "updated_match_id": str(match_id)},
+        )
 
     async def _advance_bracket(
         self, match, winner_id: uuid.UUID, loser_id: uuid.UUID | None = None
@@ -612,25 +900,13 @@ class MatchService:
     async def set_stream_url(
         self, match_id: uuid.UUID, stream_url: str | None, current_user: User,
     ) -> str | None:
-        """配信対象の試合として URL を設定する。空なら解除。
-
-        他の試合操作はロール（organizer）だけで通しているが、どの試合を
-        配信するかは大会の見せ方そのものなので、ここでは主催者本人かどうかも
-        確認する。
-        """
-        from app.core.exceptions import ForbiddenError
-        from app.models.enums import UserRole
+        """配信対象の試合として URL を設定する。空なら解除（主催者・管理者のみ）。"""
         from app.models.match import Match
-        from app.models.tournament import Tournament
 
         match = await self._db.get(Match, match_id)
         if not match:
             raise NotFoundError("試合", str(match_id))
-
-        tournament = await self._db.get(Tournament, match.tournament_id)
-        if (current_user.role != UserRole.ADMIN
-                and (tournament is None or tournament.organizer_id != current_user.id)):
-            raise ForbiddenError("この大会の配信設定を変更する権限がありません")
+        await ensure_can_manage_match(self._db, match, current_user)
 
         url = (stream_url or "").strip() or None
         match.stream_url = url

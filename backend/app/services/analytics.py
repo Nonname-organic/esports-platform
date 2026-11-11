@@ -5,11 +5,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError
 from app.core.redis import CacheKeys, CacheTTL, RedisCache
-from app.models.enums import GameType, PeriodType
+from app.models.enums import GameType, MatchStatus, PeriodType
 from app.models.match import Match, MatchGame, PlayerMatchStats
 from app.models.player import Player
 from app.models.tournament import Tournament
 from app.repositories.analytics import AnalyticsRepository
+from app.repositories.tournament import publicly_listed
 from app.schemas.analytics import (
     CompositionStatsResponse,
     MapStatsResponse,
@@ -35,14 +36,18 @@ class AnalyticsService:
         cache_key = (
             CacheKeys.PLAYER_STATS
             .replace("{id}", str(player_id))
-            .replace("{period}", f"{game}:{period_type}")
+            .replace("{period}", f"{game}:{period_type}:{tournament_id or 'all'}")
         )
         cached = await self._cache.get(cache_key)
         if cached:
             return PlayerStatsResponse(**cached)
 
-        # 集計テーブルから取得を試みる
-        stats = await self._repo.get_player_stats(player_id, game, period_type, tournament_id)
+        # 集計テーブルから取得を試みる。大会をまたぐ行は限定公開・非公開の大会も混ぜて
+        # 数えているので、大会を指定しないときは使わず、一覧に載る大会だけで数える（S7）
+        stats = (
+            await self._repo.get_player_stats(player_id, game, period_type, tournament_id)
+            if tournament_id else None
+        )
 
         if stats:
             result_data = await self._db.execute(
@@ -72,13 +77,13 @@ class AnalyticsService:
             )
         else:
             # 集計テーブルが空の場合はリアルタイム計算（デモ用）
-            response = await self._calculate_player_stats_realtime(player_id, game)
+            response = await self._calculate_player_stats_realtime(player_id, game, tournament_id)
 
         await self._cache.set(cache_key, response.model_dump(), ttl=CacheTTL.PLAYER_STATS)
         return response
 
     async def _calculate_player_stats_realtime(
-        self, player_id: uuid.UUID, game: GameType
+        self, player_id: uuid.UUID, game: GameType, tournament_id: uuid.UUID | None = None
     ) -> PlayerStatsResponse:
         """集計テーブルが未作成時のフォールバック計算。デモ用。"""
         from datetime import date
@@ -96,7 +101,16 @@ class AnalyticsService:
                 func.sum(PlayerMatchStats.kills).label("total_kills"),
                 func.sum(PlayerMatchStats.deaths).label("total_deaths"),
                 func.sum(PlayerMatchStats.assists).label("total_assists"),
-            ).where(PlayerMatchStats.player_id == player_id)
+            )
+            .select_from(PlayerMatchStats)
+            .join(MatchGame, PlayerMatchStats.match_game_id == MatchGame.id)
+            .join(Match, MatchGame.match_id == Match.id)
+            .join(Tournament, Tournament.id == Match.tournament_id)
+            .where(
+                PlayerMatchStats.player_id == player_id,
+                Match.status == MatchStatus.COMPLETED,
+                Match.tournament_id == tournament_id if tournament_id else publicly_listed(),
+            )
         )
         row = stats_result.one()
 

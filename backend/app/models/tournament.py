@@ -9,6 +9,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     Numeric,
+    SmallInteger,
     String,
     Text,
     UniqueConstraint,
@@ -118,6 +119,12 @@ class Tournament(UUIDMixin, TimestampMixin, Base):
     analytics_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     player_stats_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     ranking_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # RC4: 大会の方式。032 より前の大会は legacy、その後は roster（API では受け取らない）
+    roster_mode: Mapped[str] = mapped_column(String(8), nullable=False, default="roster",
+                                             server_default="roster")
+    roster_locked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    lineup_size: Mapped[Optional[int]] = mapped_column(SmallInteger, nullable=True)
+    roster_max: Mapped[Optional[int]] = mapped_column(SmallInteger, nullable=True)
 
     # Relationships
     organizer: Mapped["User"] = relationship("User", back_populates="organized_tournaments")

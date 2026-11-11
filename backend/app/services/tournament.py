@@ -6,7 +6,7 @@ from itertools import combinations
 from sqlalchemy import inspect as sa_inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import BusinessRuleError, ForbiddenError, NotFoundError
+from app.core.exceptions import BusinessRuleError, ConflictError, ForbiddenError, NotFoundError
 from app.core.redis import CacheKeys, CacheTTL, RedisCache
 from app.models.enums import (
     MatchStatus,
@@ -28,6 +28,31 @@ from app.schemas.tournament import (
 )
 from app.core.storage import resign_stored_url
 from app.events import Ev, EventEnvelope, EventService
+from app.services.membership import formal_clause
+from app.services.roster import (
+    CLOSED,
+    NOT_STARTED,
+    closed_tournament_guard,
+    is_legacy,
+    lock_roster,
+    record_correction,
+)
+
+
+def guard_status_change(tournament, new_status, user) -> None:
+    """完了・中止した大会の状態は管理者だけが変える（Q15。主催者が戻して訂正の規則を避けられないように）。
+    legacy の大会を開催中にしない。未開始の legacy の大会を完了にしない（Q01・Q18）。"""
+    if new_status == tournament.status:
+        return
+    if tournament.status in CLOSED and user.role != UserRole.ADMIN:
+        raise ConflictError("完了・中止した大会の状態は、管理者だけが変更できます")
+    if not is_legacy(tournament):
+        return
+    if new_status == TournamentStatus.ONGOING:
+        raise ConflictError("この大会は名簿の無い旧方式（legacy）のため開催中にできません。"
+                            "未開始のうちに名簿の方式へ切り替えてください")
+    if new_status == TournamentStatus.COMPLETED and tournament.status in NOT_STARTED:
+        raise ConflictError("始まっていない旧方式（legacy）の大会は完了にできません。中止にしてください")
 from app.services.registration_lottery import APPROVAL_MODE_LOTTERY, run_registration_lottery
 
 
@@ -79,6 +104,12 @@ def bracket_scores(match) -> dict[str, int | None]:
 # 参加チーム数が変わっても「決勝だけBO3」の意味が変わらないようにするため、
 # ラウンド番号ではなく終盤からの距離で表す。
 BO_ROUND_KEYS = {"final": 0, "semifinal": 1, "quarterfinal": 2}
+
+# 生きている参加登録（辞退・見送り以外）と、チームが自分で辞退できる大会の段階（組み合わせの生成前）
+LIVE_REGISTRATION = (RegistrationStatus.PENDING, RegistrationStatus.APPROVED, RegistrationStatus.WAITLISTED)
+WITHDRAWABLE_STAGES = (
+    TournamentStatus.REGISTRATION_OPEN, TournamentStatus.REGISTRATION_CLOSED, TournamentStatus.CHECK_IN,
+)
 
 
 def resolve_bo_format(tournament, round_number: int, rounds_count: int,
@@ -138,8 +169,14 @@ class TournamentService:
             slug = f"{slug_base}-{counter}"
             counter += 1
 
+        fields = data.model_dump(exclude_none=True)
+        # 作成画面は公開設定を rules.visibility にだけ入れて送る。列へ写さないと
+        # 「非公開」を選んでも一覧・検索に出てしまう
+        requested = fields.pop("visibility", None) or (data.rules or {}).get("visibility")
+        fields["visibility"] = requested if requested in ("public", "limited", "private") else "public"
+
         tournament = await self._repo.create(
-            **data.model_dump(exclude_none=True),
+            **fields,
             slug=slug,
             organizer_id=organizer.id,
         )
@@ -201,6 +238,8 @@ class TournamentService:
 
         update_data = data.model_dump(exclude_none=True)
         update_data = self._preserve_discord_webhook(tournament, update_data)
+        if "status" in update_data:
+            guard_status_change(tournament, TournamentStatus(update_data["status"]), current_user)
         # 変更対象フィールドのスカラー値のみ before に記録（差分・PII非対象 / ADR-0008）
         keys = [k for k in update_data if _is_scalar(getattr(tournament, k, None))]
         before = {k: _scalar(getattr(tournament, k, None)) for k in keys}
@@ -208,6 +247,9 @@ class TournamentService:
         after = {k: _scalar(getattr(tournament, k, None)) for k in keys}
         await self._emit(Ev.TOURNAMENT_UPDATED, tournament.id, before=before, after=after,
                          metadata={"fields": list(update_data.keys())})
+
+        if tournament.status == TournamentStatus.ONGOING:
+            await lock_roster(self._db, tournament)  # Q17
 
         # 受付終了後に抽選へ切り替えた場合はその場で抽選する。
         # 抽選は「受付終了へ遷移した瞬間」に走るため、既に受付終了済みの大会を
@@ -245,6 +287,7 @@ class TournamentService:
                 TeamMember.team_id == team_id,
                 Player.user_id == user.id,
                 TeamMember.left_at.is_(None),
+                await formal_clause(self._db),
             )
         )).scalar_one_or_none()
         if role != MemberRole.CAPTAIN:
@@ -300,6 +343,30 @@ class TournamentService:
                 after={"registration_id": str(reg.id), "team_id": str(team_id), "auto_approved": True},
             )
         return status
+
+    async def withdraw(self, tournament_id: uuid.UUID, current_user: User) -> RegistrationStatus:
+        """自チームの参加申請を取り下げる（チームのオーナー・キャプテン、ブラケット生成前のみ）。
+
+        生成後に抜けると組み合わせが崩れるため、その段階では主催者に任せる。
+        """
+        from app.api.v1.tournaments import _user_registration
+
+        tournament = await self._repo.get_by_id(tournament_id)
+        if not tournament:
+            raise NotFoundError("大会", str(tournament_id))
+        reg = await _user_registration(self._db, tournament_id, current_user)
+        if not reg or reg.status not in LIVE_REGISTRATION:
+            raise NotFoundError("登録", "取り下げられる参加申請がありません")
+        await self._require_team_authority(reg.team_id, current_user)
+        if tournament.status not in WITHDRAWABLE_STAGES or await self._repo.get_brackets_with_matches(tournament_id):
+            raise BusinessRuleError("組み合わせの生成後は辞退できません。主催者に連絡してください")
+
+        before = reg.status.value
+        reg = await self._repo.update_registration_status(reg, RegistrationStatus.WITHDRAWN)
+        await self._emit(Ev.TOURNAMENT_REGISTRATION_WITHDRAWN, tournament_id, before={"status": before},
+                         after={"registration_id": str(reg.id), "team_id": str(reg.team_id)})
+        await self._cache.delete(CacheKeys.TOURNAMENT_DETAIL.replace("{id}", str(tournament_id)))
+        return reg.status
 
     async def generate_bracket(
         self, tournament_id: uuid.UUID, current_user: User
@@ -647,8 +714,9 @@ class TournamentService:
         if current_user.role != UserRole.ADMIN and tournament.organizer_id != current_user.id:
             raise ForbiddenError("ステータス変更の権限がありません")
 
-        # 主催者は任意のステータスへ手動変更できる。
+        # 主催者は任意のステータスへ手動変更できる（RC4: legacy の大会の開催中・未開始からの完了を除く）。
         # 手動変更後は status_locked=True にし、日程による自動更新の対象外とする。
+        guard_status_change(tournament, new_status, current_user)
         old_status = tournament.status
         tournament = await self._repo.update(
             tournament, status=new_status, status_locked=True
@@ -657,6 +725,8 @@ class TournamentService:
         # 受付終了に入ったら、抽選大会の当落をここで確定する
         if new_status == TournamentStatus.REGISTRATION_CLOSED:
             await run_registration_lottery(self._db, tournament, self._cache)
+        if new_status == TournamentStatus.ONGOING:
+            await lock_roster(self._db, tournament)  # Q17
 
         # 遷移先に応じて1イベントを発火（ADR-0008: 1操作=1イベント）
         if new_status == TournamentStatus.COMPLETED:
@@ -668,6 +738,34 @@ class TournamentService:
         await self._emit(event_type, tournament.id,
                          before={"status": old_status.value}, after={"status": new_status.value})
 
+        await self._cache.delete(CacheKeys.TOURNAMENT_DETAIL.replace("{id}", str(tournament_id)))
+        return tournament
+
+    async def switch_to_roster(self, tournament_id: uuid.UUID, current_user: User) -> Tournament:
+        """旧方式（legacy）の未開始の大会を、名簿の方式に切り替える（一方向。Q01）。"""
+        from sqlalchemy import exists
+        from app.models.match import MatchResult
+        tournament = await self._repo.get_by_id(tournament_id)
+        if not tournament:
+            raise NotFoundError("大会", str(tournament_id))
+        if current_user.role != UserRole.ADMIN and tournament.organizer_id != current_user.id:
+            raise ForbiddenError("大会の方式を切り替えられるのは主催者と管理者だけです")
+        if not is_legacy(tournament):
+            raise ConflictError("この大会は既に名簿の方式です")
+        if tournament.status not in NOT_STARTED:
+            raise ConflictError("切り替えられるのは、まだ始まっていない大会だけです")
+        # バイ（完了・結果の行なし・相手なし）以外の試合が、すべて予定のままであること
+        is_bye = ((Match.status == MatchStatus.COMPLETED)
+                  & (Match.team1_id.is_(None) | Match.team2_id.is_(None))
+                  & ~exists().where(MatchResult.match_id == Match.id))
+        progressed = await self._db.scalar(select(Match.id).where(
+            Match.tournament_id == tournament.id, Match.status != MatchStatus.SCHEDULED, ~is_bye).limit(1))
+        if progressed:
+            raise ConflictError("始まった試合のある大会は切り替えられません")
+        tournament.roster_mode = "roster"
+        await self._db.flush()
+        await self._emit(Ev.TOURNAMENT_ROSTER_MODE_CHANGED, tournament.id,
+                         before={"roster_mode": "legacy"}, after={"roster_mode": "roster"})
         await self._cache.delete(CacheKeys.TOURNAMENT_DETAIL.replace("{id}", str(tournament_id)))
         return tournament
 
@@ -745,6 +843,7 @@ class TournamentService:
         registration_id: uuid.UUID,
         status: RegistrationStatus,
         current_user: User,
+        reason: str | None = None,
     ):
         tournament = await self._repo.get_by_id(tournament_id)
         if not tournament:
@@ -754,7 +853,13 @@ class TournamentService:
         reg = await self._repo.get_registration_by_id(registration_id)
         if not reg or reg.tournament_id != tournament_id:
             raise NotFoundError("登録", str(registration_id))
+        admin_fix = closed_tournament_guard(tournament, current_user, reason)  # Q15
+        before_status = reg.status.value
         reg = await self._repo.update_registration_status(reg, status)
+        if admin_fix:
+            await record_correction(self._db, kind="registration_change", reason=reason, actor=current_user,
+                                    tournament_id=tournament.id, before={"status": before_status},
+                                    after={"status": status.value, "registration_id": str(reg.id)})
 
         # 承認/却下のみイベント化（dispatch=True → P1-2 で通知 consumer）
         if status == RegistrationStatus.APPROVED:

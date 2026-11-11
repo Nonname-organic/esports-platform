@@ -14,12 +14,13 @@ Ban/Pick の方針:
 """
 
 import uuid
+from datetime import timedelta
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import func, select
 
-from app.core.security import create_access_token
+from app.core.security import issue_tokens
 from app.models.enums import (
     BanPickAction,
     BOFormat,
@@ -46,7 +47,7 @@ PATH = "/api/v1/matches/{match_id}/banpick"
 
 
 def _headers(user) -> dict:
-    return {"Authorization": f"Bearer {create_access_token(str(user.id), {'role': user.role.value})}"}
+    return {"Authorization": f"Bearer {issue_tokens(user)[0]}"}
 
 
 async def _make_map(db) -> Map:
@@ -82,6 +83,8 @@ async def _member(db, *, team, role, left_at=None):
     player = await f.make_player(db, user=user)
     member = await f.add_member(db, team=team, player=player, role=role)
     if left_at is not None:
+        # RC4（031）: 所属の期間は「脱退 >= 加入」。脱退より前に加入していたことにする
+        member.joined_at = min(member.joined_at, left_at - timedelta(days=1))
         member.left_at = left_at
         await db.flush()
     return user
@@ -90,18 +93,25 @@ async def _member(db, *, team, role, left_at=None):
 async def _world(db, *, status=MatchStatus.SCHEDULED):
     """主催者・両チーム・試合・マップを用意する。"""
     organizer = await f.make_user(db, role=UserRole.ORGANIZER)
-    tour = await f.make_tournament(db, organizer=organizer, status=TournamentStatus.ONGOING)
+    # RC4: 名簿の方式。出場人数 1 で、各チームに承認済みの名簿の選手を 1 人
+    tour = await f.make_tournament(db, organizer=organizer, status=TournamentStatus.ONGOING,
+                                   lineup_size=1, roster_max=3)
     owner1 = await f.make_user(db, role=UserRole.PLAYER)
     owner2 = await f.make_user(db, role=UserRole.PLAYER)
     team1 = await f.make_team(db, owner=owner1, tag="T1")
     team2 = await f.make_team(db, owner=owner2, tag="T2")
     await f.register_team(db, tournament=tour, team=team1)
     await f.register_team(db, tournament=tour, team=team2)
+    p1 = await f.roster_player(db, tournament=tour, team=team1, name="T1-p")
+    p2 = await f.roster_player(db, tournament=tour, team=team2, name="T2-p")
     match = await _make_match(db, tournament=tour, team1=team1, team2=team2, status=status)
+    if status != MatchStatus.SCHEDULED:  # 開始済みの試合は出場登録が固定されている
+        await f.lock_lineup(db, match=match, tournament=tour, team=team1, players=[p1])
+        await f.lock_lineup(db, match=match, tournament=tour, team=team2, players=[p2])
     map_ = await _make_map(db)
     return {
         "organizer": organizer, "tour": tour, "team1": team1, "team2": team2,
-        "owner1": owner1, "owner2": owner2, "match": match, "map": map_,
+        "owner1": owner1, "owner2": owner2, "match": match, "map": map_, "p1": p1, "p2": p2,
     }
 
 
@@ -570,9 +580,7 @@ async def test_p01_008_denied_result_never_enters_service(
 async def test_p01_009_denied_stats_keeps_existing_rows(client: AsyncClient, db):
     """成績は毎回置き換える実装なので、拒否で既存が消えないことを確かめる。"""
     w = await _world(db, status=MatchStatus.ONGOING)
-    user = await f.make_user(db, role=UserRole.PLAYER)
-    player = await f.make_player(db, user=user)
-    await f.add_member(db, team=w["team1"], player=player)
+    player = w["p1"]  # RC4: 成績を書けるのは出場登録（実出場）の選手
 
     ok = await client.post(
         P_STATS.format(id=w["match"].id),
@@ -649,6 +657,15 @@ _AUTHZ_EXEMPT = {
     "register_ban_pick",
     # 配信URLは MatchService.set_stream_url が自前で主催者本人を確認する。
     "set_stream_url",
+    # 結果の報告・確認・異議はチーム側（オーナー・現役キャプテン）が行うため、
+    # MatchReportService が対戦チームの代表か・主催者かを判定する（RC1）。
+    "report_result",
+    "confirm_result_report",
+    "dispute_result_report",
+    # RC4: 出場登録の変更と交代の申請は、開始の前・試合中にチーム側（オーナー・正式な所属のキャプテン）も行う。
+    # LineupService・SubstitutionService が、チームの管理者か大会の運営か（固定の後は運営だけ）を判定する
+    "put_lineup",
+    "submit_substitution",
 }
 
 

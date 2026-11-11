@@ -8,6 +8,8 @@ CareerAggregationService
 設計方針:
 - 永続テーブル(player_careers/team_careers)は重い集計のスナップショット用に確保
 - 通常はオンザフライ集計 + Redisキャッシュで応答（整合性とシンプルさ優先）
+- 公開のチーム・選手ページ用なので、一覧に載る大会（publicly_listed）の試合だけを
+  数える。限定公開・非公開の大会の対戦相手や勝敗が出ないようにする（S7）
 """
 
 import json
@@ -20,10 +22,12 @@ from sqlalchemy import select, text, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.redis import RedisCache
-from app.models.enums import MatchStatus
+from app.models.enums import MatchStatus, TournamentStatus
 from app.models.match import Match, MatchGame, PlayerMatchStats, Map
 from app.models.player import Player
 from app.models.team import Team
+from app.models.tournament import Tournament
+from app.repositories.tournament import publicly_listed
 
 
 CAREER_CACHE_TTL = 600  # 10分
@@ -82,14 +86,20 @@ class CareerAggregationService:
                 Match.id.label("match_id"),
                 Match.winner_id.label("match_winner"),
                 Match.tournament_id,
+                Match.started_at.label("match_started"),
+                Match.ended_at.label("match_ended"),
             )
             .join(MatchGame, PlayerMatchStats.match_game_id == MatchGame.id)
             .join(Match, MatchGame.match_id == Match.id)
+            .join(Tournament, Tournament.id == Match.tournament_id)
             .where(
                 PlayerMatchStats.player_id == player_id,
                 Match.status == MatchStatus.COMPLETED,
+                publicly_listed(),
             )
         )).all()
+
+        rows = await self._exclude_unattributed(player_id, rows)
 
         # マップ名解決
         map_names = await self._load_map_names()
@@ -202,9 +212,11 @@ class CareerAggregationService:
         # チームの全試合（team1 or team2）。連勝記録を数えるため時系列に並べる
         matches = (await self._db.execute(
             select(Match)
+            .join(Tournament, Tournament.id == Match.tournament_id)
             .where(
                 ((Match.team1_id == team_id) | (Match.team2_id == team_id)),
                 Match.status == MatchStatus.COMPLETED,
+                publicly_listed(),
             )
             .order_by(Match.ended_at.asc().nulls_last(), Match.round_number.asc())
         )).scalars().all()
@@ -303,9 +315,11 @@ class CareerAggregationService:
             )
             .join(MatchGame, PlayerMatchStats.match_game_id == MatchGame.id)
             .join(Match, MatchGame.match_id == Match.id)
+            .join(Tournament, Tournament.id == Match.tournament_id)
             .where(
                 PlayerMatchStats.team_id == team_id,
                 Match.status == MatchStatus.COMPLETED,
+                publicly_listed(),
             )
         )).all()
 
@@ -346,14 +360,20 @@ class CareerAggregationService:
         map_performance は選手ごとの PlayerMatchStats を集めたもので、
         1マップが5件に数えられる。マップの勝敗はここで別に数える。
         """
-        row = (await self._db.execute(text("""
-            SELECT count(*) FILTER (WHERE mg.winner_id = :team) AS wins,
-                   count(*) AS total
-              FROM match_games mg
-              JOIN matches m ON m.id = mg.match_id
-             WHERE (m.team1_id = :team OR m.team2_id = :team)
-               AND m.status::text = 'completed'
-        """), {"team": team_id})).first()
+        row = (await self._db.execute(
+            select(
+                func.count().filter(MatchGame.winner_id == team_id).label("wins"),
+                func.count().label("total"),
+            )
+            .select_from(MatchGame)
+            .join(Match, Match.id == MatchGame.match_id)
+            .join(Tournament, Tournament.id == Match.tournament_id)
+            .where(
+                (Match.team1_id == team_id) | (Match.team2_id == team_id),
+                Match.status == MatchStatus.COMPLETED,
+                publicly_listed(),
+            )
+        )).first()
         if not row:
             return 0, 0
         return int(row.wins or 0), int(row.total or 0)
@@ -369,6 +389,33 @@ class CareerAggregationService:
         except Exception:
             pass
         return None
+
+    async def _exclude_unattributed(self, player_id: uuid.UUID, rows) -> list:
+        """RC4（D4・Q13）: 本人否認・期限の後の本人未確認の所属の期間と、異議が認められた試合の成績を外す。
+
+        行は消さない。試合の時刻と重なる所属が、すべて数えない状態のときだけ外す（所属が分からない行は残す）。
+        """
+        from app.models.roster import ParticipationDispute
+        from app.models.team import TeamMember
+        from app.services.membership import CONSENTED, grace_deadline
+        deadline = await grace_deadline(self._db)
+        counted = CONSENTED + (("unconfirmed",) if deadline is None or datetime.now(timezone.utc) < deadline else ())
+        members = (await self._db.execute(select(
+            TeamMember.team_id, TeamMember.joined_at, TeamMember.left_at, TeamMember.consent,
+        ).where(TeamMember.player_id == player_id))).all()
+        upheld = set((await self._db.execute(select(ParticipationDispute.match_id).where(
+            ParticipationDispute.player_id == player_id, ParticipationDispute.status == "upheld"))).scalars())
+        kept = []
+        for r in rows:
+            if r.match_id in upheld:
+                continue
+            at = r.match_started or r.match_ended
+            overlapping = [m for m in members if m.team_id == r.team_id and at is not None
+                           and m.joined_at <= at and (m.left_at is None or m.left_at >= at)]
+            if overlapping and not any(m.consent in counted for m in overlapping):
+                continue
+            kept.append(r)
+        return kept
 
     async def _get_player_titles(self, player_id: uuid.UUID) -> tuple[int, int]:
         championships = mvp_count = 0
@@ -393,20 +440,23 @@ class CareerAggregationService:
         常に0だった。4戦全勝して優勝したチームの画面にも「0優勝」と
         出てしまうため、ブラケットから直接求める。
         """
-        row = (await self._db.execute(text("""
-            SELECT count(*)
-              FROM (
-                SELECT DISTINCT ON (m.tournament_id) m.winner_id
-                  FROM matches m
-                  JOIN tournaments t ON t.id = m.tournament_id
-                 WHERE m.status::text = 'completed'
-                   AND t.status::text = 'completed'
-                   AND m.winner_id IS NOT NULL
-                 ORDER BY m.tournament_id, m.round_number DESC, m.match_number DESC
-              ) AS finals
-             WHERE finals.winner_id = :team
-        """), {"team": team_id})).first()
-        return int(row[0]) if row and row[0] is not None else 0
+        finals = (
+            select(Match.winner_id)
+            .join(Tournament, Tournament.id == Match.tournament_id)
+            .where(
+                Match.status == MatchStatus.COMPLETED,
+                Tournament.status == TournamentStatus.COMPLETED,
+                Match.winner_id.is_not(None),
+                publicly_listed(),
+            )
+            .distinct(Match.tournament_id)
+            .order_by(Match.tournament_id, Match.round_number.desc(), Match.match_number.desc())
+            .subquery()
+        )
+        n = await self._db.scalar(
+            select(func.count()).select_from(finals).where(finals.c.winner_id == team_id)
+        )
+        return int(n or 0)
 
     # ── 実績一覧 ────────────────────────────────────────────────────────────────
     async def get_player_achievements(self, player_id: uuid.UUID) -> list[dict]:

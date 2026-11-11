@@ -25,9 +25,14 @@ class TournamentCreate(BaseModel):
     description: str | None = None
     attachments: list[dict] | None = None
     is_public: bool = True
+    # 未指定なら rules.visibility（作成画面はそこへ入れて送る）、それも無ければ public
+    visibility: str | None = Field(default=None, pattern="^(public|limited|private)$")
     require_check_in: bool = False
     # 参加申請の承認方式: manual（主催者が個別承認）/ auto（先着順で自動承認）
     approval_mode: str = Field(default="manual", pattern="^(manual|auto|lottery)$")
+    # RC4: 名簿の大会の出場人数と名簿の上限（VALORANT は空なら 5・7）
+    lineup_size: int | None = Field(default=None, ge=1, le=20)
+    roster_max: int | None = Field(default=None, ge=1, le=40)
 
     @model_validator(mode="after")
     def validate_dates(self) -> "TournamentCreate":
@@ -76,6 +81,8 @@ class TournamentUpdate(BaseModel):
     require_check_in: bool | None = None
     require_team_membership: bool | None = None
     approval_mode: str | None = Field(default=None, pattern="^(manual|auto|lottery)$")
+    lineup_size: int | None = Field(default=None, ge=1, le=20)
+    roster_max: int | None = Field(default=None, ge=1, le=40)
     # 作成フォームの拡張項目のうち、tournaments テーブルに実カラムがあるもの
     subtitle: str | None = Field(default=None, max_length=200)
     banner_url: str | None = None
@@ -83,7 +90,7 @@ class TournamentUpdate(BaseModel):
     season: str | None = Field(default=None, max_length=50)
     split: str | None = Field(default=None, max_length=50)
     tier: str | None = Field(default=None, max_length=20)
-    visibility: str | None = Field(default=None, max_length=20)
+    visibility: str | None = Field(default=None, pattern="^(public|limited|private)$")
     seeding_type: str | None = Field(default=None, max_length=20)
     age_restriction: dict | None = None
     region_restriction: dict | None = None
@@ -136,6 +143,8 @@ class TournamentDetail(TournamentSummary):
     prize_currency: str | None = None
     require_team_membership: bool | None = None
     approval_mode: str | None = Field(default=None, pattern="^(manual|auto|lottery)$")
+    lineup_size: int | None = Field(default=None, ge=1, le=20)
+    roster_max: int | None = Field(default=None, ge=1, le=40)
     age_restriction: dict | None = None
     region_restriction: dict | None = None
     rank_restriction: dict | None = None
@@ -147,6 +156,9 @@ class TournamentDetail(TournamentSummary):
     player_stats_enabled: bool | None = None
     ranking_enabled: bool | None = None
     is_public: bool | None = None
+    # RC4: 大会の方式（読み取り専用）と名簿の固定の時刻
+    roster_mode: str | None = None
+    roster_locked_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 

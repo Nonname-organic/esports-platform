@@ -5,7 +5,7 @@
 """
 
 import uuid
-from typing import Optional
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -18,7 +18,10 @@ router = APIRouter(prefix="/tags", tags=["タグ"])
 
 
 class SetTagsRequest(BaseModel):
-    tags: list[str] = Field(default_factory=list, description="slug またはラベル（正規化される）")
+    # 1回で大量のタグを作らせない（未知のタグはその場で新規作成される）
+    tags: list[Annotated[str, Field(max_length=50)]] = Field(
+        default_factory=list, max_length=20, description="slug またはラベル（正規化される）"
+    )
 
 
 @router.get("", response_model=Response[list[dict]])

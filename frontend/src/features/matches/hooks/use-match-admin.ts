@@ -88,7 +88,7 @@ export function useMatchAdmin(matchId: string, initialData?: MatchDetail) {
   useEffect(() => {
     connect();
     return () => {
-      retryRef.current && clearTimeout(retryRef.current);
+      if (retryRef.current) clearTimeout(retryRef.current);
       wsRef.current?.close();
       wsRef.current = null;
     };
@@ -96,7 +96,7 @@ export function useMatchAdmin(matchId: string, initialData?: MatchDetail) {
 
   // ── ミューテーション ──────────────────────────────────────────────────────
   const startMatch = useMutation({
-    mutationFn: () => matchApi.start(matchId),
+    mutationFn: (reason?: string) => matchApi.start(matchId, reason),
     onSuccess: () => qc.invalidateQueries({ queryKey: matchKeys.detail(matchId) }),
   });
 
@@ -116,7 +116,7 @@ export function useMatchAdmin(matchId: string, initialData?: MatchDetail) {
   });
 
   const registerResult = useMutation({
-    mutationFn: (data: { winner_id: string; was_forfeit?: boolean }) =>
+    mutationFn: (data: { winner_id: string; was_forfeit?: boolean; correction_reason?: string }) =>
       matchApi.registerResult(matchId, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: matchKeys.detail(matchId) }),
   });

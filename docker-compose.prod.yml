@@ -14,19 +14,37 @@
 # 手でイメージを入れ替えず、既存のデプロイ手順に従うこと。
 version: "3.9"
 
+# 本番だけの設定（api / worker / scheduler 共通）:
+#   REQUIRE_STRONG_SECRETS — DB パスワードが空・既定値、SECRET_KEY が見本値なら起動しない
+#   USE_REDIS_QUEUE       — キューは Redis。未設定だと AWS SQS に向かうため .env に頼らず固定する
 services:
   api:
     image: ghcr.io/${IMAGE_ORG}/esports-platform-api:${IMAGE_TAG}
     build: null
+    environment:
+      - REQUIRE_STRONG_SECRETS=true
+      - USE_REDIS_QUEUE=true
 
   worker:
     image: ghcr.io/${IMAGE_ORG}/esports-platform-worker:${IMAGE_TAG}
     build: null
+    environment:
+      - REQUIRE_STRONG_SECRETS=true
+      - USE_REDIS_QUEUE=true
 
   # scheduler は api と同一イメージ（production ターゲット）を使う
   scheduler:
     image: ghcr.io/${IMAGE_ORG}/esports-platform-api:${IMAGE_TAG}
     build: null
+    environment:
+      - REQUIRE_STRONG_SECRETS=true
+      - USE_REDIS_QUEUE=true
+
+  # 既定値（esports_pass）での初期化を許さない。/opt/app/.env に DB_PASSWORD が無いと
+  # compose がその場で止まり、稼働中のコンテナには触れない
+  postgres:
+    environment:
+      POSTGRES_PASSWORD: "${DB_PASSWORD:?DB_PASSWORD を /opt/app/.env に設定してください}"
 
   frontend:
     image: ghcr.io/${IMAGE_ORG}/esports-platform-frontend:${IMAGE_TAG}

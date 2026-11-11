@@ -15,10 +15,10 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 
-from app.core.security import create_access_token
+from app.core.security import issue_tokens
 from app.models.discord import DiscordServer
 from app.models.enums import UserRole
-from app.services.discord_service import DiscordEventPublisher
+from app.services.discord_service import DiscordEventPublisher, DiscordService
 from tests import factories as f
 
 PATH = "/api/v1/discord/setup/{tournament_id}"
@@ -27,7 +27,7 @@ FORBIDDEN_DETAIL = "この大会のDiscordを設定する権限がありませ�
 
 
 def _headers(user) -> dict:
-    return {"Authorization": f"Bearer {create_access_token(str(user.id), {'role': user.role.value})}"}
+    return {"Authorization": f"Bearer {issue_tokens(user)[0]}"}
 
 
 @pytest.fixture
@@ -39,6 +39,18 @@ def published(monkeypatch) -> list:
         calls.append((event_type, payload))
 
     monkeypatch.setattr(DiscordEventPublisher, "publish", _record)
+    return calls
+
+
+@pytest.fixture
+def guild_ok(monkeypatch) -> list:
+    """Discord 側の管理権限の確認（RC1）を、通ったものとして記録だけする。"""
+    calls: list = []
+
+    async def _ok(self, user_id, guild_id):
+        calls.append((user_id, guild_id))
+
+    monkeypatch.setattr(DiscordService, "_require_guild_manager", _ok)
     return calls
 
 
@@ -72,7 +84,7 @@ async def _bind(db, tournament, *, guild_id: str) -> DiscordServer:
 
 @pytest.mark.security
 @pytest.mark.asyncio
-async def test_p05_001_owner_allowed(client: AsyncClient, db, published):
+async def test_p05_001_owner_allowed(client: AsyncClient, db, published, guild_ok):
     """大会の主催者本人は紐付けでき、保存と Bot への依頼が1回ずつ行われる。"""
     owner = await f.make_user(db, role=UserRole.ORGANIZER)
     tour = await f.make_tournament(db, organizer=owner)
@@ -98,7 +110,7 @@ async def test_p05_001_owner_allowed(client: AsyncClient, db, published):
 
 @pytest.mark.security
 @pytest.mark.asyncio
-async def test_p05_002_admin_allowed_for_others_tournament(client: AsyncClient, db, published):
+async def test_p05_002_admin_allowed_for_others_tournament(client: AsyncClient, db, published, guild_ok):
     """ADMIN は他人の大会でも紐付けできる。"""
     owner = await f.make_user(db, role=UserRole.ORGANIZER)
     admin = await f.make_user(db, role=UserRole.ADMIN)

@@ -20,6 +20,7 @@ from app.models.match import BanPick, Map, Match, MatchGame, PlayerMatchStats
 from app.models.player import Player
 from app.models.team import Team, TeamMember
 from app.models.tournament import Tournament
+from app.repositories.tournament import publicly_listed
 
 TTL = 300  # 5分
 
@@ -47,6 +48,10 @@ class AnalyticsDashboardService:
         conds = [Tournament.game == game, Match.status == MatchStatus.COMPLETED]
         if tournament_id:
             conds.append(Match.tournament_id == tournament_id)
+        else:
+            # 大会をまたぐ集計には、限定公開・非公開・下書きの大会を混ぜない（S7）。
+            # 大会を指定した集計は、これまでどおり大会の詳細ページと同じ扱い
+            conds.append(publicly_listed())
         df, dt = _parse_dt(date_from), _parse_dt(date_to)
         occurred = func.coalesce(Match.started_at, Match.created_at)
         if df:
@@ -337,7 +342,9 @@ class AnalyticsDashboardService:
             .join(MatchGame, PlayerMatchStats.match_game_id == MatchGame.id)
             .join(Match, MatchGame.match_id == Match.id)
             .join(Tournament, Match.tournament_id == Tournament.id)
-            .where(*c)
+            # 詳細スタッツを非公開にした選手は公開ランキングに載せない
+            .join(Player, Player.id == PlayerMatchStats.player_id)
+            .where(*c, Player.stats_public.is_(True))
             .group_by(PlayerMatchStats.player_id)
             .order_by(func.avg((PlayerMatchStats.kills + PlayerMatchStats.assists) / func.nullif(PlayerMatchStats.deaths, 0)).desc().nullslast())
             .limit(limit)
@@ -364,7 +371,7 @@ class AnalyticsDashboardService:
             out.append({
                 "rank": i,
                 "player_id": str(r.player_id),
-                "player_name": (p.real_name or p.in_game_name) if p else "Unknown",
+                "player_name": p.in_game_name if p else "Unknown",  # 本名は公開しない
                 "in_game_name": p.in_game_name if p else None,
                 "team_name": t[0] if t else None,
                 "team_tag": t[1] if t else None,
@@ -424,6 +431,8 @@ class AnalyticsDashboardService:
         conds = [Tournament.game == game]
         if tournament_id:
             conds.append(Match.tournament_id == tournament_id)
+        else:
+            conds.append(publicly_listed())  # _match_conds と同じ（S7）
         rows = (await self._db.execute(
             select(
                 Map.display_name,

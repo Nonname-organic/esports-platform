@@ -8,10 +8,14 @@ from __future__ import annotations
 import uuid
 from typing import Optional
 
-from sqlalchemy import delete, select
+from sqlalchemy import and_, delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.player_lft import PlayerLFT
 from app.models.tag import Tag, Taggable
+from app.models.team_recruitment import TeamRecruitment
+from app.models.tournament import Tournament
+from app.repositories.tournament import publicly_listed
 
 
 class TagRepository:
@@ -94,7 +98,19 @@ class TagRepository:
         )
 
     async def entities_with_tag(self, slug: str, entity_type: Optional[str] = None, limit: int = 50) -> list[Taggable]:
-        q = select(Taggable).join(Tag, Tag.id == Taggable.tag_id).where(Tag.slug == slug)
+        q = select(Taggable).join(Tag, Tag.id == Taggable.tag_id).where(
+            Tag.slug == slug,
+            # タグ検索は公開検索。下書き・非公開の大会と非公開の募集は出さない
+            or_(
+                Taggable.entity_type.notin_(("tournament", "lfp", "lft")),
+                and_(Taggable.entity_type == "tournament",
+                     Taggable.entity_id.in_(select(Tournament.id).where(publicly_listed()))),
+                and_(Taggable.entity_type == "lfp",
+                     Taggable.entity_id.in_(select(TeamRecruitment.id).where(TeamRecruitment.is_public.is_(True)))),
+                and_(Taggable.entity_type == "lft",
+                     Taggable.entity_id.in_(select(PlayerLFT.id).where(PlayerLFT.is_public.is_(True)))),
+            ),
+        )
         if entity_type:
             q = q.where(Taggable.entity_type == entity_type)
         q = q.limit(limit)

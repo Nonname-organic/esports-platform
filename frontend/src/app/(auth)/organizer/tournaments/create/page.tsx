@@ -158,13 +158,12 @@ const TIER_OPTIONS = [
   { value: "professional", label: "Professional", desc: "プロチーム参加の公式大会" },
 ];
 
+// ブラケットを自動生成できる形式だけを出す。スイス式・グループステージ・
+// リーグ戦は選べても大会を作れないか、組み合わせを生成できなかった。
 const FORMAT_OPTIONS = [
   { value: "single_elimination", label: "シングルエリミネーション", desc: "負けたら終わり" },
   { value: "double_elimination", label: "ダブルエリミネーション", desc: "敗者復活あり" },
-  { value: "swiss", label: "スイス式", desc: "成績に応じた対戦相手決定" },
   { value: "round_robin", label: "ラウンドロビン", desc: "総当たり戦" },
-  { value: "group_stage", label: "グループステージ", desc: "グループ戦+決勝トーナメント" },
-  { value: "league", label: "リーグ戦", desc: "シーズン制リーグ" },
 ];
 
 // ── ステップコンテンツ ─────────────────────────────────────────────────────────
@@ -796,8 +795,8 @@ function Step11Visibility({ register, watch, control }: any) {
       <div className="space-y-2">
         {[
           { value: "public", label: "公開", desc: "誰でも大会を見つけられます", icon: "🌐" },
-          { value: "limited", label: "限定公開", desc: "招待コードを持つ人のみ参加可能", icon: "🔗" },
-          { value: "private", label: "非公開", desc: "リストに表示されません", icon: "🔒" },
+          { value: "limited", label: "限定公開", desc: "一覧・検索に表示されず、URL を知っている人だけが見られます", icon: "🔗" },
+          { value: "private", label: "非公開", desc: "一覧・検索・ホームに表示されません", icon: "🔒" },
         ].map((v) => (
           <label key={v.value} className={cn(
             "flex cursor-pointer items-center gap-3 rounded-xl border p-4 transition-colors",
@@ -867,7 +866,6 @@ export default function TournamentCreatePage() {
   const router = useRouter();
   const qc = useQueryClient();
 
-  if (!ready || !authed) return null;
   const [currentStep, setCurrentStep] = useState(0);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [draftId, setDraftId] = useState<string | null>(null);
@@ -999,6 +997,9 @@ export default function TournamentCreatePage() {
     <Step11Visibility key="11" {...stepProps} />,
     <Step12Analytics key="12" {...stepProps} />,
   ];
+
+  // フックを全部呼んだ後で抜ける（途中で return するとログアウト時にフック数が変わって落ちる）
+  if (!ready || !authed) return null;
 
   return (
     <div className="flex h-[calc(100vh-3.5rem)] flex-col bg-slate-950">

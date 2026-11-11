@@ -60,8 +60,9 @@ async def make_team(db: AsyncSession, *, owner: User, name=None, tag="TST",
 
 
 async def add_member(db: AsyncSession, *, team: Team, player: Player,
-                     role=MemberRole.PLAYER) -> TeamMember:
-    m = TeamMember(team_id=team.id, player_id=player.id, role=role, joined_at=_now())
+                     role=MemberRole.PLAYER, consent="invitation") -> TeamMember:
+    """RC4: 既定は本人が招待を承認した所属。移行前の所属は consent="unconfirmed" で作る。"""
+    m = TeamMember(team_id=team.id, player_id=player.id, role=role, joined_at=_now(), consent=consent)
     db.add(m)
     await db.flush()
     return m
@@ -110,3 +111,61 @@ async def register_team(db: AsyncSession, *, tournament: Tournament, team: Team,
     db.add(reg)
     await db.flush()
     return reg
+
+
+async def make_legacy_tournament(db: AsyncSession, **kw) -> Tournament:
+    """032 より前からある旧方式（legacy）の大会。DB は新しい legacy の行を断る（Q02）ので、
+    このトランザクションの中だけトリガーを止めて作る（テスト専用）。"""
+    from sqlalchemy import text
+    await db.execute(text("ALTER TABLE tournaments DISABLE TRIGGER trg_tournaments_roster_mode_guard"))
+    t = await make_tournament(db, roster_mode="legacy", **kw)
+    await db.execute(text("ALTER TABLE tournaments ENABLE TRIGGER trg_tournaments_roster_mode_guard"))
+    return t
+
+
+async def add_roster(db: AsyncSession, *, tournament: Tournament, team: Team, player: Player,
+                     status="accepted", slot="starter"):
+    """名簿の行（既定は本人が承認済み）。参加登録と、承諾済みの現役の所属が要る。"""
+    from sqlalchemy import select
+    from app.models.roster import TournamentRosterEntry
+    reg = await db.scalar(select(TournamentRegistration).where(
+        TournamentRegistration.tournament_id == tournament.id, TournamentRegistration.team_id == team.id))
+    member = await db.scalar(select(TeamMember).where(
+        TeamMember.team_id == team.id, TeamMember.player_id == player.id, TeamMember.left_at.is_(None)))
+    assert reg is not None and member is not None, "参加登録と所属を先に作る"
+    e = TournamentRosterEntry(id=uuid.uuid4(), tournament_id=tournament.id, registration_id=reg.id,
+                              team_id=team.id, player_id=player.id, membership_id=member.id,
+                              default_slot=slot, status=status)
+    db.add(e)
+    await db.flush()
+    return e
+
+
+async def roster_player(db: AsyncSession, *, tournament: Tournament, team: Team, name=None,
+                        role=MemberRole.PLAYER, slot="starter", user=None) -> Player:
+    """承諾済みの所属と、承認済みの名簿の行を持つ選手を 1 人作る。"""
+    player = await make_player(db, user=user or await make_user(db), in_game_name=name or f"P-{uuid.uuid4().hex[:5]}")
+    await add_member(db, team=team, player=player, role=role)
+    await add_roster(db, tournament=tournament, team=team, player=player, slot=slot)
+    return player
+
+
+async def lock_lineup(db: AsyncSession, *, match, tournament: Tournament, team: Team, players: list,
+                      slot="starter") -> list:
+    """試合の出場登録を直接作り、固定済みにする（試合を ONGOING で直接作るテスト用）。
+
+    選手には承認済みの名簿の行が要る（roster_player / add_roster）。
+    """
+    from sqlalchemy import select
+    from app.models.roster import MatchLineupEntry, TournamentRosterEntry
+    out = []
+    for p in players:
+        roster = await db.scalar(select(TournamentRosterEntry).where(
+            TournamentRosterEntry.tournament_id == tournament.id, TournamentRosterEntry.player_id == p.id))
+        e = MatchLineupEntry(id=uuid.uuid4(), match_id=match.id, tournament_id=tournament.id, team_id=team.id,
+                             player_id=p.id, roster_entry_id=roster.id, slot=slot, source="default")
+        db.add(e)
+        out.append(e)
+    match.lineup_locked_at = match.lineup_locked_at or _now()
+    await db.flush()
+    return out

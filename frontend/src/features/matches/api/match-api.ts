@@ -22,8 +22,9 @@ export const matchApi = {
     return apiClient.get(`/api/v1/matches?${qs.toString()}`);
   },
 
-  start: (id: string): Promise<void> =>
-    apiClient.patch(`/api/v1/matches/${id}/start`),
+  /** 開始で出場登録を固定する。スターターが出場人数に満たないチームがあれば理由が要る（RC4） */
+  start: (id: string, reason?: string): Promise<void> =>
+    apiClient.patch(`/api/v1/matches/${id}/start`, reason ? { reason } : undefined),
 
   /** この試合を配信対象にする。空文字で解除。 */
   setStreamUrl: (id: string, streamUrl: string): Promise<unknown> =>
@@ -42,8 +43,23 @@ export const matchApi = {
       winner_id: string;
       was_forfeit?: boolean;
       game_stats?: unknown[];
+      /** 完了・中止した大会の訂正（管理者だけ）の理由（RC4） */
+      correction_reason?: string;
     },
   ): Promise<void> => apiClient.post(`/api/v1/matches/${id}/result`, data),
+
+  // 対戦チームによる結果報告 → 相手チームの確認（主催者は報告で即確定）
+  reportState: (id: string): Promise<{ data: ResultReportState }> =>
+    apiClient.get(`/api/v1/matches/${id}/report`),
+  report: (id: string, winnerId: string): Promise<{ data: { status: string } }> =>
+    apiClient.post(`/api/v1/matches/${id}/report`, { winner_id: winnerId }),
+  confirmReport: (id: string): Promise<{ data: { status: string } }> =>
+    apiClient.post(`/api/v1/matches/${id}/report/confirm`),
+  disputeReport: (id: string, reason: string): Promise<{ data: { status: string } }> =>
+    apiClient.post(`/api/v1/matches/${id}/report/dispute`, { reason }),
+  /** 完了・中止した大会の試合は、管理者だけが理由つきで再開できる（RC4） */
+  reopen: (id: string, reason?: string): Promise<void> =>
+    apiClient.post(`/api/v1/matches/${id}/reopen`, reason ? { reason } : undefined),
 
   registerBanPick: (
     id: string,
@@ -82,3 +98,16 @@ export const matchApi = {
     return apiClient.upload(`/api/v1/matches/${id}/scoreboard-ocr`, form);
   },
 };
+
+export interface ResultReportState {
+  report: {
+    status: "pending" | "confirmed" | "disputed" | "superseded";
+    winner_id: string;
+    reported_by_team_id: string;
+    dispute_reason: string | null;
+  } | null;
+  my_team_id: string | null;
+  can_report: boolean;
+  can_confirm: boolean;
+  can_dispute: boolean;
+}

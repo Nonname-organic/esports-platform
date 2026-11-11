@@ -22,6 +22,7 @@ export const discordApi = {
 
   oauthCallback: (
     code: string,
+    state: string,
   ): Promise<ApiResponse<{ discord_user_id: string; discord_username: string | null }>> =>
-    apiClient.post("/api/v1/discord/oauth/callback", { code }),
+    apiClient.post("/api/v1/discord/oauth/callback", { code, state }),
 };

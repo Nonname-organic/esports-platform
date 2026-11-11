@@ -18,7 +18,7 @@ from app.core.redis import RedisCache, get_redis
 from app.main import app
 from app.models.enums import UserRole
 from app.models.user import User
-from app.core.security import hash_password, create_access_token
+from app.core.security import hash_password, issue_tokens
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
@@ -153,7 +153,7 @@ async def admin_user(db: AsyncSession) -> User:
 
 @pytest_asyncio.fixture
 def admin_token(admin_user: User) -> str:
-    return create_access_token(str(admin_user.id), {"role": UserRole.ADMIN.value})
+    return issue_tokens(admin_user)[0]
 
 
 @pytest_asyncio.fixture
@@ -173,7 +173,7 @@ async def organizer_user(db: AsyncSession) -> User:
 
 @pytest_asyncio.fixture
 def organizer_token(organizer_user: User) -> str:
-    return create_access_token(str(organizer_user.id), {"role": UserRole.ORGANIZER.value})
+    return issue_tokens(organizer_user)[0]
 
 
 @pytest_asyncio.fixture
@@ -189,7 +189,7 @@ async def player_user(db: AsyncSession) -> User:
 
 @pytest_asyncio.fixture
 def player_token(player_user: User) -> str:
-    return create_access_token(str(player_user.id), {"role": UserRole.PLAYER.value})
+    return issue_tokens(player_user)[0]
 
 
 @pytest_asyncio.fixture
@@ -205,7 +205,7 @@ async def second_player_user(db: AsyncSession) -> User:
 
 @pytest_asyncio.fixture
 def second_player_token(second_player_user: User) -> str:
-    return create_access_token(str(second_player_user.id), {"role": UserRole.PLAYER.value})
+    return issue_tokens(second_player_user)[0]
 
 
 def auth_headers(token: str) -> dict:

@@ -92,6 +92,18 @@ export function useRegisterTeam(tournamentId: string) {
   });
 }
 
+/** 自チームの参加申請を取り下げる（組み合わせ生成前のみサーバーが受け付ける）。 */
+export function useWithdrawRegistration(tournamentId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => tournamentApi.withdraw(tournamentId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: tournamentKeys.detail(tournamentId) });
+      qc.invalidateQueries({ queryKey: tournamentKeys.myRegistration(tournamentId) });
+    },
+  });
+}
+
 export function useGenerateBracket(tournamentId: string) {
   const qc = useQueryClient();
   return useMutation({

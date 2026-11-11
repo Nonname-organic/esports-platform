@@ -57,8 +57,45 @@ jobs:
             cd /opt/app
             export COMPOSE_FILE
 
+            # 切り戻しのために、入れ替える前のイメージを digest で控える（RC4_ROLLBACK_RUNBOOK の 1 章）。
+            # 同じ版のデプロイをやり直したときに新しい版で上書きしないよう、最初の 1 回だけ書く
+            ROLLBACK="$HOME/rollback-images-$IMAGE_TAG.yml"
+            if [ ! -f "$ROLLBACK" ]; then
+              echo "services:" > "$ROLLBACK.tmp"
+              for svc in api worker scheduler frontend; do
+                cid=$(docker compose ps -q "$svc" 2>/dev/null || true)
+                [ -n "$cid" ] || continue
+                ref=$(docker inspect --format '{{.Config.Image}}' "$cid")
+                dig=$(docker image inspect --format '{{index .RepoDigests 0}}' "$ref" 2>/dev/null || true)
+                printf '  %s:\n    image: %s\n' "$svc" "${dig:-$ref}" >> "$ROLLBACK.tmp"
+              done
+              mv "$ROLLBACK.tmp" "$ROLLBACK"
+            fi
+            echo "切り戻し用のイメージ: $ROLLBACK"
+            cat "$ROLLBACK"
+
             # Pull new images (docker-compose.prod.yml overrides build: → image:)
             IMAGE_TAG="$IMAGE_TAG" IMAGE_ORG="$IMAGE_ORG" docker compose pull
+
+            # 新しいイメージで本番設定を先に検査する（REQUIRE_STRONG_SECRETS）。
+            # DB パスワードが空・既定値、SECRET_KEY が見本値ならここで止まり、
+            # 稼働中のコンテナは入れ替えない。値は表示されない
+            IMAGE_TAG="$IMAGE_TAG" IMAGE_ORG="$IMAGE_ORG" \
+              docker compose run --rm --no-deps -T api python -c "import app.core.config"
+
+            # ── RC4（Q28・Q29）: バックアップ → 新しいイメージでマイグレーション → 入れ替え ──
+            # 入れ替えの前に流す。新しいコードが古いスキーマで動く間を作らない。
+            # 開催中の大会・進行中の試合があると 032 が止め、すべてのマイグレーションが
+            # 1 つのトランザクションで戻る（版は元のまま、旧コードのまま動き続ける。D23 の延期）
+            ./scripts/backup-db.sh
+            BACKUP=$(ls -1t backups/*.sql.gz | head -1)  # いま backup-db.sh が書いたもの
+            gzip -t "$BACKUP"
+            gzip -dc "$BACKUP" | tail -n 20 | grep -q "PostgreSQL database dump complete"
+            echo "バックアップを確かめました: $(basename "$BACKUP")"
+
+            MIGRATION_STARTED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+            IMAGE_TAG="$IMAGE_TAG" IMAGE_ORG="$IMAGE_ORG" \
+              docker compose run --rm --no-deps -T api alembic upgrade head
 
             # イメージが変わったサービス（api / worker / scheduler / frontend）を
             # 作り直す。compose の既定は旧コンテナを停止してから新コンテナを起動
@@ -127,11 +164,12 @@ jobs:
 
             if [ "$READY" -ne 1 ]; then
               echo "readiness が通りませんでした（試行 ${TRIED} 回 / 上限 12 回・期限 60 秒）。"
-              echo "マイグレーションは実行しません。"
+              echo "切り戻しの手順（docs/release/RC4_ROLLBACK_RUNBOOK.md）へ進んでください。"
               exit 1
             fi
 
-            # readiness が通ってからマイグレーションを流す
-            docker compose exec -T api alembic upgrade head
+            # RC4（Q29 (a)）: 公開の確認。件数だけを出す。マイグレーションの後に始まった
+            # 旧方式（legacy）の大会の試合や開催中の legacy の大会があれば失敗にし、切り戻しの手順へ進む
+            docker compose exec -T api python scripts/rc4_release_check.py --since "$MIGRATION_STARTED_AT"
 
             echo "Deploy $IMAGE_TAG complete"

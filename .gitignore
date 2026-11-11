@@ -40,8 +40,8 @@ yarn-error.log*
 # baseline screenshots (tests/e2e/**-snapshots) は意図的に追跡する
 test-results/
 playwright-report/
-playwright/.cache/
-playwright/.auth/
+**/playwright/.cache/
+**/playwright/.auth/
 blob-report/
 
 # ── Terraform (root-level state if accidentally run here) ─────────────────────

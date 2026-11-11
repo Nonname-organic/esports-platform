@@ -12,6 +12,7 @@ import { OperationsPanel } from "./_components/operations-panel";
 import { TrendSection } from "./_components/trend-section";
 import { ActivityFeed } from "./_components/activity-feed";
 import { NotificationPanel } from "./_components/notification-panel";
+import { UserManagementSection } from "./_components/user-management";
 
 function AdminAuditSection() {
   const { data: items, isLoading } = useAdminAudit();
@@ -78,14 +79,23 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        <button
-          onClick={() => refetch()}
-          disabled={isFetching}
-          className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-400 hover:text-white transition-colors disabled:opacity-50"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? "animate-spin" : ""}`} />
-          更新
-        </button>
+        <div className="flex items-center gap-2">
+          {/* RC4: 出場の異議の裁定 */}
+          <a
+            href="/admin/disputes"
+            className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-400 hover:text-white transition-colors"
+          >
+            出場の異議
+          </a>
+          <button
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-400 hover:text-white transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? "animate-spin" : ""}`} />
+            更新
+          </button>
+        </div>
       </div>
 
       {/* コンテンツ */}
@@ -123,6 +133,9 @@ export default function AdminDashboardPage() {
             <ActivityFeed activities={data.recent_activities} />
             <NotificationPanel />
           </div>
+
+          {/* ユーザー管理（利用停止・ロール変更） */}
+          <UserManagementSection />
 
           {/* 監査ログ（全体・Admin限定 / ADR-0012） */}
           <AdminAuditSection />

@@ -1,9 +1,10 @@
 import uuid
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, Query
 
-from app.core.dependencies import Cache, CurrentUser, DBSession
+from app.api.v1.analytics import _require_player_stats_public, player_stats_visible
+from app.core.dependencies import Cache, CurrentUser, DBSession, OptionalUser
 from app.schemas.common import ListResponse, Meta, Response
 from app.schemas.player import (
     GAME_ROLES,
@@ -36,7 +37,10 @@ async def get_player_activity(
 
 # ── Career / Achievements / Ratings ─────────────────────────────────────────
 @router.get("/{player_id}/career", response_model=Response[PlayerCareerSchema])
-async def get_player_career(player_id: uuid.UUID, db: DBSession, cache: Cache):
+async def get_player_career(
+    player_id: uuid.UUID, db: DBSession, cache: Cache, viewer: OptionalUser,
+) -> Response[PlayerCareerSchema]:
+    await _require_player_stats_public(db, player_id, viewer)
     service = CareerAggregationService(db, cache)
     career = await service.get_player_career(player_id)
     return Response(data=PlayerCareerSchema(**career), meta=None)
@@ -59,16 +63,24 @@ async def get_player_rank_card_endpoint(player_id: uuid.UUID, db: DBSession, cac
 
 # ── World-class Player Profile（ADR-0018 / Read Model・AI分析 / 追加のみ） ──────
 @router.get("/{player_id}/profile", response_model=Response[dict])
-async def get_player_profile(player_id: uuid.UUID, db: DBSession, cache: Cache):
+async def get_player_profile(
+    player_id: uuid.UUID, db: DBSession, cache: Cache, viewer: OptionalUser,
+) -> Response[dict[str, Any]]:
     """1ページ完結のプロフィール集約（basic/career/rank/achievements/history/analysis/activity）。"""
     from app.player_profile.aggregator import PlayerProfileAggregator
     data = await PlayerProfileAggregator(db, cache).profile(player_id)
+    # 詳細スタッツ（第2層）非公開なら career/analysis だけ伏せる。大会成績など第1層は残す
+    if not await player_stats_visible(db, player_id, viewer):
+        data = {**data, "career": None, "analysis": None}
     return Response(data=data, meta=None)
 
 
 @router.get("/{player_id}/analysis", response_model=Response[PlayerAnalysis])
-async def get_player_analysis(player_id: uuid.UUID, db: DBSession, cache: Cache):
+async def get_player_analysis(
+    player_id: uuid.UUID, db: DBSession, cache: Cache, viewer: OptionalUser,
+) -> Response[PlayerAnalysis]:
     """AI分析（Read Only・Provider化・現状ルールベース）。"""
+    await _require_player_stats_public(db, player_id, viewer)
     from app.player_profile.aggregator import PlayerProfileAggregator
     data = await PlayerProfileAggregator(db, cache).analysis(player_id)
     return Response(data=PlayerAnalysis(**data), meta=None)
@@ -93,11 +105,14 @@ async def get_player_rating_history(
 
 
 @router.get("/{player_id}/stats")
-async def get_player_stats(player_id: uuid.UUID, db: DBSession, cache: Cache):
+async def get_player_stats(
+    player_id: uuid.UUID, db: DBSession, cache: Cache, viewer: OptionalUser,
+) -> dict[str, Any]:
     """プレイヤー詳細ヘッダー用の集計スタッツ（キャリア集計から導出）。
 
     実績の無い新規プレイヤーでもゼロ値を返す（404にしない）。
     """
+    await _require_player_stats_public(db, player_id, viewer)
     service = CareerAggregationService(db, cache)
     c = await service.get_player_career(player_id)
     agents = c.get("agent_usage") or []

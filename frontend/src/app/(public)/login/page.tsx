@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Trophy, Eye, EyeOff } from "lucide-react";
 import { useAuthStore } from "@/store/auth-store";
 import { apiClient } from "@/lib/api-client";
+import { safeNextPath } from "@/lib/safe-redirect";
 
 interface LoginResponse {
   access_token: string;
@@ -54,9 +55,7 @@ function LoginForm() {
         avatar_url: meRes.avatar_url,
       });
 
-      const nextParam = searchParams.get("next") ?? "";
-      const next = nextParam && nextParam !== "/login" && nextParam !== "/register" ? nextParam : "/dashboard";
-      router.replace(next);
+      router.replace(safeNextPath(searchParams.get("next")));
     } catch (err) {
       setError(err instanceof Error ? err.message : "ログインに失敗しました");
     } finally {
@@ -79,6 +78,11 @@ function LoginForm() {
           onSubmit={handleSubmit}
           className="rounded-2xl border border-white/10 bg-slate-900 p-6 space-y-4"
         >
+          {!error && searchParams.get("password_changed") && (
+            <div role="status" className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+              パスワードを変更しました。新しいパスワードでログインしてください
+            </div>
+          )}
           {error && (
             <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
               {error}
@@ -86,10 +90,10 @@ function LoginForm() {
           )}
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-400">
+            <label htmlFor="login-email" className="mb-1.5 block text-sm font-medium text-slate-400">
               メールアドレス
             </label>
-            <input
+            <input id="login-email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -102,13 +106,13 @@ function LoginForm() {
 
           <div>
             <div className="mb-1.5 flex items-center justify-between">
-              <label className="block text-sm font-medium text-slate-400">パスワード</label>
+              <label htmlFor="login-password" className="block text-sm font-medium text-slate-400">パスワード</label>
               <Link href="/forgot-password" className="text-xs text-brand-400 hover:text-brand-300">
                 お忘れですか？
               </Link>
             </div>
             <div className="relative">
-              <input
+              <input id="login-password"
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}

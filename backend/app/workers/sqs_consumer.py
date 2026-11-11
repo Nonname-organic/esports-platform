@@ -190,12 +190,8 @@ def _compute_tournament_status(t, now):
     return None  # 受付開始前 → 現状維持（公開＝受付）
 
 
-async def tournament_status_loop() -> None:
-    """公開済み大会のステータスを日程に応じて自動更新（手動操作は廃止）。
-
-    下書き(draft)/中止(cancelled)/終了(completed) は対象外。
-    draft→公開 は運営の「公開」操作（registration_open化）で行い、以降は自動。
-    """
+async def apply_tournament_status_transitions(db, now) -> int:
+    """日程に応じた大会ステータスの更新を 1 回分行い、変えた件数を返す（commit は呼び出し側）。"""
     from sqlalchemy import select
     from app.models.enums import TournamentStatus
     from app.models.tournament import Tournament
@@ -206,31 +202,57 @@ async def tournament_status_loop() -> None:
         TournamentStatus.CHECK_IN,
         TournamentStatus.ONGOING,
     ]
+    rows = (
+        await db.execute(select(Tournament).where(
+            Tournament.status.in_(managed),
+            Tournament.status_locked == False,  # 手動変更済みは自動更新しない
+        ))
+    ).scalars().all()
+    changed = 0
+    for t in rows:
+        new_status = _compute_tournament_status(t, now)
+        if not new_status or new_status == t.status:
+            continue
+        # RC4（Q01）: 旧方式（legacy）の大会は、開催中・完了へは自動で変えない。
+        # 受付の開始・終了と抽選は今のとおり行う
+        if t.roster_mode == "legacy" and new_status in (
+            TournamentStatus.ONGOING, TournamentStatus.COMPLETED
+        ):
+            continue
+        # 大会ごとにセーブポイントで区切る。1 件の失敗でほかの大会の更新を戻さない（Q17）
+        tid = t.id  # 戻した後の t は期限切れで、属性を読むと非同期の外で I/O になる
+        try:
+            async with db.begin_nested():
+                t.status = new_status
+                # 受付終了に入った抽選大会は、ここで当落を確定する
+                if new_status == TournamentStatus.REGISTRATION_CLOSED:
+                    from app.services.registration_lottery import run_registration_lottery
+                    won = await run_registration_lottery(
+                        db, t, RedisCache(await get_redis())
+                    )
+                    if won:
+                        logger.info(f"registration lottery: {won} teams approved ({t.id})")
+                if new_status == TournamentStatus.ONGOING:
+                    from app.services.roster import lock_roster
+                    await lock_roster(db, t)
+                await db.flush()
+            changed += 1
+        except Exception as e:
+            logger.error(f"tournament status update failed ({tid}): {e}")
+    return changed
+
+
+async def tournament_status_loop() -> None:
+    """公開済み大会のステータスを日程に応じて自動更新（手動操作は廃止）。
+
+    下書き(draft)/中止(cancelled)/終了(completed) は対象外。
+    draft→公開 は運営の「公開」操作（registration_open化）で行い、以降は自動。
+    """
     await asyncio.sleep(15)
     while True:
         try:
-            now = datetime.now(timezone.utc)
             async with AsyncSessionLocal() as db:
-                rows = (
-                    await db.execute(select(Tournament).where(
-                        Tournament.status.in_(managed),
-                        Tournament.status_locked == False,  # 手動変更済みは自動更新しない
-                    ))
-                ).scalars().all()
-                changed = 0
-                for t in rows:
-                    new_status = _compute_tournament_status(t, now)
-                    if new_status and new_status != t.status:
-                        t.status = new_status
-                        changed += 1
-                        # 受付終了に入った抽選大会は、ここで当落を確定する
-                        if new_status == TournamentStatus.REGISTRATION_CLOSED:
-                            from app.services.registration_lottery import run_registration_lottery
-                            won = await run_registration_lottery(
-                                db, t, RedisCache(await get_redis())
-                            )
-                            if won:
-                                logger.info(f"registration lottery: {won} teams approved ({t.id})")
+                changed = await apply_tournament_status_transitions(db, datetime.now(timezone.utc))
                 if changed:
                     await db.commit()
                     logger.info(f"tournament status auto-update: {changed} changed")

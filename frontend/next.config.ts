@@ -4,6 +4,11 @@ const nextConfig: NextConfig = {
   // Docker では standalone、Netlify ではランタイムが独自に束ねるため無効化
   output: process.env.NETLIFY ? undefined : "standalone",
   images: {
+    // 画像最適化 API（/_next/image）を止める。next 15.5.27 にはこの API 経由の
+    // 未認証 RCE（SVG）が報告されており、修正は 15.5.29。画面は next/image を
+    // 使っていないため、止めても表示は変わらない。
+    // shortcut: next を 15.5.29 以上へ上げたら外してよい。
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: "https",

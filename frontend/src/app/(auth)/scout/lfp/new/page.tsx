@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useRequireAuth } from "@/hooks/use-require-auth";
 import { useMyTeams } from "@/features/teams/hooks/use-teams";
 import { useCreateLFP } from "@/features/lfp/hooks/use-lfp";
@@ -26,9 +27,9 @@ export default function LFPNewPage() {
     return (
       <div className="mx-auto max-w-lg px-4 py-20 text-center">
         <p className="text-slate-400">募集を作成するにはチームオーナーである必要があります。</p>
-        <a href="/teams/create" className="mt-4 inline-block rounded-xl bg-brand-500 px-5 py-2 text-sm font-bold text-white hover:bg-brand-600 transition-colors">
+        <Link href="/teams/create" className="mt-4 inline-block rounded-xl bg-brand-500 px-5 py-2 text-sm font-bold text-white hover:bg-brand-600 transition-colors">
           チームを作成
-        </a>
+        </Link>
       </div>
     );
   }

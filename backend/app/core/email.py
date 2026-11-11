@@ -57,15 +57,18 @@ async def send_email(to: str, subject: str, body: str) -> bool:
     （アドレスの存在が推測できてしまうため）ので、呼び出し側が結果で
     分岐しない前提の設計にしている。
     """
+    # 宛先アドレスは個人情報なのでログに残さない（調査にはドメインで足りる）
+    domain = to.rsplit("@", 1)[-1]
     if not is_configured():
-        logger.info(
-            "SMTP未設定のためメールは送信されません。宛先=%s 件名=%s\n%s",
-            to, subject, body,
-        )
+        # 本文にはパスワード再設定リンク（トークン）が入るため、通常のログには残さない
+        logger.info("SMTP未設定のためメールは送信されません。宛先ドメイン=%s 件名=%s", domain, subject)
+        logger.debug("未送信メール本文:\n%s", body)
         return False
     try:
         await run_in_threadpool(_send_sync, to, subject, body)
         return True
-    except Exception:  # noqa: BLE001 - 送信失敗は呼び出し元の処理を止めない
-        logger.exception("メール送信に失敗しました: 宛先=%s 件名=%s", to, subject)
+    except Exception as exc:  # noqa: BLE001 - 送信失敗は呼び出し元の処理を止めない
+        # 例外の文面（SMTPRecipientsRefused 等）には宛先アドレスが入るため、種類だけ残す
+        logger.error("メール送信に失敗しました: 宛先ドメイン=%s 件名=%s 種類=%s",
+                     domain, subject, type(exc).__name__)
         return False

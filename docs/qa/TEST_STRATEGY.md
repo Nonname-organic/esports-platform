@@ -186,6 +186,12 @@ psql "$TEST_DB_URL" -f tests/seed/golden_seed.sql   # or python -m tests.seed.go
 cd frontend && npm test
 # E2E + Visual
 cd frontend && npx playwright test
+#   Windows + Docker Desktop で回すときは nginx・api・frontend を同じ Docker ネットワークの
+#   コンテナで動かす（本番と同じ構成）。nginx コンテナから host.docker.internal 経由でホストの
+#   プロセスへ繋ぐと、新規接続の約1.6%が確立せず、画面の読み込みが止まって時間切れになる。
+#   API をホストで動かす場合は DB_HOST / REDIS_HOST を localhost でなく 127.0.0.1 にする
+#   （localhost は ::1 が先に引かれ、IPv4 にしか公開していないコンテナへの接続が毎回約2秒待たされる）。
+#   起動待ちは /health でなく /health/ready（DB・Redis）と、画面・API が実際に返ることで判定する。
 # Load
 k6 run k6/tournament.js
 ```

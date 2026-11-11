@@ -2,11 +2,13 @@ import uuid
 
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import Cache, DBSession
-from app.models.enums import GameType, PeriodType
+from app.core.dependencies import Cache, DBSession, OptionalUser
+from app.models.enums import GameType, PeriodType, UserRole
 from app.models.player import Player
 from app.models.team import Team
+from app.models.user import User
 from app.schemas.analytics import (
     CompositionStatsResponse,
     MapStatsResponse,
@@ -33,10 +35,21 @@ async def _require_team_stats_public(db, team_id: uuid.UUID) -> None:
         raise HTTPException(status_code=403, detail="このチームは詳細スタッツを非公開にしています")
 
 
-async def _require_player_stats_public(db, player_id: uuid.UUID) -> None:
+async def player_stats_visible(db: AsyncSession, player_id: uuid.UUID, viewer: User | None = None) -> bool:
+    """第2層（個人詳細スタッツ）を viewer に見せてよいか。非公開でも本人と管理者は見られる。"""
+    row = (await db.execute(
+        select(Player.stats_public, Player.user_id).where(Player.id == player_id)
+    )).first()
+    if row is None or row.stats_public:
+        return True
+    return viewer is not None and (viewer.role == UserRole.ADMIN or viewer.id == row.user_id)
+
+
+async def _require_player_stats_public(
+    db: AsyncSession, player_id: uuid.UUID, viewer: User | None = None,
+) -> None:
     """第2層（個人詳細スタッツ）の公開チェック。MVP・大会成績（第1層）は対象外。"""
-    flag = await db.scalar(select(Player.stats_public).where(Player.id == player_id))
-    if flag is False:
+    if not await player_stats_visible(db, player_id, viewer):
         raise HTTPException(status_code=403, detail="このプレイヤーは詳細スタッツを非公開にしています")
 
 
@@ -144,11 +157,12 @@ async def get_player_stats(
     player_id: uuid.UUID,
     db: DBSession,
     cache: Cache,
+    viewer: OptionalUser,
     game: GameType = Query(...),
     period_type: PeriodType = Query(default=PeriodType.ALL_TIME),
     tournament_id: uuid.UUID | None = Query(default=None),
 ):
-    await _require_player_stats_public(db, player_id)
+    await _require_player_stats_public(db, player_id, viewer)
     service = AnalyticsService(db, cache)
     stats = await service.get_player_stats(player_id, game, period_type, tournament_id)
     return Response(data=stats)

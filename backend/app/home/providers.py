@@ -19,6 +19,7 @@ from app.models.tag import Tag, Taggable
 from app.models.team import Team
 from app.models.tournament import Tournament, TournamentRegistration
 from app.rankings.aggregator import RankingAggregator
+from app.repositories.tournament import publicly_listed
 from app.services.activity_service import ActivityService
 from app.services.stats_service import StatsService
 
@@ -55,7 +56,9 @@ class RuleBasedRecommendationProvider:
 
     async def build(self, db: AsyncSession, cache: RedisCache, ctx: HomeContext) -> list[dict]:
         rows = list((await db.execute(
-            select(Tournament).where(Tournament.status == TournamentStatus.REGISTRATION_OPEN)
+            select(Tournament).where(
+                Tournament.status == TournamentStatus.REGISTRATION_OPEN, publicly_listed()
+            )
         )).scalars().all())
         if not rows:
             return []
@@ -106,11 +109,11 @@ class RuleBasedPredictionProvider:
 
     async def build(self, db: AsyncSession, cache: RedisCache, ctx: HomeContext):
         t = await db.scalar(
-            select(Tournament).where(Tournament.status == TournamentStatus.ONGOING).order_by(Tournament.prize_pool.desc()).limit(1)
+            select(Tournament).where(Tournament.status == TournamentStatus.ONGOING, publicly_listed()).order_by(Tournament.prize_pool.desc()).limit(1)
         )
         if not t:
             t = await db.scalar(
-                select(Tournament).where(Tournament.status == TournamentStatus.REGISTRATION_OPEN).order_by(Tournament.prize_pool.desc()).limit(1)
+                select(Tournament).where(Tournament.status == TournamentStatus.REGISTRATION_OPEN, publicly_listed()).order_by(Tournament.prize_pool.desc()).limit(1)
             )
         if not t:
             return None
@@ -154,7 +157,10 @@ class TrendingProvider:
     async def build(self, db: AsyncSession, cache: RedisCache, ctx: HomeContext) -> dict:
         counts = await _approved_counts(db)
         active = list((await db.execute(
-            select(Tournament).where(Tournament.status.in_([TournamentStatus.REGISTRATION_OPEN, TournamentStatus.ONGOING]))
+            select(Tournament).where(
+                Tournament.status.in_([TournamentStatus.REGISTRATION_OPEN, TournamentStatus.ONGOING]),
+                publicly_listed(),
+            )
         )).scalars().all())
         active.sort(key=lambda t: counts.get(t.id, 0), reverse=True)
         tournaments = [{

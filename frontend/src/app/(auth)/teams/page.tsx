@@ -24,12 +24,20 @@ export default function MyTeamsPage() {
             <p className="text-sm text-slate-500">作成・参加中のチーム</p>
           </div>
         </div>
-        <Link
-          href="/teams/create"
-          className="flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2 text-sm font-bold text-white hover:bg-brand-600 transition-colors"
-        >
-          <Plus className="h-4 w-4" /> チームを作成
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/teams/invitations"
+            className="flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-300 hover:text-white transition-colors"
+          >
+            <UserPlus className="h-4 w-4" /> 届いた招待
+          </Link>
+          <Link
+            href="/teams/create"
+            className="flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2 text-sm font-bold text-white hover:bg-brand-600 transition-colors"
+          >
+            <Plus className="h-4 w-4" /> チームを作成
+          </Link>
+        </div>
       </div>
 
       {isLoading ? (

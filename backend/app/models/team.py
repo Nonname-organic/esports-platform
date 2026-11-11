@@ -82,6 +82,14 @@ class TeamMember(UUIDMixin, Base):
     left_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # RC4: 本人の承諾の状態（self / invitation / confirmed / unconfirmed / rejected）
+    consent: Mapped[str] = mapped_column(String(16), nullable=False, default="unconfirmed",
+                                         server_default="unconfirmed")
+    confirmed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    rejected_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    invitation_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("team_invitations.id", ondelete="SET NULL"), nullable=True
+    )
 
     # Relationships
     team: Mapped["Team"] = relationship("Team", back_populates="all_members")

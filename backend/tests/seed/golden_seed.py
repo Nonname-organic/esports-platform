@@ -121,6 +121,9 @@ async def seed() -> None:
                 db.add(Tournament(
                     id=tid, name=name, slug=f"golden-{suf}", game=GameType.VALORANT,
                     format=TournamentFormat.SINGLE_ELIMINATION, status=status,
+                    # 日付は固定なので状態も固定する。worker の日付による自動更新
+                    # （開催中→完了など）で、E2E の途中に大会の状態が変わっていた
+                    status_locked=True,
                     organizer_id=users["organizer"][0], max_teams=8, min_teams=2,
                     is_public=True, prize_pool=10000, prize_currency="JPY",
                     registration_start_at=NOW + rs * D if rs is not None else None,

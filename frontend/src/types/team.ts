@@ -39,6 +39,49 @@ export interface TeamMember {
   joined_at: string;
   is_active: boolean;
   rating: number | null;
+  /** RC4: 所属の承諾の状態（self・invitation・confirmed は本人の承諾済み、unconfirmed は移行前の本人未確認） */
+  consent?: MembershipConsent;
+  /** 正式な所属か（承諾済み、または移行期間中の本人未確認） */
+  formal?: boolean;
+}
+
+export type MembershipConsent = "self" | "invitation" | "confirmed" | "unconfirmed" | "rejected";
+
+/** チームからの招待（本人が承認したときだけ所属になる） */
+export interface TeamInvitation {
+  id: string;
+  team_id: string;
+  invitee_user_id: string;
+  role: string;
+  status: "pending" | "accepted" | "declined" | "cancelled" | "expired";
+  created_at: string;
+  expires_at: string;
+}
+
+export interface MyTeamInvitation extends TeamInvitation {
+  team_name: string;
+  team_tag: string;
+}
+
+/** 自分の所属（移行前の本人未確認の所属は、本人が確認か否認をする） */
+export interface Membership {
+  id: string;
+  team_id: string;
+  team_name: string;
+  team_tag: string;
+  role: string;
+  joined_at: string;
+  left_at: string | null;
+  consent: MembershipConsent;
+  confirmed_at: string | null;
+  rejected_at: string | null;
+  formal: boolean;
+}
+
+export interface MyMemberships {
+  /** 本人未確認の所属を数える期限（移行の開始から 60 日）。未設定なら null */
+  deadline: string | null;
+  items: Membership[];
 }
 
 export interface TeamStats {

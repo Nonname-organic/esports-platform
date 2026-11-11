@@ -197,26 +197,35 @@ async def readiness():
 
     checks: dict[str, str] = {}
 
+    # 未認証で叩けるため、例外の中身（接続先ホスト名など）は返さずログにだけ残す
     try:
         async with AsyncSessionLocal() as session:
             await session.execute(text("SELECT 1"))
         checks["database"] = "ok"
     except Exception as exc:
-        checks["database"] = f"error: {exc}"
+        logger.warning("readiness_database_error", exc=str(exc))
+        checks["database"] = "error"
 
     try:
         redis = await get_redis()
         await redis.ping()
         checks["cache"] = "ok"
     except Exception as exc:
-        checks["cache"] = f"error: {exc}"
+        logger.warning("readiness_cache_error", exc=str(exc))
+        checks["cache"] = "error"
 
     all_ok = all(v == "ok" for v in checks.values())
     payload = {"status": "ready" if all_ok else "degraded", "checks": checks}
     return JSONResponse(payload, status_code=200 if all_ok else 503)
 
 
-@app.get("/metrics", include_in_schema=False)
-async def prometheus_metrics():
-    """Prometheus scrape endpoint — read by ServiceMonitor in Kubernetes."""
-    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+# 既定では登録しない。未認証で到達すると、パス別のリクエスト数・エラー率・
+# レイテンシと稼働中のイメージタグが読める。未登録なら 404 になる。
+# 監視を入れるときは EXPOSE_METRICS=true にするが、それだけでは無認証のまま
+# 公開されるので、あわせて認証かネットワーク制限を決める必要がある。
+if settings.EXPOSE_METRICS:
+
+    @app.get("/metrics", include_in_schema=False)
+    async def prometheus_metrics():
+        """Prometheus scrape endpoint — read by ServiceMonitor in Kubernetes."""
+        return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)

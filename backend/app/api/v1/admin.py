@@ -1,9 +1,15 @@
+import uuid
+
 from fastapi import APIRouter, Query
+from pydantic import BaseModel
 
 from app.core.dependencies import AdminUser, DBSession, Cache
+from app.core.exceptions import BusinessRuleError, NotFoundError
+from app.events import Ev, EventEnvelope, EventService
+from app.models.enums import UserRole
 from app.schemas.common import Response
 from app.services.audit_service import AuditService
-from sqlalchemy import select, func, text
+from sqlalchemy import or_, select, func, text
 from app.models.user import User
 from app.models.tournament import Tournament, TournamentRegistration
 from app.models.match import Match
@@ -12,7 +18,7 @@ from app.models.player import Player
 from app.models.domain_event import DomainEvent
 from app.models.enums import MatchStatus, RegistrationStatus
 import datetime
-from typing import Optional
+from typing import Any, Optional
 
 router = APIRouter(prefix="/admin", tags=["管理"])
 
@@ -30,6 +36,70 @@ async def get_audit_log(
         entity_type=entity_type, action=action, limit=limit, offset=offset,
     )
     return Response(data=items, meta=None)
+
+
+# ── ユーザー管理（利用停止・ロール変更） ─────────────────────────────────────
+class AdminUserUpdate(BaseModel):
+    is_active: bool | None = None
+    role: UserRole | None = None
+
+
+def _user_item(u: User) -> dict[str, Any]:
+    return {
+        "id": str(u.id), "username": u.username, "email": u.email,
+        "role": u.role.value, "is_active": u.is_active,
+        "created_at": u.created_at.isoformat() if u.created_at else None,
+    }
+
+
+@router.get("/users", response_model=Response[list[dict[str, Any]]])
+async def list_users(
+    db: DBSession, current_user: AdminUser,
+    q: str | None = Query(default=None, max_length=100),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+) -> Response[list[dict[str, Any]]]:
+    """ユーザー一覧（Admin限定）。ユーザー名・メールアドレスの部分一致で絞り込む。"""
+    stmt = select(User).order_by(User.created_at.desc()).limit(limit).offset(offset)
+    if q:
+        like = f"%{q}%"
+        stmt = stmt.where(or_(User.username.ilike(like), User.email.ilike(like)))
+    users = (await db.execute(stmt)).scalars().all()
+    return Response(data=[_user_item(u) for u in users], meta=None)
+
+
+@router.patch("/users/{user_id}", response_model=Response[dict[str, Any]])
+async def update_user(
+    user_id: uuid.UUID, data: AdminUserUpdate, db: DBSession, current_user: AdminUser,
+) -> Response[dict[str, Any]]:
+    """利用停止・再開とロール変更（Admin限定）。操作は監査ログに残す。
+
+    停止したユーザーは次のリクエストから認証を通らない（get_current_user が is_active を見る）。
+    """
+    # 自分自身は変えられない。これで操作した管理者が必ず残り、管理者ゼロにはならない
+    if user_id == current_user.id:
+        raise BusinessRuleError("自分自身の状態やロールは変更できません")
+    user = await db.get(User, user_id)
+    if not user:
+        raise NotFoundError("ユーザー", str(user_id))
+
+    events = EventService(db)
+    if data.is_active is not None and data.is_active != user.is_active:
+        before = user.is_active
+        user.is_active = data.is_active
+        await events.emit(EventEnvelope.build(
+            type=Ev.USER_STATUS_CHANGED, entity_type="user", entity_id=str(user.id), producer="admin",
+            before={"is_active": before}, after={"is_active": user.is_active},
+        ))
+    if data.role is not None and data.role != user.role:
+        before_role = user.role.value
+        user.role = data.role
+        await events.emit(EventEnvelope.build(
+            type=Ev.USER_ROLE_CHANGED, entity_type="user", entity_id=str(user.id), producer="admin",
+            before={"role": before_role}, after={"role": user.role.value},
+        ))
+    await db.flush()
+    return Response(data=_user_item(user), meta=None)
 
 
 @router.get("/dashboard")

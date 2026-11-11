@@ -458,6 +458,10 @@ async def ensure_open_tournament(db, apply: bool) -> None:
         "end_at": "CAST(:now AS timestamptz) + interval '25 days'",
         "created_at": "CAST(:now AS timestamptz)",
         "updated_at": "CAST(:now AS timestamptz)",
+        # RC4（Q20）: 複製元が旧方式（legacy）でも、新しく作る大会は名簿の方式にする。
+        # 032 の前の DB にはこの列が無いので、列の一覧に無ければ使われない
+        "roster_mode": "'roster'",
+        "roster_locked_at": "NULL",
     }
     select_list = ", ".join(overrides.get(c, c) for c in columns)
     column_list = ", ".join(columns)

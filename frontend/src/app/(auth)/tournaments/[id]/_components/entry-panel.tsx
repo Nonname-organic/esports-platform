@@ -7,9 +7,10 @@ import { ApiError } from "@/lib/api-client";
 import { formatDateShort } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth-store";
 import { useMyTeams } from "@/features/teams/hooks/use-teams";
-import { useMyRegistration, useRegisterTeam } from "@/features/tournaments/hooks/use-tournaments";
+import { useMyRegistration, useRegisterTeam, useWithdrawRegistration } from "@/features/tournaments/hooks/use-tournaments";
 import type { RegistrationState } from "@/features/tournaments/api/tournament-api";
 import type { TournamentDetail } from "@/types/tournament";
+import { RosterPanel } from "./roster-panel";
 
 const CARD = "rounded-xl border border-white/10 bg-slate-900 p-5";
 
@@ -34,6 +35,11 @@ const STATE_VIEW: Record<RegistrationState, { label: string; note: string; tone:
     label: "今回は見送り",
     note: "今回はご参加いただけません。次の大会へのエントリーをお待ちしています",
     tone: "text-red-400",
+  },
+  withdrawn: {
+    label: "辞退済み",
+    note: "この大会への参加を辞退しました。再度参加する場合は主催者に連絡してください",
+    tone: "text-slate-400",
   },
 };
 
@@ -62,6 +68,7 @@ export function EntryPanel({ tournament }: EntryPanelProps) {
   const { data: registration } = useMyRegistration(tournamentId, authed);
   const { data: teams } = useMyTeams(authed);
   const register = useRegisterTeam(tournamentId);
+  const withdraw = useWithdrawRegistration(tournamentId);
 
   const [teamId, setTeamId] = useState("");
   const [notes, setNotes] = useState("");
@@ -106,6 +113,31 @@ export function EntryPanel({ tournament }: EntryPanelProps) {
           </p>
         )}
         <p className="mt-2 text-[11px] leading-relaxed text-slate-500">{view.note}</p>
+        {/* 辞退できるか（申請の状態・大会の段階・オーナーかキャプテンか）はサーバーが判定する */}
+        {registration.can_withdraw && (
+          <button
+            type="button"
+            disabled={withdraw.isPending}
+            onClick={() => {
+              if (window.confirm("この大会への参加を辞退しますか？（取り消しは主催者への連絡が必要です）")) {
+                withdraw.mutate();
+              }
+            }}
+            className="mt-3 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-300 hover:text-white disabled:opacity-50"
+          >
+            {withdraw.isPending ? "処理中..." : "参加を辞退する"}
+          </button>
+        )}
+        {withdraw.isError && (
+          <p role="alert" className="mt-2 text-xs text-red-400">
+            {withdraw.error instanceof Error ? withdraw.error.message : "辞退に失敗しました"}
+          </p>
+        )}
+        {/* RC4: 名簿の方式の大会では、出場する選手を名簿に載せる（オーナー・キャプテン） */}
+        {tournament.roster_mode === "roster" && registration.can_manage_roster && registration.registration_id
+          && registration.team_id && ["pending", "approved", "waitlisted"].includes(registration.status) && (
+          <RosterPanel tournament={tournament} registrationId={registration.registration_id} teamId={registration.team_id} />
+        )}
       </div>
     );
   }

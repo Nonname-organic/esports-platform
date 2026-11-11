@@ -41,6 +41,8 @@ from app.models.user import User
 from app.services.match import MatchService
 from app.services.tournament import TournamentService
 
+from app.services.membership import formal_clause
+
 router = APIRouter(prefix="/bot", tags=["bot"])
 
 
@@ -63,7 +65,8 @@ async def _actor_context(db, user: User) -> dict:
             await db.execute(
                 select(TeamMember, Team)
                 .join(Team, Team.id == TeamMember.team_id)
-                .where(TeamMember.player_id == player.id, TeamMember.left_at.is_(None))
+                .where(TeamMember.player_id == player.id, TeamMember.left_at.is_(None),
+                       await formal_clause(db))
             )
         ).all()
         for tm, team in rows:
@@ -330,82 +333,37 @@ class ReportBody(BaseModel):
     winner_id: str
 
 
-def _redis_report_key(match_id: uuid.UUID) -> str:
-    return f"bot:reported:{match_id}"
-
-
-async def _finalize_result(db, cache, match: Match, winner_id: uuid.UUID, user: User) -> None:
-    """既存サービスで結果を確定（必要なら自動でstart）。"""
-    service = MatchService(db, cache)
-    if match.status == MatchStatus.SCHEDULED:
-        await service.start_match(match.id, user)
-    from app.schemas.match import MatchResultCreate
-    await service.register_result(match.id, MatchResultCreate(winner_id=str(winner_id)), user)
-
-
 @router.post("/matches/{match_id}/report")
 async def report_result(
     match_id: uuid.UUID, body: ReportBody, db: DBSession, cache: Cache,
     _: BotAuth, actor: BotActor,
 ):
+    """Web と同じ報告フロー（MatchReportService）を使う。運営は即確定、チームは相手の確認待ち。"""
+    from app.services.match_report import MatchReportService
+
     user = await _require_actor(actor)
-    match = (await db.execute(select(Match).where(Match.id == match_id))).scalar_one_or_none()
-    if not match:
-        raise NotFoundError("試合", str(match_id))
-    winner_id = uuid.UUID(body.winner_id)
-    if winner_id not in (match.team1_id, match.team2_id):
-        raise BusinessRuleError("勝者はこの試合の参加チームである必要があります")
-
-    tournament = (
-        await db.execute(select(Tournament).where(Tournament.id == match.tournament_id))
-    ).scalar_one_or_none()
-    ctx = await _actor_context(db, user)
-    is_owner = tournament and (user.role == UserRole.ADMIN or tournament.organizer_id == user.id)
-    is_captain = any(tid in (match.team1_id, match.team2_id) for tid in ctx["captain_team_ids"])
-    if not (is_owner or is_captain):
-        raise ForbiddenError("結果を報告できるのは運営または対戦チームのキャプテンのみです")
-
-    # 運営は即確定。キャプテンは相手の確認待ち（Redisに保留）。
-    if is_owner:
-        await _finalize_result(db, cache, match, winner_id, user)
-        return {"data": {"status": "confirmed", "winner_id": str(winner_id)}}
-
-    reporter_team = next(
-        tid for tid in ctx["captain_team_ids"] if tid in (match.team1_id, match.team2_id)
-    )
-    await cache.set(
-        _redis_report_key(match_id),
-        {"winner_id": str(winner_id), "by_team": str(reporter_team), "by_user": str(user.id)},
-        ttl=86400,
-    )
-    return {"data": {"status": "pending_confirmation", "winner_id": str(winner_id)}}
+    try:
+        winner_id = uuid.UUID(body.winner_id)
+    except ValueError:
+        raise BusinessRuleError("勝者のIDが不正です")
+    status = await MatchReportService(db, cache).report(match_id, winner_id, user)
+    bot_status = {"pending": "pending_confirmation"}.get(status, status)
+    return {"data": {"status": bot_status, "winner_id": str(winner_id)}}
 
 
 @router.post("/matches/{match_id}/confirm")
 async def confirm_result(
     match_id: uuid.UUID, db: DBSession, cache: Cache, _: BotAuth, actor: BotActor,
 ):
-    user = await _require_actor(actor)
-    pending = await cache.get(_redis_report_key(match_id))
-    if not pending:
-        raise BusinessRuleError("確認待ちの報告がありません")
-    match = (await db.execute(select(Match).where(Match.id == match_id))).scalar_one_or_none()
-    if not match:
-        raise NotFoundError("試合", str(match_id))
-    ctx = await _actor_context(db, user)
-    reporter_team = uuid.UUID(pending["by_team"])
-    other_team = match.team1_id if reporter_team == match.team2_id else match.team2_id
-    # 確認は「報告した側ではない方のキャプテン」または運営
-    tournament = (
-        await db.execute(select(Tournament).where(Tournament.id == match.tournament_id))
-    ).scalar_one_or_none()
-    is_owner = tournament and (user.role == UserRole.ADMIN or tournament.organizer_id == user.id)
-    if not (is_owner or other_team in ctx["captain_team_ids"]):
-        raise ForbiddenError("確認できるのは相手チームのキャプテンまたは運営のみです")
+    from app.models.match_report import MatchResultReport
+    from app.services.match_report import MatchReportService
 
-    await _finalize_result(db, cache, match, uuid.UUID(pending["winner_id"]), user)
-    await cache.delete(_redis_report_key(match_id))
-    return {"data": {"status": "confirmed", "winner_id": pending["winner_id"]}}
+    user = await _require_actor(actor)
+    await MatchReportService(db, cache).confirm(match_id, user)
+    report = (await db.execute(
+        select(MatchResultReport).where(MatchResultReport.match_id == match_id)
+    )).scalar_one()
+    return {"data": {"status": "confirmed", "winner_id": str(report.winner_id)}}
 
 
 class DisputeBody(BaseModel):
@@ -441,42 +399,39 @@ async def forfeit_match(
     match_id: uuid.UUID, body: ForfeitBody, db: DBSession, cache: Cache,
     _: BotAuth, actor: BotActor,
 ):
+    """不戦勝の確定。Web と同じく結果（was_forfeit）を登録し、勝者を次の試合へ送る。
+
+    以前は状態を FORFEIT にするだけで、結果も次の試合への進出も記録されなかった。
+    """
+    from app.schemas.match import MatchResultCreate
+
     user = await _require_actor(actor)
     match = (await db.execute(select(Match).where(Match.id == match_id))).scalar_one_or_none()
     if not match:
         raise NotFoundError("試合", str(match_id))
-    tournament = (
-        await db.execute(select(Tournament).where(Tournament.id == match.tournament_id))
-    ).scalar_one_or_none()
-    if not (user.role == UserRole.ADMIN or (tournament and tournament.organizer_id == user.id)):
-        raise ForbiddenError("不戦敗を設定できるのは運営のみです")
-    winner_id = uuid.UUID(body.winner_id)
-    if winner_id not in (match.team1_id, match.team2_id):
-        raise BusinessRuleError("勝者はこの試合の参加チームである必要があります")
-    match.status = MatchStatus.FORFEIT
-    match.winner_id = winner_id
-    match.ended_at = datetime.now(timezone.utc)
-    await db.flush()
+    try:
+        winner_id = uuid.UUID(body.winner_id)
+    except ValueError:
+        raise BusinessRuleError("勝者のIDが不正です")
+    service = MatchService(db, cache)  # 主催者・管理者かどうかはサービス側で確認する
+    if match.status == MatchStatus.SCHEDULED:
+        # RC4: 予定の試合は開始せずに不戦勝にする（出場登録を固定しない。Q04）
+        await service.record_forfeit_without_start(
+            match.id, winner_id, "Discord Bot からの不戦勝の確定", user)
+        return {"data": {"status": "forfeit", "winner_id": str(winner_id)}}
+    await service.register_result(
+        match.id, MatchResultCreate(winner_id=winner_id, was_forfeit=True), user,
+    )
     return {"data": {"status": "forfeit", "winner_id": str(winner_id)}}
 
 
 @router.post("/matches/{match_id}/reopen")
 async def reopen_match(
-    match_id: uuid.UUID, db: DBSession, _: BotAuth, actor: BotActor,
+    match_id: uuid.UUID, db: DBSession, cache: Cache, _: BotAuth, actor: BotActor,
 ):
+    """確定済みの試合を進行中へ戻す。次の試合へ送ったチームも取り除く（MatchService.reopen_match）。"""
     user = await _require_actor(actor)
-    match = (await db.execute(select(Match).where(Match.id == match_id))).scalar_one_or_none()
-    if not match:
-        raise NotFoundError("試合", str(match_id))
-    tournament = (
-        await db.execute(select(Tournament).where(Tournament.id == match.tournament_id))
-    ).scalar_one_or_none()
-    if not (user.role == UserRole.ADMIN or (tournament and tournament.organizer_id == user.id)):
-        raise ForbiddenError("試合を再オープンできるのは運営のみです")
-    match.status = MatchStatus.ONGOING
-    match.winner_id = None
-    match.ended_at = None
-    await db.flush()
+    await MatchService(db, cache).reopen_match(match_id, user)
     return {"data": {"status": "ongoing"}}
 
 
@@ -568,14 +523,14 @@ async def create_recruitment(
     data = RecruitmentCreate(
         post_type=body.post_type, game=body.game, title=body.title, description=body.description,
         player_id=ctx["player_id"] if body.post_type == "player_seeks" else None,
-        team_id=(str(ctx["captain_team_ids"][0]) if body.post_type == "team_seeks" and ctx["captain_team_ids"] else None),
+        team_id=(ctx["captain_team_ids"][0] if body.post_type == "team_seeks" and ctx["captain_team_ids"] else None),
     )
     post = await ScoutService(db, cache).create_post(user.id, data)
     return {"data": {"id": str(post.id), "title": post.title, "post_type": post.post_type}}
 
 
 class ApplyBody(BaseModel):
-    post_id: str
+    post_id: uuid.UUID  # 不正な値は 422（以前はサービス側で 500）
     message: Optional[str] = None
 
 

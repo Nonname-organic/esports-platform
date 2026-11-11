@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AlreadyExistsError, ForbiddenError, NotFoundError
 from app.core.redis import RedisCache
+from app.models.enums import MemberRole
 from app.models.player import Player
 from app.models.team import Team, TeamMember
 from app.models.scout import ScoutProfile, RecruitmentPost, RecruitmentApplication
@@ -26,6 +27,7 @@ from app.repositories.scout import (
     ScoutProfileRepository, RecruitmentRepository, ApplicationRepository,
 )
 from app.services.career_service import CareerAggregationService
+from app.services.team import TeamService
 from app.core.storage import resign_stored_url
 
 
@@ -395,12 +397,25 @@ class ScoutService:
         return cards[:limit]
 
     # ── Recruitment Board ─────────────────────────────────────────────────────
+    async def _require_acting_as(
+        self, user_id: uuid.UUID, team_id: uuid.UUID | None, player_id: uuid.UUID | None,
+    ) -> None:
+        """他人のチーム・選手になりすまして募集/応募させない。"""
+        if team_id:
+            teams = TeamService(self._db, self._cache)
+            team = await teams.get_team(team_id)
+            if team.owner_id != user_id and await teams._get_member_role(team_id, user_id) != MemberRole.CAPTAIN:
+                raise ForbiddenError("チームのオーナーまたはキャプテンのみ、チームとして操作できます")
+        if player_id and await self._db.scalar(select(Player.user_id).where(Player.id == player_id)) != user_id:
+            raise ForbiddenError("自分の選手プロフィールでのみ操作できます")
+
     async def create_post(self, author_id: uuid.UUID, data) -> RecruitmentPost:
+        await self._require_acting_as(author_id, data.team_id, data.player_id)
         post = await self._recruitment.create(
             author_id=author_id,
             post_type=data.post_type,
-            team_id=uuid.UUID(data.team_id) if data.team_id else None,
-            player_id=uuid.UUID(data.player_id) if data.player_id else None,
+            team_id=data.team_id,
+            player_id=data.player_id,
             game=data.game,
             title=data.title,
             description=data.description,
@@ -457,17 +472,18 @@ class ScoutService:
         await self._recruitment.delete(post)
 
     async def apply(self, applicant_id: uuid.UUID, data) -> RecruitmentApplication:
-        post = await self._recruitment.get_by_id(uuid.UUID(data.post_id))
+        post = await self._recruitment.get_by_id(data.post_id)
         if not post or not post.is_open:
-            raise NotFoundError("募集", data.post_id)
+            raise NotFoundError("募集", str(data.post_id))
+        await self._require_acting_as(applicant_id, data.team_id, data.player_id)
         existing = await self._applications.get_existing(post.id, applicant_id)
         if existing:
             raise AlreadyExistsError("既に応募済みです")
         app = await self._applications.create(
             post_id=post.id,
             applicant_id=applicant_id,
-            applicant_player_id=uuid.UUID(data.player_id) if data.player_id else None,
-            applicant_team_id=uuid.UUID(data.team_id) if data.team_id else None,
+            applicant_player_id=data.player_id,
+            applicant_team_id=data.team_id,
             kind=data.kind,
             message=data.message,
             status="pending",

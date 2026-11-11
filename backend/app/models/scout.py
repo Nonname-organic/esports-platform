@@ -48,7 +48,7 @@ class RecruitmentPost(UUIDMixin, Base):
     author_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-    post_type: Mapped[str] = mapped_column(String(10), nullable=False)  # team_seeks / player_seeks
+    post_type: Mapped[str] = mapped_column(String(20), nullable=False)  # team_seeks / player_seeks（12文字）
     team_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
     player_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
     game: Mapped[str] = mapped_column(String(20), nullable=False)

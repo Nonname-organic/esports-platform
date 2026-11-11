@@ -1,17 +1,16 @@
+import re
 import secrets
 import uuid
 
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel, EmailStr, Field
+from fastapi import APIRouter
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.dependencies import Cache, CurrentUser, DBSession
 from app.core.exceptions import BusinessRuleError, UnauthorizedError
-from app.core.redis import RedisCache
 from app.core import email as mailer
-from app.core.security import hash_password, verify_password
+from app.core.security import hash_password_async, verify_password_async
 from app.models.user import User
 from app.schemas.auth import (
     LoginRequest,
@@ -25,9 +24,21 @@ from app.services.auth import AuthService
 router = APIRouter(prefix="/auth", tags=["認証"])
 
 
+def _password_rule(v: str) -> str:
+    """登録時と同じ強度ルール。変更・再設定で弱いパスワードに戻せないようにする。"""
+    if not re.search(r"[A-Z]", v) or not re.search(r"[0-9]", v):
+        raise ValueError("パスワードは大文字と数字をそれぞれ1文字以上含む必要があります")
+    return v
+
+
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str = Field(min_length=8, max_length=128)
+
+    @field_validator("new_password")
+    @classmethod
+    def _strong(cls, v: str) -> str:
+        return _password_rule(v)
 
 
 class ChangeEmailRequest(BaseModel):
@@ -50,6 +61,11 @@ class ForgotPasswordRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     token: str = Field(min_length=16, max_length=128)
     new_password: str = Field(min_length=8, max_length=128)
+
+    @field_validator("new_password")
+    @classmethod
+    def _strong(cls, v: str) -> str:
+        return _password_rule(v)
 
 
 @router.post("/forgot-password", status_code=202)
@@ -98,7 +114,7 @@ async def reset_password(data: ResetPasswordRequest, db: DBSession, cache: Cache
     if not user or not user.is_active:
         raise UnauthorizedError("アカウントが見つかりません")
 
-    user.hashed_password = hash_password(data.new_password)
+    user.hashed_password = await hash_password_async(data.new_password)
     await db.flush()
 
 
@@ -129,16 +145,16 @@ async def me(current_user: CurrentUser):
 @router.patch("/password", status_code=204)
 async def change_password(data: ChangePasswordRequest, db: DBSession, current_user: CurrentUser):
     """パスワード変更（現在のパスワード確認が必要）。"""
-    if not verify_password(data.current_password, current_user.hashed_password):
+    if not await verify_password_async(data.current_password, current_user.hashed_password):
         raise UnauthorizedError("現在のパスワードが正しくありません")
-    current_user.hashed_password = hash_password(data.new_password)
+    current_user.hashed_password = await hash_password_async(data.new_password)
     await db.flush()
 
 
 @router.patch("/email", response_model=UserResponse)
 async def change_email(data: ChangeEmailRequest, db: DBSession, current_user: CurrentUser):
     """メールアドレス変更（パスワード確認が必要）。"""
-    if not verify_password(data.password, current_user.hashed_password):
+    if not await verify_password_async(data.password, current_user.hashed_password):
         raise UnauthorizedError("パスワードが正しくありません")
     dupe = await db.scalar(
         select(User).where(User.email == data.new_email, User.id != current_user.id)
@@ -192,7 +208,7 @@ async def toggle_organizer(
 @router.delete("/account", status_code=204)
 async def delete_account(data: DeleteAccountRequest, db: DBSession, current_user: CurrentUser):
     """退会（パスワード確認）。所有チーム等のFK制約に配慮し論理削除。以後ログイン不可。"""
-    if not verify_password(data.password, current_user.hashed_password):
+    if not await verify_password_async(data.password, current_user.hashed_password):
         raise UnauthorizedError("パスワードが正しくありません")
     current_user.is_active = False
     await db.flush()

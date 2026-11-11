@@ -10,6 +10,7 @@ import {
   RefreshCw, ExternalLink, FileText, Loader2, ScrollText,
 } from "lucide-react";
 import { tournamentApi, type RegistrationInfo } from "@/features/tournaments/api/tournament-api";
+import { rosterApi } from "@/features/rosters/api/roster-api";
 import { useTeamMembers } from "@/features/teams/hooks/use-teams";
 import { useTournamentAudit } from "@/features/audit/hooks/use-audit";
 import { AuditLogTable } from "@/components/audit-log-table";
@@ -30,6 +31,62 @@ const STATUS_FLOW: { status: TournamentStatus; label: string; icon: React.Elemen
 
 // ステータスは日程に応じてバックエンドが自動更新する（手動遷移は廃止）。
 // 運営の手動操作は draft → 公開（registration_open）のみ。
+
+// ── 大会の方式（RC4）─────────────────────────────────────────────────────────
+const NOT_STARTED: TournamentStatus[] = ["draft", "registration_open", "registration_closed", "check_in"];
+
+/**
+ * RC4 より前からある大会（legacy）は名簿が無く、開催中にできない。未開始のうちに主催者が
+ * 名簿の方式へ切り替える（一方向）。切り替えた後は、各チームが名簿を作り、選手が参加を承認する。
+ */
+function RosterModeCard({ tournament }: { tournament: TournamentDetail }) {
+  const qc = useQueryClient();
+  const switchMode = useMutation({
+    mutationFn: () => rosterApi.switchToRoster(String(tournament.id)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["tournament", String(tournament.id)] }),
+  });
+  if (tournament.roster_mode !== "legacy") {
+    const size = tournament.lineup_size ?? (tournament.game === "VALORANT" ? 5 : null);
+    const max = tournament.roster_max ?? (tournament.game === "VALORANT" ? 7 : null);
+    return (
+      <div className="mb-6 rounded-2xl border border-white/10 bg-slate-900 p-5 text-xs text-slate-400">
+        <h2 className="mb-1 text-sm font-bold text-white">大会の方式: 名簿</h2>
+        出場 {size ?? "未設定"} 人・名簿 {max ?? "未設定"} 人まで。
+        {tournament.roster_locked_at ? " 名簿は固定済みです（変更には理由が要ります）" : " 名簿は大会の開始で固定されます"}
+      </div>
+    );
+  }
+  const canSwitch = NOT_STARTED.includes(tournament.status);
+  return (
+    <div className="mb-6 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-5">
+      <h2 className="mb-1 flex items-center gap-2 text-sm font-bold text-amber-300">
+        <AlertCircle className="h-4 w-4" /> 名簿の無い旧方式の大会です
+      </h2>
+      <p className="text-xs leading-relaxed text-slate-400">
+        {canSwitch
+          ? "このままでは開催中にできず、試合も開始できません。名簿の方式に切り替えると、各チームが出場する選手を名簿に載せ、選手本人が承認します（元には戻せません）"
+          : "この大会は旧方式のまま記録を残します。試合の開始・再開はできません"}
+      </p>
+      {canSwitch && (
+        <button
+          type="button"
+          disabled={switchMode.isPending}
+          onClick={() => {
+            if (window.confirm("名簿の方式に切り替えますか？（元には戻せません）")) switchMode.mutate();
+          }}
+          className="mt-3 rounded-lg bg-brand-500 px-4 py-2 text-xs font-bold text-white hover:bg-brand-600 disabled:opacity-50"
+        >
+          {switchMode.isPending ? "切り替え中..." : "名簿の方式に切り替える"}
+        </button>
+      )}
+      {switchMode.isError && (
+        <p role="alert" className="mt-2 text-xs text-red-400">
+          {switchMode.error instanceof Error ? switchMode.error.message : "切り替えに失敗しました"}
+        </p>
+      )}
+    </div>
+  );
+}
 
 // ── メンバー役割ラベル ───────────────────────────────────────────────────────
 const MEMBER_ROLE_LABEL: Record<string, string> = {
@@ -139,25 +196,27 @@ function RegistrationRow({
         <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-semibold", statusColor)}>
           {statusLabel}
         </span>
-        {/* 審査中に加え、補欠（自動承認の定員超過分）も繰り上げ承認できる */}
-        {(reg.status === "pending" || reg.status === "waitlisted") && (
+        {/* 審査中に加え、補欠（自動承認の定員超過分）も繰り上げ承認できる。辞退済みは承認し直すと取り消せる */}
+        {(reg.status === "pending" || reg.status === "waitlisted" || reg.status === "withdrawn") && (
           <div className="flex gap-1.5">
             <button
               onClick={() => onApprove(reg.id)}
               disabled={isPending}
               className="rounded-lg bg-green-500/10 p-1.5 text-green-400 hover:bg-green-500/20 transition-colors disabled:opacity-50"
-              title={reg.status === "waitlisted" ? "繰り上げ承認" : "承認"}
+              title={reg.status === "waitlisted" ? "繰り上げ承認" : reg.status === "withdrawn" ? "辞退を取り消して承認" : "承認"}
             >
               <CheckCircle2 className="h-4 w-4" />
             </button>
-            <button
-              onClick={() => onReject(reg.id)}
-              disabled={isPending}
-              className="rounded-lg bg-red-500/10 p-1.5 text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-50"
-              title="却下"
-            >
-              <XCircle className="h-4 w-4" />
-            </button>
+            {reg.status !== "withdrawn" && (
+              <button
+                onClick={() => onReject(reg.id)}
+                disabled={isPending}
+                className="rounded-lg bg-red-500/10 p-1.5 text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-50"
+                title="却下"
+              >
+                <XCircle className="h-4 w-4" />
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -359,6 +418,8 @@ export default function TournamentManagePage({ params }: { params: Promise<{ id:
           ※ 手動で変更すると、日程による自動更新は行われなくなります。
         </p>
       </div>
+
+      <RosterModeCard tournament={tournament} />
 
       {/* 統計カード */}
       <div className="mb-6 grid grid-cols-3 gap-3">

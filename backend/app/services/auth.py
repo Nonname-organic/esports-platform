@@ -1,7 +1,5 @@
 import uuid
-from datetime import datetime, timezone
 
-from jose import JWTError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,16 +7,22 @@ from app.core.exceptions import AlreadyExistsError, UnauthorizedError
 from app.core.redis import CacheKeys, CacheTTL, RedisCache
 from app.core.security import (
     REFRESH_TOKEN_TYPE,
-    create_access_token,
-    create_refresh_token,
+    SESSION_REVOKED,
+    JWTError,
     decode_token,
     hash_password,
-    verify_password,
+    hash_password_async,
+    issue_tokens,
+    stamp_matches,
+    verify_password_async,
     verify_token_type,
 )
 from app.models.enums import UserRole
 from app.models.user import User
 from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse
+
+# 存在しないアドレスでのログインでも照合時間を揃えるための固定ハッシュ（何とも一致しない）
+_DUMMY_HASH = hash_password("timing-equalizer-not-a-real-password")
 
 
 class AuthService:
@@ -42,7 +46,7 @@ class AuthService:
         user = User(
             email=data.email,
             username=data.username,
-            hashed_password=hash_password(data.password),
+            hashed_password=await hash_password_async(data.password),
             role=data.role if data.role in (UserRole.PLAYER, UserRole.ORGANIZER) else UserRole.PLAYER,
             is_active=True,
         )
@@ -57,14 +61,14 @@ class AuthService:
         )
         user = result.scalar_one_or_none()
 
-        if not user or not verify_password(data.password, user.hashed_password):
+        if user is None:
+            # 存在しないアドレスでも照合1回分の時間をかけ、応答時間で登録有無が分からないようにする
+            await verify_password_async(data.password, _DUMMY_HASH)
+            raise UnauthorizedError("メールアドレスまたはパスワードが正しくありません")
+        if not await verify_password_async(data.password, user.hashed_password):
             raise UnauthorizedError("メールアドレスまたはパスワードが正しくありません")
 
-        access_token = create_access_token(
-            subject=str(user.id),
-            extra={"role": user.role.value},
-        )
-        refresh_token = create_refresh_token(subject=str(user.id))
+        access_token, refresh_token = issue_tokens(user)
 
         # Refresh Token を Redis に保存（無効化可能にするため）
         jti = str(uuid.uuid4())
@@ -106,12 +110,11 @@ class AuthService:
         user = result.scalar_one_or_none()
         if not user:
             raise UnauthorizedError("ユーザーが存在しません")
+        # パスワードを変えた・再設定した後は、それ以前のリフレッシュトークンで更新させない（S9）
+        if not stamp_matches(payload, user.hashed_password):
+            raise UnauthorizedError(SESSION_REVOKED)
 
-        access_token = create_access_token(
-            subject=str(user.id),
-            extra={"role": user.role.value},
-        )
-        new_refresh_token = create_refresh_token(subject=str(user.id))
+        access_token, new_refresh_token = issue_tokens(user)
 
         from app.core.config import settings
 

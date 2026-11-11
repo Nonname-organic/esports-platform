@@ -15,7 +15,10 @@ export default defineConfig({
   expect: { toHaveScreenshot: { maxDiffPixelRatio: 0.02 } },
   fullyParallel: true,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 2 : undefined,
+  // ローカルではアプリ（Next / API / DB）と同じマシンでブラウザを動かす。既定（論理コア数の半分、
+  // 16スレッド機で8）だと動画録画込みのブラウザ8つで全コアが埋まり、起動直後の Next が
+  // 応答できず時間切れになった（8並列: 初回の各テスト12〜19秒 / 4並列: 0.1〜5秒）。
+  workers: process.env.CI ? 2 : 4,
   reporter: [["html", { open: "never" }], ["list"]],
   use: {
     baseURL,

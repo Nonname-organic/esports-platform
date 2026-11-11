@@ -5,6 +5,9 @@ import type {
   TeamStats,
   TeamAnalytics,
   TeamMatchSummary,
+  TeamInvitation,
+  MyTeamInvitation,
+  MyMemberships,
 } from "@/types/team";
 import type { ApiResponse, ListResponse } from "@/types/tournament";
 
@@ -31,7 +34,7 @@ export interface TeamUpdateInput {
   stats_public?: boolean;
 }
 
-export interface AddMemberInput {
+export interface InviteMemberInput {
   username: string;
   role?: string;
 }
@@ -67,8 +70,15 @@ export const teamApi = {
   getMembers: (id: string): Promise<ApiResponse<TeamMember[]>> =>
     apiClient.get(`/api/v1/teams/${id}/members`),
 
-  addMember: (id: string, data: AddMemberInput): Promise<ApiResponse<TeamMember>> =>
-    apiClient.post(`/api/v1/teams/${id}/members`, data),
+  // RC4: メンバーは直接足さない。招待を送り、本人が承認したときだけ所属になる
+  invite: (id: string, data: InviteMemberInput): Promise<ApiResponse<TeamInvitation>> =>
+    apiClient.post(`/api/v1/teams/${id}/invitations`, data),
+
+  listInvitations: (id: string): Promise<ApiResponse<(TeamInvitation & { invitee_username?: string | null })[]>> =>
+    apiClient.get(`/api/v1/teams/${id}/invitations`),
+
+  cancelInvitation: (id: string, invitationId: string): Promise<void> =>
+    apiClient.delete(`/api/v1/teams/${id}/invitations/${invitationId}`),
 
   removeMember: (teamId: string, playerId: string): Promise<void> =>
     apiClient.delete(`/api/v1/teams/${teamId}/members/${playerId}`),
@@ -87,4 +97,25 @@ export const teamApi = {
 
   getAnalytics: (id: string): Promise<ApiResponse<TeamAnalytics>> =>
     apiClient.get(`/api/v1/teams/${id}/analytics`),
+};
+
+/** 本人の操作（招待への返事・移行前の所属の確認と否認）。本人だけが行える */
+export const membershipApi = {
+  myInvitations: (): Promise<ApiResponse<MyTeamInvitation[]>> =>
+    apiClient.get("/api/v1/me/team-invitations"),
+
+  accept: (invitationId: string): Promise<ApiResponse<{ membership_id: string; team_id: string }>> =>
+    apiClient.post(`/api/v1/team-invitations/${invitationId}/accept`),
+
+  decline: (invitationId: string): Promise<void> =>
+    apiClient.post(`/api/v1/team-invitations/${invitationId}/decline`),
+
+  myMemberships: (): Promise<ApiResponse<MyMemberships>> =>
+    apiClient.get("/api/v1/me/memberships"),
+
+  confirm: (membershipId: string): Promise<ApiResponse<{ id: string; consent: string }>> =>
+    apiClient.post(`/api/v1/me/memberships/${membershipId}/confirm`),
+
+  reject: (membershipId: string): Promise<ApiResponse<{ id: string; consent: string }>> =>
+    apiClient.post(`/api/v1/me/memberships/${membershipId}/reject`),
 };
